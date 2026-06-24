@@ -923,21 +923,21 @@ async function runLiveSearch(){
             `Searching ${districts.join(', ')} for ${chanWd} listings`, 10, '…');
   addLog(`Starting search: ${districts.join(', ')} · ${chanWd}${minBeds>0?' · '+minBeds+'+ beds':''}${maxPriceV>0?' · under £'+maxPriceV.toLocaleString():''}`);
 
-  // ── Step 1: server-side Rightmove fetch (real listings, NO API key needed) ──
-  // The Node server proxies Rightmove and returns real addresses + links.
+  // ── Step 1: live search across Rightmove + OnTheMarket (no API key) ──
+  // The server merges both portals and returns real addresses + links.
   // If it succeeds we render and stop here. If the endpoint is unavailable
   // (e.g. served as a static file with no backend) we fall through to AI.
   try {
     const chan = isSale ? 'sale' : 'rent';
     for (let di = 0; di < districts.length; di++) {
       const code = districts[di];
-      setStatus('Finding live properties on Rightmove…', `Fetching ${code} listings…`,
-                15 + Math.round(di * (55 / districts.length)), props.length || '…');
+      setStatus('Finding live properties…', `Searching Rightmove + OnTheMarket · ${code}…`,
+                15 + Math.round(di * (45 / districts.length)), props.length || '…');
       const qs = new URLSearchParams({ district: code, channel: chan });
       if (minBeds > 0)   qs.set('minBeds', String(minBeds));
       if (maxPriceV > 0) qs.set('maxPrice', String(maxPriceV));
-      const r = await fetch('/api/rightmove?' + qs.toString());
-      if (!r.ok) throw new Error('rightmove endpoint ' + r.status);
+      const r = await fetch('/api/listings?' + qs.toString());
+      if (!r.ok) throw new Error('listings endpoint ' + r.status);
       const d = await r.json();
       const dist2  = HA_DISTRICTS.find(x => x.code === code);
       const rmId2  = RM_IDS[code];
@@ -958,7 +958,7 @@ async function runLiveSearch(){
           type: raw.type || 'Property', beds: raw.beds || 0,
           price: raw.price || 0,
           priceLabel: raw.priceLabel || (raw.price ? '£' + Number(raw.price).toLocaleString() : ''),
-          status: isSale ? 'For Sale' : 'To Let', portal: 'Rightmove', portalCls: 'rm',
+          status: isSale ? 'For Sale' : 'To Let', portal: raw.source || 'Rightmove', portalCls: 'rm',
           agent: raw.agent || '', addedDate: raw.addedDate || '',
           description: '', isLive: true, isRealUrl: !!pid2, selected: true,
           isNew: false, listedAt: new Date(),
@@ -968,7 +968,7 @@ async function runLiveSearch(){
           zoUrl: `https://www.zoopla.co.uk/${zoCh2}/property/${zoSlug2}/`,
           otUrl: `https://www.onthemarket.com/${zoCh2}/${zoSlug2}/`,
           rmId: rmId2, propertyId: pid2, portalUrl: raw.url || '',
-          fullAddress: disp2, source: 'Rightmove (server)'
+          fullAddress: disp2, source: raw.source || 'Rightmove'
         });
       });
       addLog(`${code}: +${d.properties?.length || 0} live listings`);
@@ -1467,6 +1467,7 @@ function renderLiveResults(){
         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
           +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px">📮 '+p.postcode+'</span>':'')
           +(p._epcTop?'<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px">✓ EPC matched'+(p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+(p._epcTop.band?' · band '+p._epcTop.band:'')+'</span>':'')
+          +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')
           +(p.addedDate?'<span style="font-size:11px;color:var(--muted)">Listed: '+p.addedDate+'</span>':'')
@@ -1482,7 +1483,7 @@ function renderLiveResults(){
         +'<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">'
           // Primary: Verify on Rightmove
           +(isReal
-            ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;transition:opacity .15s" onmouseover="this.style.opacity=\'.82\'" onmouseout="this.style.opacity=\'1\'">🏠 Verify on Rightmove →</a>'
+            ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;transition:opacity .15s" onmouseover="this.style.opacity=\'.82\'" onmouseout="this.style.opacity=\'1\'">🏠 Verify on '+(p.portal||'Rightmove')+' →</a>'
             :'<a href="'+p.rmAreaUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none">🔍 Browse '+p.haCode+' on Rightmove</a>'
           )
           // Queue letter button
