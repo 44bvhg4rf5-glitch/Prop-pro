@@ -981,12 +981,49 @@ async function runLiveSearch(){
     const seenS = new Set();
     props = props.filter(p => { const k = p.propertyId || p.address; if (seenS.has(k)) return false; seenS.add(k); return true; });
     props = props.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
+
+    // ── Auto-resolve exact EPC addresses, keep only matched listings ──
+    const found = props.length;
+    let done = 0, matchedCount = 0;
+    setStatus('Finding exact addresses…', `Checking the EPC register for ${found} propert${found===1?'y':'ies'}…`, 72, '…');
+    const results = await mapLimit(props, 5, async (p) => {
+      const r = await epcLookup(p);
+      done++;
+      if (r && r.candidates && r.candidates.length) matchedCount++;
+      setStatus('Finding exact addresses…', `Matched ${matchedCount} of ${found}…`, 72 + Math.round(done * (22 / found)), matchedCount);
+      return r;
+    });
+    const matched = [];
+    props.forEach((p, idx) => {
+      const r = results[idx];
+      if (r && r.candidates && r.candidates.length) {
+        const top = r.candidates[0];
+        p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
+        if (top.postcode) p.postcode = top.postcode;
+        p.addressSource = 'EPC register';
+        p._epcResolved = true;
+        p._epcTop = top;
+        p._epcMeta = { sizeMatched: r.sizeMatched, listingSqft: r.listingSqft, total: r.total };
+        matched.push(p);
+      }
+    });
+    props = matched.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
+
     document.getElementById('search-status').style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Find Live Properties'; }
+    if (!props.length) {
+      document.getElementById('results-area').style.display = 'block';
+      document.getElementById('results-title').textContent = 'No exact addresses found';
+      document.getElementById('results-sub').textContent = `${found} live listings, but none could be matched to an EPC address. Try other districts.`;
+      document.getElementById('results-table').innerHTML =
+        '<div style="text-align:center;padding:32px;color:var(--muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div>'
+        + '<div style="font-size:14px;font-weight:600">No EPC-matched addresses this time</div></div>';
+      blog(`Found ${found} listings, 0 matched to an EPC address`, 'warn');
+      return;
+    }
     renderLiveResults();
-    const real = props.filter(p => p.propertyId && p.propertyId.length >= 6).length;
-    blog(`✅ Found ${props.length} live properties · ${real} with direct Rightmove links`, 'ok');
-    toast(`✅ ${props.length} live properties found`, 'ok');
+    blog(`✅ ${props.length} of ${found} listings matched to an EPC address (closest by floor size)`, 'ok');
+    toast(`✅ ${props.length} properties matched to a full address`, 'ok');
     updateKPIs();
     return;
   }
@@ -1281,6 +1318,29 @@ ${rawText.slice(0,10000)}`
 async function doHASearch(){ return runLiveSearch(); }
 
 // ── Render the results table ──
+// Run an async worker over items with a concurrency limit.
+async function mapLimit(items, limit, worker){
+  const results = new Array(items.length);
+  let idx = 0;
+  async function run(){ while(idx < items.length){ const i = idx++; results[i] = await worker(items[i], i); } }
+  await Promise.all(Array.from({length: Math.min(limit, items.length)}, run));
+  return results;
+}
+
+// Look up a listing's exact address in the EPC register (one retry on failure).
+async function epcLookup(p, retries=1){
+  try{
+    const pc = (p.postcode||'').replace(/—.*/,'').trim();
+    const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'' });
+    if(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('postcode', pc);
+    if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
+    if(p.sizeSqft>0) qs.set('size', p.sizeSqft);
+    const r = await fetch('/api/epc?'+qs.toString());
+    if(!r.ok) return retries>0 ? epcLookup(p, retries-1) : null;
+    return await r.json();
+  }catch(e){ return retries>0 ? epcLookup(p, retries-1) : null; }
+}
+
 // ── Find the full house-number address via the public EPC register ──
 async function findFullAddress(i){
   const p = props[i]; if(!p) return;
@@ -1403,6 +1463,7 @@ function renderLiveResults(){
         // Postcode + meta
         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
           +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px">📮 '+p.postcode+'</span>':'')
+          +(p._epcTop?'<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px">✓ EPC matched'+(p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+(p._epcTop.band?' · band '+p._epcTop.band:'')+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')
           +(p.addedDate?'<span style="font-size:11px;color:var(--muted)">Listed: '+p.addedDate+'</span>':'')
@@ -1423,15 +1484,11 @@ function renderLiveResults(){
           )
           // Queue letter button
           +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'">📬 Queue Letter</button>'
-          // Find full address (EPC register)
-          +'<button onclick="event.stopPropagation();findFullAddress('+i+')" style="padding:7px 13px;background:rgba(201,146,26,.12);color:#9a6b00;border:1.5px solid rgba(201,146,26,.35);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔑 Find full address</button>'
           // Zoopla cross-check
           +'<a href="'+p.zoUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:11px;font-weight:600;color:#7C3AED;text-decoration:none;background:rgba(124,58,237,.06)">Zoopla</a>'
           // Sold prices
           +'<a href="'+p.rmSoldUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(5,150,105,.22);border-radius:7px;font-size:11px;font-weight:600;color:var(--green);text-decoration:none;background:rgba(5,150,105,.06)">Sold Prices</a>'
         +'</div>'
-        // EPC candidate-address results appear here
-        +'<div id="epc-'+i+'" style="margin-top:8px"></div>'
         +(p.description?'<div style="margin-top:7px;font-size:11px;color:var(--muted);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.description+'</div>':'')
       +'</div>'
       // Letter footer
