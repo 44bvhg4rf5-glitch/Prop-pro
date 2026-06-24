@@ -974,3 +974,17 @@ body{ background:var(--slate); -webkit-font-smoothing:antialiased; }
 
 .toast{ border-radius:12px; box-shadow:var(--sh2); }
 
+/* Agent-targeting pills */
+.agent-list{ display:flex; flex-wrap:wrap; gap:7px; max-height:210px; overflow:auto; padding:2px; }
+.agent-list::-webkit-scrollbar{ width:6px; }
+.agent-list::-webkit-scrollbar-thumb{ background:var(--slate3); border-radius:3px; }
+.agent-pill{ display:inline-flex; align-items:center; gap:7px; padding:6px 13px; border-radius:999px; font-size:12px;
+  font-weight:600; font-family:inherit; cursor:pointer; border:1.5px solid var(--border2); background:#fff;
+  color:var(--muted); transition:all .14s ease; }
+.agent-pill:hover{ border-color:var(--blue); color:var(--text); }
+.agent-pill .ck{ display:inline-flex; width:15px; height:15px; border-radius:50%; align-items:center;
+  justify-content:center; font-size:9px; border:1.5px solid var(--border2); color:transparent; transition:all .14s; }
+.agent-pill .cnt{ font-size:11px; opacity:.55; font-weight:600; }
+.agent-pill.on{ border-color:var(--blue); background:var(--blue-gl); color:var(--text); }
+.agent-pill.on .ck{ background:var(--blue); border-color:var(--blue); color:#fff; }
+
