@@ -4,6 +4,18 @@ An AI-powered estate-agent intelligence platform for the Harrow (HA) postcode
 area. It finds live property listings, extracts real addresses, researches
 owners via public UK sources, and generates instruction letters.
 
+## Two ways to run it
+
+**1. Single HTML file (no server)** — open `propmail-pro.html` directly in a
+browser, or host it on any static host (GitHub Pages, Netlify, S3…). The whole
+app (HTML + CSS + JS) is in that one file. Click the **🔑 API Key** button
+(bottom-right) and paste your Anthropic key (`sk-ant-…`) to enable the AI
+features. The key is stored only in your browser's `localStorage` and sent
+directly to `api.anthropic.com` — it never touches any other server.
+
+**2. Node server (key stays server-side)** — see below. Use this if you don't
+want the API key living in the browser.
+
 ## Running locally
 
 No dependencies and no build step — just Node.js (v18+).
