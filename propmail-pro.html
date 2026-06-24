@@ -2014,7 +2014,29 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
   <div class="dir-hero">
     <div style="position:relative;z-index:1;display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">
       <div style="flex:1">
-        <div
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gold-l);margin-bottom:10px">15 Strategic Plays · HA Specialist</div>
+        <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;line-height:1.2;margin-bottom:10px">Turn 14 years of estate-agency instinct into a repeatable revenue engine.</div>
+        <p style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.6;max-width:680px">Every idea below is HA-specific, revenue-proven, and mapped to a place it can be built inside PropMail Pro. Filter by theme or priority, then export the full board as a report.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dir-filter-bar">
+    <button class="dir-filter df-active" onclick="filterIdeas('all', this)">All Ideas</button>
+    <button class="dir-filter" onclick="filterIdeas('immediate', this)">🔴 Do This Week</button>
+    <button class="dir-filter" onclick="filterIdeas('short', this)">🟠 This Month</button>
+    <button class="dir-filter" onclick="filterIdeas('medium', this)">🔵 Next 90 Days</button>
+    <button class="dir-filter" onclick="filterIdeas('strategic', this)">🟣 Strategic</button>
+    <button class="dir-filter" onclick="filterIdeas('tech', this)">💻 Tech</button>
+    <button class="dir-filter" onclick="filterIdeas('content', this)">✍️ Content</button>
+    <button class="dir-filter" onclick="filterIdeas('data', this)">📊 Data</button>
+    <button class="dir-filter" onclick="filterIdeas('brand', this)">🎨 Brand</button>
+    <button class="dir-filter" onclick="filterIdeas('ops', this)">⚙️ Ops</button>
+  </div>
+
+  <div class="ideas-grid" id="ideas-grid"></div>
+</div>
+
 <script>
 /* ── Standalone API-key manager ──────────────────────────────────────────
    This single HTML file talks to the Anthropic API directly from the browser.
