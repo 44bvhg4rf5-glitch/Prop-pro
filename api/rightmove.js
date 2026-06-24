@@ -1,5 +1,15 @@
 import { OUTCODES, fetchText, extractProperties, sendJson } from '../lib/helpers.js';
 
+// Parse a Rightmove "1,001 sq. ft." / "93 sq m" string into square feet.
+function parseSqft(displaySize) {
+  if (!displaySize) return null;
+  const m = displaySize.replace(/,/g, '').match(/([\d.]+)\s*sq\.?\s*(ft|m)/i);
+  if (!m) return null;
+  const val = parseFloat(m[1]);
+  if (Number.isNaN(val)) return null;
+  return /m/i.test(m[2]) ? Math.round(val * 10.7639) : Math.round(val); // m² → ft²
+}
+
 export default async function handler(req, res) {
   const u = new URL(req.url, 'http://localhost');
   const district = (u.searchParams.get('district') || '').toUpperCase();
@@ -43,6 +53,8 @@ export default async function handler(req, res) {
           status: seg === 'property-to-rent' ? 'To Rent' : 'For Sale',
           agent: (p.customer && p.customer.branchDisplayName) || '',
           addedDate: (p.addedOrReduced || p.firstVisibleDate || '').replace('T', ' ').slice(0, 16),
+          sizeSqft: parseSqft(p.displaySize),
+          hasFloorplan: (p.numberOfFloorplans || 0) > 0,
           url: 'https://www.rightmove.co.uk/properties/' + id,
         };
       })

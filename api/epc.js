@@ -26,6 +26,22 @@ export default async function handler(req, res) {
   }
 
   const u = new URL(req.url, 'http://localhost');
+
+  // Temporary probe to discover the certificate-detail schema (remove later).
+  if (u.searchParams.get('debug')) {
+    const pc = (u.searchParams.get('postcode') || 'HA1 1BA').toUpperCase();
+    const s = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=3`, EPC_API_KEY);
+    const row = ((s.json && s.json.data) || [])[0] || null;
+    const cn = row && (row.certificateNumber || row.certificate_number);
+    let detail = null;
+    if (cn) {
+      const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cn)}`, EPC_API_KEY);
+      detail = d.json;
+    }
+    sendJson(res, 200, { searchRowKeys: row ? Object.keys(row) : [], searchRow: row, certNo: cn || null, detail });
+    return;
+  }
+
   const postcodeIn = (u.searchParams.get('postcode') || '').trim().toUpperCase();
   const street = (u.searchParams.get('street') || '').trim();
   const rmType = (u.searchParams.get('type') || '').trim();
