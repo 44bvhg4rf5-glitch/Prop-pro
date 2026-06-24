@@ -1806,9 +1806,30 @@ function loadGroups(){
     automation.defaultGroupId='g-default'; saveGroups();
   }
   if(!automation.defaultGroupId || !groups.find(g=>g.id===automation.defaultGroupId)) automation.defaultGroupId=groups[0].id;
+  if(!automation.autoAssign){ const rent=groups.find(g=>/rent/i.test(g.name)); automation.autoAssign={ sale:automation.defaultGroupId, rent:rent?rent.id:'', sold:'', premarket:'' }; saveGroups(); }
   const e=document.getElementById('auto-enabled'); if(e) e.checked=!!automation.enabled;
-  renderGroups(); updateAutomationUI();
+  renderGroups(); renderAutoAssign(); updateAutomationUI();
 }
+// Categorise a property so it can auto-join the right cycle.
+function categoryOf(prop){
+  const s=(prop.source||'').toLowerCase();
+  if(s.includes('sold')) return 'sold';
+  if(s.includes('pre-market')||s.includes('premarket')||s.includes('epc')) return 'premarket';
+  const st=(prop.status||'').toLowerCase();
+  if(st.includes('let')||st.includes('rent')) return 'rent';
+  return 'sale';
+}
+const AUTO_CATS=[['sale','🏠 Sales (For Sale)'],['rent','🔑 Rentals (To Let)'],['sold','🏆 Sold-in-street'],['premarket','📡 Pre-market']];
+function renderAutoAssign(){
+  const box=document.getElementById('auto-assign'); if(!box) return;
+  box.innerHTML=AUTO_CATS.map(([cat,label])=>{
+    const cur=(automation.autoAssign||{})[cat]||'';
+    const opts='<option value="">Ask each time</option>'+groups.map(g=>'<option value="'+g.id+'"'+(cur===g.id?' selected':'')+'>'+g.name+'</option>').join('');
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="font-size:12px;font-weight:600;color:var(--text2);width:160px;flex-shrink:0">'+label+'</span>'
+      +'<select onchange="setAutoAssign(\''+cat+'\',this.value)" style="flex:1;padding:7px 9px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:12px">'+opts+'</select></div>';
+  }).join('');
+}
+function setAutoAssign(cat,gid){ automation.autoAssign=automation.autoAssign||{}; automation.autoAssign[cat]=gid; saveGroups(); toast(gid?('New '+cat+' properties will auto-join “'+(groupById(gid)?.name)+'”'):('New '+cat+' properties will ask each time'),'ok'); }
 function saveGroups(){ localStorage.setItem('pmGroups', JSON.stringify(groups)); localStorage.setItem('pmAutomation', JSON.stringify(automation)); }
 function loadSequence(){ loadGroups(); }   // back-compat alias
 function groupById(id){ return groups.find(g=>g.id===id) || groups.find(g=>g.id===automation.defaultGroupId) || groups[0]; }
@@ -2006,9 +2027,16 @@ function logContact(prop, tpl, source){
   const addr=prop.fullAddress||prop.displayAddress||prop.address||''; if(!addr) return;
   const k=contactKey(addr); if(!k) return; const now=new Date().toISOString();
   if(contacts[k]){ contacts[k].lastAt=now; contacts[k].count=(contacts[k].count||1)+1; }
-  else contacts[k]={ address:addr, postcode:prop.postcode||'', district:prop.haCode||prop.district||'',
-    source:source||prop.source||'Search', template:(tpl&&tpl.name)||'', status:'sent',
-    firstAt:now, lastAt:now, count:1 };  // a cycle is only attached when the user picks one
+  else {
+    contacts[k]={ address:addr, postcode:prop.postcode||'', district:prop.haCode||prop.district||'',
+      source:source||prop.source||'Search', template:(tpl&&tpl.name)||'', status:'sent',
+      firstAt:now, lastAt:now, count:1 };
+    // Auto-join a cycle by property type (rentals → Rentals, etc.), if a rule is set.
+    try{
+      const gid=(typeof automation!=='undefined' && automation.autoAssign) ? automation.autoAssign[categoryOf(prop)] : '';
+      if(gid && groupById(gid)){ const c=contacts[k]; c.groupId=gid; c.ref=newRef(groupById(gid)); c.enrolledAt=now; c.seqDone=1; }
+    }catch(e){}
+  }
   saveContacts(); updateCampBadges();
 }
 function isFollowupDue(c){
