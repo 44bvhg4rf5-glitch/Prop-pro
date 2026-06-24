@@ -68,6 +68,19 @@ create a **New → Blueprint**, point it at this repo, and Render runs
 `node server.js` on a free web service. Add `ANTHROPIC_API_KEY` in the
 dashboard only if you want the AI features too.
 
+### Vercel (sign in with GitHub, no email needed)
+
+`vercel.json` + the `api/` serverless functions let the app run on
+[Vercel](https://vercel.com) with only a GitHub login:
+
+1. Sign in to Vercel with **GitHub** and **Add New → Project**, import this repo.
+2. Deploy (no build settings needed — `vercel.json` handles it).
+3. In **Settings → Environment Variables**, optionally add `ANTHROPIC_API_KEY`
+   (AI features) and `EPC_API_KEY` (full-address lookup), then redeploy.
+
+The static UI is served from `public/`; `/api/rightmove`, `/api/epc`,
+`/api/anthropic`, and `/api/config` run as serverless functions.
+
 ## How the AI features work
 
 The browser never sees your API key. The frontend posts to a local
