@@ -17,6 +17,28 @@ export default async function handler(req, res) {
   }
 
   const u = new URL(req.url, 'http://localhost');
+
+  // Diagnostics: discover the real council value + whether date filtering works.
+  if (u.searchParams.get('debug')) {
+    const pc = (u.searchParams.get('pc') || 'HA1 1BA').toUpperCase();
+    const s1 = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=50`, EPC_API_KEY);
+    const rows1 = (s1.json && s1.json.data) || [];
+    const councilsSeen = [...new Set(rows1.map((r) => r.council).filter(Boolean))];
+    const sampleRow = rows1[0] || null;
+    const council = u.searchParams.get('council') || councilsSeen[0] || 'Harrow';
+    const sNoDate = await fetchJson(`${EPC_BASE}/api/domestic/search?council%5B%5D=${encodeURIComponent(council)}&page_size=5`, EPC_API_KEY);
+    const e = new Date(); const st = new Date(); st.setDate(st.getDate() - 30);
+    const sDate = await fetchJson(`${EPC_BASE}/api/domestic/search?council%5B%5D=${encodeURIComponent(council)}&date_start=${ymd(st)}&date_end=${ymd(e)}&page_size=5`, EPC_API_KEY);
+    sendJson(res, 200, {
+      pc, councilsSeen, council,
+      sampleRowKeys: sampleRow ? Object.keys(sampleRow) : [],
+      sampleCouncil: sampleRow && sampleRow.council,
+      councilNoDate: { status: sNoDate.status, total: (sNoDate.json && sNoDate.json.pagination && sNoDate.json.pagination.totalRecords) ?? ((sNoDate.json && sNoDate.json.data) || []).length },
+      councilWithDate: { status: sDate.status, total: (sDate.json && sDate.json.pagination && sDate.json.pagination.totalRecords) ?? ((sDate.json && sDate.json.data) || []).length },
+    });
+    return;
+  }
+
   const days = Math.min(parseInt(u.searchParams.get('days') || '14', 10) || 14, 90);
   const districts = (u.searchParams.get('districts') || ALL_HA.join(','))
     .toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
