@@ -1961,6 +1961,56 @@ function exportSchedule(){
   a.download='propmail_schedule_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
   toast('Schedule exported','ok');
 }
+// ── PrintNode (cloud printing to a real printer) ──
+function getPrintNode(){ try{ return JSON.parse(localStorage.getItem('pmPrintNode')||'{}'); }catch(e){ return {}; } }
+function savePrintNode(v){ localStorage.setItem('pmPrintNode', JSON.stringify(v)); }
+function printNodeConnected(){ const pn=getPrintNode(); return !!(pn.key && pn.printerId); }
+function renderPrintNodeUI(){
+  const box=document.getElementById('pn-body'); if(!box) return;
+  const pn=getPrintNode();
+  box.innerHTML='<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div class="fg" style="flex:1;min-width:220px"><label>PrintNode API key</label><input type="password" id="pn-key" value="'+(pn.key||'').replace(/"/g,'&quot;')+'" placeholder="Paste your PrintNode API key"></div>'
+    +'<button class="btn bp sm-btn" onclick="connectPrintNode()">Connect</button></div>'
+    +'<div id="pn-printers"></div>'
+    +(pn.printerId?'<div style="margin-top:10px;font-size:12px;color:var(--green);font-weight:600">✓ Connected — printing to '+(pn.printerName||('printer #'+pn.printerId))+' <button class="btn bs sm-btn" style="margin-left:8px" onclick="testPrintNode()">Test print</button> <button class="btn bghost sm-btn" onclick="disconnectPrintNode()">Disconnect</button></div>':'');
+}
+async function connectPrintNode(){
+  const key=(document.getElementById('pn-key')?.value||'').trim();
+  if(!key){ toast('Paste your PrintNode API key','warn'); return; }
+  const box=document.getElementById('pn-printers'); if(box) box.innerHTML='<span style="font-size:12px;color:var(--muted)">Finding your printers…</span>';
+  try{
+    const r=await fetch('/api/printnode?action=printers',{headers:{'x-printnode-key':key}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</span>'; return; }
+    const pn=getPrintNode(); pn.key=key; savePrintNode(pn);
+    const printers=d.printers||[];
+    if(!printers.length){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--muted)">No printers found. Make sure the PrintNode client is running on your PC and the printer is on.</span>'; return; }
+    if(box) box.innerHTML='<div class="fg" style="max-width:380px"><label>Choose printer</label><select id="pn-printer" onchange="selectPrinter()">'
+      +'<option value="">— select —</option>'+printers.map(p=>'<option value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'"'+(pn.printerId==p.id?' selected':'')+'>'+p.name+(p.computer?' ('+p.computer+')':'')+'</option>').join('')+'</select></div>';
+    toast('PrintNode connected — pick your printer','ok');
+  }catch(e){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--amber)">⚠ '+e.message+'</span>'; }
+}
+function selectPrinter(){
+  const sel=document.getElementById('pn-printer'); if(!sel||!sel.value) return;
+  const pn=getPrintNode(); pn.printerId=Number(sel.value); pn.printerName=sel.options[sel.selectedIndex]?.getAttribute('data-name')||''; savePrintNode(pn);
+  renderPrintNodeUI(); toast('Printer set: '+pn.printerName,'ok');
+}
+function disconnectPrintNode(){ savePrintNode({}); renderPrintNodeUI(); toast('PrintNode disconnected','warn'); }
+async function testPrintNode(){
+  const sent=await printViaPrintNode(['PropMail Pro test letter\n\nIf you can read this on paper, cloud printing is working. 🎉\n\n'+new Date().toLocaleString('en-GB')],'PropMail test');
+  if(sent) toast('Test page sent to your printer','ok');
+}
+async function printViaPrintNode(letters, title){
+  const pn=getPrintNode(); if(!pn.key||!pn.printerId) return false;
+  try{
+    const r=await fetch('/api/printnode?action=print',{method:'POST',headers:{'Content-Type':'application/json','x-printnode-key':pn.key},
+      body:JSON.stringify({ printerId:pn.printerId, title:title||'PropMail letters', letters })});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ toast('PrintNode error: '+(d.error||r.status),'warn'); return false; }
+    return true;
+  }catch(e){ toast('PrintNode error: '+e.message,'warn'); return false; }
+}
+
 // ── Auto-print calendar ──
 let printSchedule = { enabled:false, days:[1,2,3,4,5], time:'09:00', lastRun:'' };
 const PS_DAYS = [['Mon',1],['Tue',2],['Wed',3],['Thu',4],['Fri',5],['Sat',6],['Sun',0]];
@@ -1977,10 +2027,18 @@ function renderPrintSchedule(){
 function togglePrintDay(d){ const s=new Set(printSchedule.days); s.has(d)?s.delete(d):s.add(d); printSchedule.days=[...s]; savePrintSchedule(); renderPrintSchedule(); }
 function setPrintTime(v){ printSchedule.time=v||'09:00'; savePrintSchedule(); }
 function togglePrintEnabled(){ const e=document.getElementById('ps-enabled'); printSchedule.enabled=e?e.checked:false; savePrintSchedule(); toast('Auto-print '+(printSchedule.enabled?'on — runs on the selected days':'off'), printSchedule.enabled?'ok':'warn'); }
-// Print every pending letter as a single multi-page job (one print dialog).
-function printAllDue(){
+// Print every pending letter — silently via PrintNode if connected, else a
+// single multi-page browser print job.
+async function printAllDue(){
   const pend=queue.map((q,i)=>i).filter(i=>queue[i].status==='pend');
   if(!pend.length){ toast('No letters waiting to print','warn'); return 0; }
+  if(printNodeConnected()){
+    const letters=pend.map(i=>buildLetter(queue[i].tpl?.body||'', queue[i].prop||{}));
+    const ok=await printViaPrintNode(letters, 'PropMail – '+letters.length+' letters');
+    if(ok){ pend.forEach(i=>queue[i].status='done'); renderQueue(); if(typeof updQStats==='function') updQStats();
+      toast('🖨 Sent '+pend.length+' letter'+(pend.length>1?'s':'')+' to '+(getPrintNode().printerName||'your printer'),'ok'); return pend.length; }
+    // fall through to browser print if PrintNode failed
+  }
   const pa=document.getElementById('pa'); if(!pa) return 0;
   pa.innerHTML=pend.map(i=>{ const it=queue[i]; const content=buildLetter(it.tpl?.body||'', it.prop||{});
     return '<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:36px 54px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111;page-break-after:always">'+content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'; }).join('');
@@ -2002,7 +2060,10 @@ function checkPrintSchedule(){
   if(typeof runDueSequences==='function') runDueSequences(true);
   const pending=queue.filter(x=>x.status==='pend').length;
   printSchedule.lastRun=today; savePrintSchedule();
-  if(pending>0) showPrintRunModal(pending);
+  if(pending>0){
+    if(printNodeConnected()) printAllDue();        // silent — prints straight to the printer
+    else showPrintRunModal(pending);               // browser: one-tap confirm
+  }
 }
 function showPrintRunModal(n){
   document.getElementById('printrun-modal')?.remove();
@@ -2159,7 +2220,7 @@ function showPanel(n){
   if (n === 'ha')        loadTargeting();
   if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); }
   if (n === 'queue')     renderQueue();
-  if (n === 'printers')  renderPrinters();
+  if (n === 'printers')  { renderPrinters(); renderPrintNodeUI(); }
   if (n === 'bot')       updateBotUI();
   if (n === 'investor'  && typeof initInvestorDashboard === 'function') initInvestorDashboard();
   if (n === 'advisor'   && typeof initAdvisorScorecard  === 'function') initAdvisorScorecard();
