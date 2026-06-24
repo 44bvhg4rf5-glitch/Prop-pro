@@ -319,18 +319,20 @@ function updQStats(){
   document.getElementById('qs-pend').textContent=queue.filter(q=>q.status==='pend').length;
   updQBadge();
 }
-function printItem(i){
+function printItem(i, fromBatch){
   if(!queue[i]) return;
   queue[i].status='prnt'; renderQueue();
   if(queue[i]?.prop && queue[i]?.tpl) doPrint(buildLetter(queue[i].tpl.body,queue[i].prop));
-  setTimeout(()=>{if(queue[i]){queue[i].status='done';renderQueue();toast(`Printed: ${queue[i]?.prop?.address?.split(',')?.[0]||'Letter'}`,'ok');}},800);
+  setTimeout(()=>{if(queue[i]){queue[i].status='done';renderQueue();toast(`Printed: ${queue[i]?.prop?.address?.split(',')?.[0]||'Letter'}`,'ok');
+    if(!fromBatch && queue[i]?.prop && typeof showCycleModal==='function') showCycleModal(queue[i].prop);
+  }},800);
 }
-function reprintItem(i){if(queue[i]){queue[i].status='pend';printItem(i);}}
+function reprintItem(i){if(queue[i]){queue[i].status='pend';printItem(i,true);}}
 function rmQItem(i){queue.splice(i,1);renderQueue();updQStats();}
 function printAll(){
   const pend=queue.map((q,i)=>i).filter(i=>queue[i].status==='pend');
   if(!pend.length){toast('No pending items','warn');return;}
-  pend.forEach((qi,s)=>setTimeout(()=>printItem(qi),s*400));
+  pend.forEach((qi,s)=>setTimeout(()=>printItem(qi,true),s*400));
 }
 function clrDone(){queue=queue.filter(q=>q.status!=='done');renderQueue();updQStats();}
 
@@ -1929,6 +1931,63 @@ function exportCampaigns(){
   toast('Campaign list exported','ok');
 }
 function clearCampaigns(){ if(!confirm('Clear all logged contacts? This cannot be undone.')) return; contacts={}; saveContacts(); updateCampBadges(); renderCampaigns(); toast('Campaign log cleared','warn'); }
+
+// ── Post-print "start an automated cycle?" modal ──
+function showCycleModal(prop){
+  if(localStorage.getItem('pmCycleAsk')==='never') return;
+  const addr=prop.fullAddress||prop.displayAddress||prop.address||''; if(!addr) return;
+  const c=contacts[contactKey(addr)];
+  if(sequence.enabled && c && (c.seqDone||1) < (sequence.steps?.length||1)) return; // already mid-cycle
+  document.getElementById('cycle-modal')?.remove();
+  window._cycleProp = prop;
+  window._cycleSteps = JSON.parse(JSON.stringify((sequence.steps&&sequence.steps.length)?sequence.steps:[{tpl:'intro',day:0},{tpl:'sale',day:14}]));
+  const ov=document.createElement('div'); ov.id='cycle-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.onclick=(e)=>{ if(e.target===ov) cycleClose(); };
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:470px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);overflow:hidden">'
+    +'<div style="padding:20px 22px;border-bottom:1px solid var(--border)"><div style="font-size:17px;font-weight:700;color:var(--text)">⏱️ Automated letter cycle</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5">You just printed a letter for <strong style="color:var(--text)">'+addr.split(',')[0]+'</strong>. Would you like to put it on an automated follow-up cycle? Pick the letters and timings below.</div></div>'
+    +'<div style="padding:18px 22px;max-height:46vh;overflow:auto"><div id="cycle-steps"></div>'
+    +'<button class="btn bs sm-btn" style="margin-top:6px" onclick="cycleAddStep()">+ Add letter</button></div>'
+    +'<div style="padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<button class="btn bp" onclick="cycleConfirm(\''+contactKey(addr).replace(/\\/g,'')+'\')">✓ Start automated cycle</button>'
+    +'<button class="btn bs" onclick="cycleClose()">Not now</button><div style="flex:1"></div>'
+    +'<button class="btn bghost sm-btn" onclick="cycleNever()">Don’t ask again</button></div></div>';
+  document.body.appendChild(ov);
+  renderCycleSteps();
+}
+function renderCycleSteps(){
+  const box=document.getElementById('cycle-steps'); if(!box) return;
+  const tpls=[...templates,...(uploadedTpls||[])];
+  box.innerHTML=window._cycleSteps.map((s,i)=>{
+    const opts=tpls.map(t=>'<option value="'+t.id+'"'+(s.tpl===t.id?' selected':'')+'>'+t.name+'</option>').join('');
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
+      +'<span style="font-size:11px;font-weight:700;color:var(--muted);width:42px;flex-shrink:0">No.'+(i+1)+'</span>'
+      +'<select onchange="cycleSetStep('+i+',\'tpl\',this.value)" style="flex:1;min-width:0;padding:7px 9px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:12px">'+opts+'</select>'
+      +(i===0?'<span style="font-size:11px;color:var(--muted);width:78px;flex-shrink:0;text-align:right">day 0</span>'
+        :'<label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;width:84px;flex-shrink:0;justify-content:flex-end">day<input type="number" min="1" max="60" value="'+s.day+'" onchange="cycleSetStep('+i+',\'day\',this.value)" style="width:48px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-family:inherit"></label>')
+      +(i>0?'<button class="bic" onclick="cycleRemoveStep('+i+')">✕</button>':'<span style="width:22px;flex-shrink:0"></span>')
+    +'</div>';
+  }).join('');
+}
+function cycleSetStep(i,k,v){ const s=window._cycleSteps[i]; if(!s) return; if(k==='day') s.day=Math.max(1,Math.min(60,parseInt(v)||1)); else s[k]=v; }
+function cycleAddStep(){ if(window._cycleSteps.length>=6){ toast('Maximum 6 letters in a cycle','warn'); return; } const last=window._cycleSteps[window._cycleSteps.length-1]; window._cycleSteps.push({ tpl:(templates[1]||templates[0]).id, day:Math.min(60,(last?last.day:0)+14) }); renderCycleSteps(); }
+function cycleRemoveStep(i){ if(i===0) return; window._cycleSteps.splice(i,1); renderCycleSteps(); }
+function cycleClose(){ document.getElementById('cycle-modal')?.remove(); }
+function cycleNever(){ localStorage.setItem('pmCycleAsk','never'); cycleClose(); toast('Won’t ask again — set cycles any time in Campaigns','ok'); }
+function cycleConfirm(key){
+  sequence.steps=(window._cycleSteps||[]).slice(0,6); if(sequence.steps[0]) sequence.steps[0].day=0;
+  sequence.steps=sequence.steps.filter(s=>s.day<=60).sort((a,b)=>a.day-b.day);
+  sequence.enabled=true; localStorage.setItem('pmSequence', JSON.stringify(sequence));
+  if(!contacts[key] && window._cycleProp) logContact(window._cycleProp, templates[0], window._cycleProp.source||'Printed');
+  const c=contacts[key];
+  if(c){ c.enrolledAt=new Date().toISOString(); c.seqDone=1; if(['responded','instructed','dead'].includes(c.status)) c.status='sent'; saveContacts(); }
+  cycleClose();
+  if(typeof loadSequence==='function') loadSequence();
+  runDueSequences(false);
+  updateCampBadges();
+  toast('✓ '+((c&&c.address.split(',')[0])||'Property')+' added to the automated cycle','ok');
+}
 
 function showPanel(n){
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
