@@ -1787,6 +1787,83 @@ async function queueStreetLetters(i, btn){
 
 // ── Campaign Tracker (CRM-lite, stored in this browser) ──
 let contacts = {};
+// Drip sequence: ordered letters at day-offsets from the first contact.
+let sequence = { enabled:false, steps:[{tpl:'intro',day:0},{tpl:'sale',day:7},{tpl:'sold',day:21}] };
+function loadSequence(){
+  try{ const s=JSON.parse(localStorage.getItem('pmSequence')||'null'); if(s) sequence=s; }catch(e){}
+  if(!sequence.steps || !sequence.steps.length) sequence.steps=[{tpl:'intro',day:0}];
+  const e=document.getElementById('seq-enabled'); if(e) e.checked=!!sequence.enabled;
+  renderSeqSteps(); updateSeqNote();
+}
+function renderSeqSteps(){
+  const box=document.getElementById('seq-steps'); if(!box) return;
+  const tpls=[...templates,...(uploadedTpls||[])];
+  box.innerHTML = sequence.steps.map((s,i)=>{
+    const opts=tpls.map(t=>'<option value="'+t.id+'"'+(s.tpl===t.id?' selected':'')+'>'+t.name+'</option>').join('');
+    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:7px">'
+      +'<span style="font-size:11px;font-weight:700;color:var(--muted);width:52px;flex-shrink:0">Letter '+(i+1)+'</span>'
+      +'<select onchange="setSeqStep('+i+',\'tpl\',this.value)" style="flex:1;min-width:0;padding:7px 9px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:12px">'+opts+'</select>'
+      +(i===0
+        ? '<span style="font-size:12px;color:var(--muted);width:120px;flex-shrink:0;text-align:center">day 0 (first letter)</span>'
+        : '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;width:120px;flex-shrink:0;justify-content:flex-end">on day <input type="number" min="1" max="60" value="'+s.day+'" onchange="setSeqStep('+i+',\'day\',this.value)" style="width:52px;padding:6px;border:1px solid var(--border2);border-radius:7px;font-family:inherit"></label>')
+      +(i>0?'<button class="bic" title="Remove" onclick="removeSeqStep('+i+')">✕</button>':'<span style="width:24px;flex-shrink:0"></span>')
+    +'</div>';
+  }).join('');
+}
+function setSeqStep(i,k,v){ const s=sequence.steps[i]; if(!s) return; if(k==='day'){ s.day=Math.max(1,Math.min(60,parseInt(v)||1)); } else s[k]=v; persistSequence(); }
+function addSeqStep(){ if(sequence.steps.length>=6){ toast('Maximum 6 letters in a sequence','warn'); return; }
+  const last=sequence.steps[sequence.steps.length-1]; const day=Math.min(60,(last?last.day:0)+14);
+  sequence.steps.push({ tpl:(templates[1]||templates[0]).id, day }); persistSequence(); renderSeqSteps(); }
+function removeSeqStep(i){ if(i===0) return; sequence.steps.splice(i,1); persistSequence(); renderSeqSteps(); }
+function persistSequence(){
+  if(sequence.steps[0]) sequence.steps[0].day=0;
+  sequence.steps=sequence.steps.slice(0,6).filter(s=>s.day<=60).sort((a,b)=>a.day-b.day);
+  localStorage.setItem('pmSequence', JSON.stringify(sequence));
+  updateSeqNote();
+}
+function saveSequence(showToast){
+  const e=document.getElementById('seq-enabled'); sequence.enabled=e?e.checked:false;
+  persistSequence(); renderSeqSteps();
+  if(sequence.enabled) runDueSequences(false);
+  if(showToast) toast('Sequence saved'+(sequence.enabled?' — automation on':' (automation off)'),'ok');
+}
+function updateSeqNote(){
+  const n=document.getElementById('seq-note'); if(!n) return;
+  const active=Object.values(contacts).filter(c=>!['responded','instructed','dead'].includes(c.status) && (c.seqDone||1)<sequence.steps.length).length;
+  n.textContent = sequence.enabled ? (active+' propert'+(active===1?'y':'ies')+' in active sequence') : 'Automation is off — turn on “Automate” to run it.';
+}
+// Queue any sequence letters that are now due across all active contacts.
+function runDueSequences(silent){
+  if(!sequence.enabled || sequence.steps.length<2){ updateSeqNote(); return 0; }
+  const tpls=[...templates,...(uploadedTpls||[])];
+  let queued=0;
+  Object.values(contacts).forEach(c=>{
+    if(['responded','instructed','dead'].includes(c.status)) return;
+    if(!c.enrolledAt) c.enrolledAt=c.firstAt||c.lastAt||new Date().toISOString();
+    const enrolled=new Date(c.enrolledAt).getTime();
+    let done=c.seqDone||1;
+    while(done<sequence.steps.length){
+      const step=sequence.steps[done];
+      if(Date.now() >= enrolled+step.day*86400000){
+        const tpl=tpls.find(t=>t.id===step.tpl)||tpls[0];
+        const prop={ address:c.address, displayAddress:c.address, fullAddress:c.address, postcode:c.postcode,
+          district:c.district, haCode:c.district, type:'Property', beds:0, source:c.source, portal:'Sequence', isRealUrl:true };
+        queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:true, sequence:true });
+        done++; c.count=(c.count||1)+1; c.lastAt=new Date().toISOString(); queued++;
+      } else break;
+    }
+    c.seqDone=done;
+  });
+  if(queued){ saveContacts();
+    if(typeof updQBadge==='function') updQBadge();
+    if(typeof updQStats==='function') updQStats();
+    if(typeof updateKPIs==='function') updateKPIs();
+    updateCampBadges();
+    if(!silent) toast('📬 Queued '+queued+' scheduled follow-up letter'+(queued>1?'s':''),'ok');
+  }
+  updateSeqNote();
+  return queued;
+}
 function loadContacts(){ try{ contacts=JSON.parse(localStorage.getItem('pmContacts')||'{}'); }catch(e){ contacts={}; } updateCampBadges(); }
 function saveContacts(){ localStorage.setItem('pmContacts', JSON.stringify(contacts)); }
 function contactKey(addr){ return (addr||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
@@ -1796,11 +1873,18 @@ function logContact(prop, tpl, source){
   const k=contactKey(addr); if(!k) return; const now=new Date().toISOString();
   if(contacts[k]){ contacts[k].lastAt=now; contacts[k].count=(contacts[k].count||1)+1; }
   else contacts[k]={ address:addr, postcode:prop.postcode||'', district:prop.haCode||prop.district||'',
-    source:source||prop.source||'Search', template:(tpl&&tpl.name)||'', status:'sent', firstAt:now, lastAt:now, count:1 };
+    source:source||prop.source||'Search', template:(tpl&&tpl.name)||'', status:'sent',
+    firstAt:now, lastAt:now, count:1, enrolledAt:now, seqDone:1 };
   saveContacts(); updateCampBadges();
 }
 function isFollowupDue(c){
   if(['responded','instructed','dead'].includes(c.status)) return false;
+  if(sequence.enabled && sequence.steps.length>1){
+    const done=c.seqDone||1;
+    if(done>=sequence.steps.length) return false;
+    const enrolled=new Date(c.enrolledAt||c.firstAt||c.lastAt).getTime();
+    return Date.now() >= enrolled + sequence.steps[done].day*86400000;
+  }
   return (Date.now()-new Date(c.lastAt).getTime())/86400000 >= 21;
 }
 function updateCampBadges(){
@@ -1853,7 +1937,7 @@ function showPanel(n){
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
-  if (n === 'campaigns') { loadContacts(); renderCampaigns(); }
+  if (n === 'campaigns') { loadContacts(); loadSequence(); runDueSequences(false); renderCampaigns(); }
   if (n === 'ha')        loadTargeting();
   if (n === 'templates') renderTpls();
   if (n === 'queue')     renderQueue();
@@ -4638,3 +4722,4 @@ function updateIntelTable(){
 // Load saved agent-targeting settings + campaign log as soon as the app is ready.
 try { if (typeof loadTargeting === 'function') loadTargeting(); } catch (e) {}
 try { if (typeof loadContacts === 'function') loadContacts(); } catch (e) {}
+try { if (typeof loadSequence === 'function') { loadSequence(); runDueSequences(false); } } catch (e) {}
