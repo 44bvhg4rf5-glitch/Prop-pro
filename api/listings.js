@@ -8,10 +8,11 @@ export default async function handler(req, res) {
   const channel = (u.searchParams.get('channel') || 'sale').toLowerCase();
   const minBeds = parseInt(u.searchParams.get('minBeds') || '0', 10) || 0;
   const maxPrice = parseInt(u.searchParams.get('maxPrice') || '0', 10) || 0;
+  const pages = Math.min(parseInt(u.searchParams.get('pages') || '1', 10) || 1, 5);
   const opts = { channel, minBeds, maxPrice };
 
   const [rm, otm] = await Promise.all([
-    rightmoveListings(district, opts).catch(() => []),
+    rightmoveListings(district, { ...opts, pages }).catch(() => []),
     onTheMarketListings(district, opts).catch(() => []),
   ]);
 

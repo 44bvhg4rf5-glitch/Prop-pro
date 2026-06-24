@@ -935,7 +935,7 @@ async function scanAllAgents(btn){
   if(btn){ btn.disabled=true; btn.textContent='⟳ Scanning…'; }
   const all=[];
   await mapLimit(districts, 4, async (code)=>{
-    try{ const r=await fetch('/api/listings?district='+code+'&channel='+chan);
+    try{ const r=await fetch('/api/listings?district='+code+'&channel='+chan+'&pages=3');
       const d=await r.json(); (d.properties||[]).forEach(p=>{ if(p.agent) all.push({agent:p.agent}); });
     }catch(e){}
   });
