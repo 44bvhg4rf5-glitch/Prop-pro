@@ -41,6 +41,7 @@
     <button class="ni" id="nav-premarket" onclick="showPanel('premarket')"><span class="ic">🔑</span><span>Pre-Market Radar</span><span class="nb nb-g">NEW</span></button>
     <button class="ni" id="nav-sold" onclick="showPanel('sold')"><span class="ic">🏆</span><span>Sold Board</span><span class="nb nb-g">NEW</span></button>
     <button class="ni" id="nav-campaigns" onclick="showPanel('campaigns')"><span class="ic">📇</span><span>Campaigns</span><span class="nb nb-b" id="camp-nav-badge" style="display:none">0</span></button>
+    <button class="ni" id="nav-schedule" onclick="showPanel('schedule')"><span class="ic">📅</span><span>Schedule</span></button>
     <button class="ni" id="nav-queue" onclick="showPanel('queue')"><span class="ic">🖨</span><span>Print Queue</span><span class="nb nb-g" id="q-nav-badge">0</span></button>
   </div>
   <div class="nav-sep"></div>
@@ -470,8 +471,13 @@
 <!-- ═══ TEMPLATES ═══ -->
 <div class="panel" id="panel-templates">
   <div class="page-hdr">
-    <div><div class="page-title">Letter Templates</div><div class="page-sub">Create, edit and upload templates with dynamic property placeholders</div></div>
+    <div><div class="page-title">Letter Templates</div><div class="page-sub">Create templates, and group them into automated letter cycles (folders)</div></div>
     <button class="btn bp" onclick="newTpl()">+ New Template</button>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EEF4FF">🗂️</div>Letter Cycles (folders)</div>
+    <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">Group your templates into named cycles — e.g. a <strong>Rentals</strong> cycle of up to 6 letters over up to 60 days. When a property is put on a cycle (after printing), each letter is queued automatically on its day.</div>
+    <div id="groups-mgr"></div>
   </div>
   <div class="card">
     <div class="ct"><div class="ct-icon" style="background:#FEF2F2">📤</div>Upload Letter File</div>
@@ -1196,21 +1202,17 @@
       <div class="kpi-box"><div class="kpi-n" id="camp-followups">0</div><div class="kpi-l">Follow-ups due</div></div>
     </div>
   </div>
-  <details class="card card-sm" id="seq-card" open>
-    <summary style="cursor:pointer;font-weight:700;font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px;list-style:none">
-      ⏱️ Letter Sequence
-      <label style="margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text2);text-transform:none;letter-spacing:normal" onclick="event.stopPropagation()"><input type="checkbox" id="seq-enabled" onchange="saveSequence(true)"> Automate</label>
-    </summary>
-    <div style="margin-top:12px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Build up to <strong>6 letters over up to 60 days</strong>. When a property is first lettered, the follow-ups are scheduled — each one is queued automatically as it falls due (next time you open the app).</div>
-      <div id="seq-steps"></div>
-      <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn bs sm-btn" onclick="addSeqStep()">+ Add letter</button>
-        <button class="btn bp sm-btn" onclick="saveSequence(true)">Save sequence</button>
-        <span id="seq-note" style="font-size:12px;color:var(--muted);font-weight:600"></span>
-      </div>
+  <div class="card card-sm">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="font-weight:700;font-size:14px;color:var(--text)">⏱️ Automation</div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text2)"><input type="checkbox" id="auto-enabled" onchange="toggleAutomation()"> Run letter cycles automatically</label>
+      <div style="flex:1"></div>
+      <button class="btn bs sm-btn" onclick="showPanel('templates')">✏️ Manage cycles</button>
+      <button class="btn bs sm-btn" onclick="showPanel('schedule')">📅 Schedule</button>
     </div>
-  </details>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px"><span id="auto-note"></span> Build your letter cycles in <strong>Templates → Letter Cycles</strong>; a property joins one when you choose a cycle after printing.</div>
+    <div id="auto-groups" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"></div>
+  </div>
   <div class="card card-sm" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
     <input id="camp-filter" oninput="renderCampaigns()" placeholder="Search address…" style="padding:8px 12px;border:1px solid var(--border2);border-radius:9px;font-size:13px;font-family:inherit;min-width:200px">
     <select id="camp-status-filter" onchange="renderCampaigns()" style="padding:8px 10px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:13px">
@@ -1222,6 +1224,24 @@
     <button class="btn bghost sm-btn" onclick="clearCampaigns()">Clear all</button>
   </div>
   <div class="card" id="camp-results"><div style="text-align:center;padding:32px;color:var(--muted)">No letters logged yet. Queue letters from any panel and they'll appear here.</div></div>
+</div>
+
+<!-- SCHEDULE -->
+<div class="panel" id="panel-schedule">
+  <div class="page-hdr">
+    <div><div class="page-title">📅 Schedule</div><div class="page-sub">Every upcoming cycle letter, by date — each with a reference so you can track it. Due letters are auto-queued when you open the app.</div></div>
+    <div class="page-kpis">
+      <div class="kpi-box"><div class="kpi-n" id="sched-count">0</div><div class="kpi-l">Scheduled</div></div>
+      <div class="kpi-box"><div class="kpi-n" id="sched-overdue">0</div><div class="kpi-l">Due now</div></div>
+    </div>
+  </div>
+  <div class="card card-sm" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--muted)">Letters are scheduled from each property's cycle. The <strong>reference</strong> (e.g. RNT‑1042) lets you find a campaign across the app or your own diary.</span>
+    <div style="flex:1"></div>
+    <button class="btn bp sm-btn" onclick="runDueSequences(false);renderSchedule()">⟳ Queue due now</button>
+    <button class="btn bs sm-btn" onclick="exportSchedule()">⬇ Export CSV</button>
+  </div>
+  <div class="card" id="sched-results"><div style="text-align:center;padding:32px;color:var(--muted)">Loading schedule…</div></div>
 </div>
 
 <script src="app.js"></script>

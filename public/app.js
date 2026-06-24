@@ -1790,67 +1790,97 @@ async function queueStreetLetters(i, btn){
 // ── Campaign Tracker (CRM-lite, stored in this browser) ──
 let contacts = {};
 // Drip sequence: ordered letters at day-offsets from the first contact.
-let sequence = { enabled:false, steps:[{tpl:'intro',day:0},{tpl:'sale',day:7},{tpl:'sold',day:21}] };
-function loadSequence(){
-  try{ const s=JSON.parse(localStorage.getItem('pmSequence')||'null'); if(s) sequence=s; }catch(e){}
-  if(!sequence.steps || !sequence.steps.length) sequence.steps=[{tpl:'intro',day:0}];
-  const e=document.getElementById('seq-enabled'); if(e) e.checked=!!sequence.enabled;
-  renderSeqSteps(); updateSeqNote();
+// ── Letter cycle groups (user-created folders of letters) ──
+let groups = [];
+let automation = { enabled:false, defaultGroupId:null, refSeq:1000 };
+function loadGroups(){
+  try{ groups=JSON.parse(localStorage.getItem('pmGroups')||'null')||[]; }catch(e){ groups=[]; }
+  try{ automation=Object.assign({enabled:false,defaultGroupId:null,refSeq:1000}, JSON.parse(localStorage.getItem('pmAutomation')||'{}')); }catch(e){}
+  if(!groups.length){
+    let steps=[{tplId:'intro',day:0},{tplId:'sale',day:7},{tplId:'sold',day:21}];
+    try{ const old=JSON.parse(localStorage.getItem('pmSequence')||'null'); if(old&&old.steps&&old.steps.length){ steps=old.steps.map(s=>({tplId:s.tpl,day:s.day})); if(old.enabled) automation.enabled=true; } }catch(e){}
+    groups=[
+      {id:'g-default', name:'General sales', steps},
+      {id:'g-rentals', name:'Rentals', steps:[{tplId:'let',day:0},{tplId:'let',day:10},{tplId:'cash',day:30}]},
+    ];
+    automation.defaultGroupId='g-default'; saveGroups();
+  }
+  if(!automation.defaultGroupId || !groups.find(g=>g.id===automation.defaultGroupId)) automation.defaultGroupId=groups[0].id;
+  const e=document.getElementById('auto-enabled'); if(e) e.checked=!!automation.enabled;
+  renderGroups(); updateAutomationUI();
 }
-function renderSeqSteps(){
-  const box=document.getElementById('seq-steps'); if(!box) return;
+function saveGroups(){ localStorage.setItem('pmGroups', JSON.stringify(groups)); localStorage.setItem('pmAutomation', JSON.stringify(automation)); }
+function loadSequence(){ loadGroups(); }   // back-compat alias
+function groupById(id){ return groups.find(g=>g.id===id) || groups.find(g=>g.id===automation.defaultGroupId) || groups[0]; }
+function refPrefix(name){ return ((name||'').replace(/[^a-zA-Z]/g,'').slice(0,3).toUpperCase())||'PM'; }
+function newRef(group){ automation.refSeq=(automation.refSeq||1000)+1; saveGroups(); return refPrefix(group&&group.name)+'-'+automation.refSeq; }
+
+// ── Group CRUD (managed in the Templates / letter section) ──
+function createGroup(){
+  const name=prompt('Name this letter cycle (e.g. Rentals, Probate, New listings):','');
+  if(name===null) return;
+  const g={ id:'g'+Date.now(), name:name.trim()||'New cycle',
+    steps:[{tplId:(templates[0]||{}).id||'intro',day:0},{tplId:(templates[1]||templates[0]||{}).id||'sale',day:7}] };
+  groups.push(g); saveGroups(); renderGroups(); toast('Cycle “'+g.name+'” created','ok');
+}
+function deleteGroup(id){ if(!confirm('Delete this letter cycle?')) return; groups=groups.filter(g=>g.id!==id); if(automation.defaultGroupId===id) automation.defaultGroupId=groups[0]?.id||null; saveGroups(); renderGroups(); }
+function renameGroup(id,name){ const g=groups.find(x=>x.id===id); if(g){ g.name=name; saveGroups(); updateAutomationUI(); } }
+function setDefaultGroup(id){ automation.defaultGroupId=id; saveGroups(); renderGroups(); }
+function groupAddStep(id){ const g=groups.find(x=>x.id===id); if(!g) return; if(g.steps.length>=6){ toast('Maximum 6 letters per cycle','warn'); return; } const last=g.steps[g.steps.length-1]; g.steps.push({ tplId:(templates[1]||templates[0]).id, day:Math.min(60,(last?last.day:0)+14) }); saveGroups(); renderGroups(); }
+function groupRemoveStep(id,i){ const g=groups.find(x=>x.id===id); if(!g||i===0) return; g.steps.splice(i,1); saveGroups(); renderGroups(); }
+function groupSetStep(id,i,k,v){ const g=groups.find(x=>x.id===id); if(!g||!g.steps[i]) return; if(k==='day') g.steps[i].day=Math.max(1,Math.min(60,parseInt(v)||1)); else g.steps[i].tplId=v; if(g.steps[0]) g.steps[0].day=0; g.steps.sort((a,b)=>a.day-b.day); saveGroups(); renderGroups(); }
+function renderGroups(){
+  const box=document.getElementById('groups-mgr'); if(!box) return;
   const tpls=[...templates,...(uploadedTpls||[])];
-  box.innerHTML = sequence.steps.map((s,i)=>{
-    const opts=tpls.map(t=>'<option value="'+t.id+'"'+(s.tpl===t.id?' selected':'')+'>'+t.name+'</option>').join('');
-    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:7px">'
-      +'<span style="font-size:11px;font-weight:700;color:var(--muted);width:52px;flex-shrink:0">Letter '+(i+1)+'</span>'
-      +'<select onchange="setSeqStep('+i+',\'tpl\',this.value)" style="flex:1;min-width:0;padding:7px 9px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:12px">'+opts+'</select>'
-      +(i===0
-        ? '<span style="font-size:12px;color:var(--muted);width:120px;flex-shrink:0;text-align:center">day 0 (first letter)</span>'
-        : '<label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;width:120px;flex-shrink:0;justify-content:flex-end">on day <input type="number" min="1" max="60" value="'+s.day+'" onchange="setSeqStep('+i+',\'day\',this.value)" style="width:52px;padding:6px;border:1px solid var(--border2);border-radius:7px;font-family:inherit"></label>')
-      +(i>0?'<button class="bic" title="Remove" onclick="removeSeqStep('+i+')">✕</button>':'<span style="width:24px;flex-shrink:0"></span>')
+  box.innerHTML = groups.map(g=>{
+    const isDef=g.id===automation.defaultGroupId;
+    const steps=g.steps.map((s,i)=>{
+      const opts=tpls.map(t=>'<option value="'+t.id+'"'+(s.tplId===t.id?' selected':'')+'>'+t.name+'</option>').join('');
+      return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
+        +'<span style="font-size:11px;font-weight:700;color:var(--muted);width:42px;flex-shrink:0">No.'+(i+1)+'</span>'
+        +'<select onchange="groupSetStep(\''+g.id+'\','+i+',\'tplId\',this.value)" style="flex:1;min-width:0;padding:6px 9px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:12px">'+opts+'</select>'
+        +(i===0?'<span style="font-size:11px;color:var(--muted);width:78px;flex-shrink:0;text-align:right">day 0</span>'
+          :'<label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;width:84px;flex-shrink:0;justify-content:flex-end">day<input type="number" min="1" max="60" value="'+s.day+'" onchange="groupSetStep(\''+g.id+'\','+i+',\'day\',this.value)" style="width:46px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-family:inherit"></label>')
+        +(i>0?'<button class="bic" onclick="groupRemoveStep(\''+g.id+'\','+i+')">✕</button>':'<span style="width:22px;flex-shrink:0"></span>')
+      +'</div>';
+    }).join('');
+    return '<div style="border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">'
+        +'<input value="'+(g.name||'').replace(/"/g,'&quot;')+'" onchange="renameGroup(\''+g.id+'\',this.value)" style="font-size:14px;font-weight:700;border:none;border-bottom:1.5px solid var(--border);padding:3px 2px;font-family:inherit;color:var(--text);background:none;min-width:160px">'
+        +'<span style="font-size:10px;color:var(--muted)">'+g.steps.length+' letters · up to day '+Math.max.apply(null,g.steps.map(s=>s.day))+'</span>'
+        +(isDef?'<span class="tag tag-blue">default</span>':'<button class="btn bs sm-btn" style="font-size:10px;padding:3px 8px" onclick="setDefaultGroup(\''+g.id+'\')">Make default</button>')
+        +'<div style="flex:1"></div>'
+        +'<button class="bic" title="Delete cycle" onclick="deleteGroup(\''+g.id+'\')">🗑</button>'
+      +'</div>'+steps
+      +'<button class="btn bs sm-btn" style="margin-top:4px" onclick="groupAddStep(\''+g.id+'\')">+ Add letter</button>'
     +'</div>';
-  }).join('');
+  }).join('') + '<button class="btn bp sm-btn" onclick="createGroup()">+ New letter cycle</button>';
 }
-function setSeqStep(i,k,v){ const s=sequence.steps[i]; if(!s) return; if(k==='day'){ s.day=Math.max(1,Math.min(60,parseInt(v)||1)); } else s[k]=v; persistSequence(); }
-function addSeqStep(){ if(sequence.steps.length>=6){ toast('Maximum 6 letters in a sequence','warn'); return; }
-  const last=sequence.steps[sequence.steps.length-1]; const day=Math.min(60,(last?last.day:0)+14);
-  sequence.steps.push({ tpl:(templates[1]||templates[0]).id, day }); persistSequence(); renderSeqSteps(); }
-function removeSeqStep(i){ if(i===0) return; sequence.steps.splice(i,1); persistSequence(); renderSeqSteps(); }
-function persistSequence(){
-  if(sequence.steps[0]) sequence.steps[0].day=0;
-  sequence.steps=sequence.steps.slice(0,6).filter(s=>s.day<=60).sort((a,b)=>a.day-b.day);
-  localStorage.setItem('pmSequence', JSON.stringify(sequence));
-  updateSeqNote();
+function toggleAutomation(){ const e=document.getElementById('auto-enabled'); automation.enabled=e?e.checked:false; saveGroups(); if(automation.enabled) runDueSequences(false); updateAutomationUI(); toast('Automation '+(automation.enabled?'on':'off'),automation.enabled?'ok':'warn'); }
+function updateAutomationUI(){
+  const n=document.getElementById('auto-note'); if(n){
+    const active=Object.values(contacts).filter(c=>c.groupId && !['responded','instructed','dead'].includes(c.status)).length;
+    n.textContent = automation.enabled ? (active+' propert'+(active===1?'y':'ies')+' in an active cycle') : 'Automation is off.';
+  }
+  const gl=document.getElementById('auto-groups'); if(gl){ gl.innerHTML = groups.map(g=>'<span class="tag tag-grey">'+g.name+' · '+g.steps.length+'</span>').join(' '); }
 }
-function saveSequence(showToast){
-  const e=document.getElementById('seq-enabled'); sequence.enabled=e?e.checked:false;
-  persistSequence(); renderSeqSteps();
-  if(sequence.enabled) runDueSequences(false);
-  if(showToast) toast('Sequence saved'+(sequence.enabled?' — automation on':' (automation off)'),'ok');
-}
-function updateSeqNote(){
-  const n=document.getElementById('seq-note'); if(!n) return;
-  const active=Object.values(contacts).filter(c=>!['responded','instructed','dead'].includes(c.status) && (c.seqDone||1)<sequence.steps.length).length;
-  n.textContent = sequence.enabled ? (active+' propert'+(active===1?'y':'ies')+' in active sequence') : 'Automation is off — turn on “Automate” to run it.';
-}
-// Queue any sequence letters that are now due across all active contacts.
+// Queue any cycle letters now due (per each contact's chosen group).
 function runDueSequences(silent){
-  if(!sequence.enabled || sequence.steps.length<2){ updateSeqNote(); return 0; }
-  const tpls=[...templates,...(uploadedTpls||[])];
-  let queued=0;
+  if(!automation.enabled){ updateAutomationUI(); return 0; }
+  const tpls=[...templates,...(uploadedTpls||[])]; let queued=0;
   Object.values(contacts).forEach(c=>{
+    if(!c.groupId) return;
     if(['responded','instructed','dead'].includes(c.status)) return;
+    const g=groupById(c.groupId); if(!g||g.steps.length<2) return;
     if(!c.enrolledAt) c.enrolledAt=c.firstAt||c.lastAt||new Date().toISOString();
-    const enrolled=new Date(c.enrolledAt).getTime();
-    let done=c.seqDone||1;
-    while(done<sequence.steps.length){
-      const step=sequence.steps[done];
+    const enrolled=new Date(c.enrolledAt).getTime(); let done=c.seqDone||1;
+    while(done<g.steps.length){
+      const step=g.steps[done];
       if(Date.now() >= enrolled+step.day*86400000){
-        const tpl=tpls.find(t=>t.id===step.tpl)||tpls[0];
+        const tpl=tpls.find(t=>t.id===step.tplId)||tpls[0];
         const prop={ address:c.address, displayAddress:c.address, fullAddress:c.address, postcode:c.postcode,
-          district:c.district, haCode:c.district, type:'Property', beds:0, source:c.source, portal:'Sequence', isRealUrl:true };
-        queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:true, sequence:true });
+          district:c.district, haCode:c.district, type:'Property', beds:0, source:c.source, portal:'Cycle', isRealUrl:true };
+        queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:true, sequence:true, ref:c.ref, group:g.name });
         done++; c.count=(c.count||1)+1; c.lastAt=new Date().toISOString(); queued++;
       } else break;
     }
@@ -1861,10 +1891,54 @@ function runDueSequences(silent){
     if(typeof updQStats==='function') updQStats();
     if(typeof updateKPIs==='function') updateKPIs();
     updateCampBadges();
-    if(!silent) toast('📬 Queued '+queued+' scheduled follow-up letter'+(queued>1?'s':''),'ok');
+    if(!silent) toast('📬 Queued '+queued+' scheduled cycle letter'+(queued>1?'s':''),'ok');
   }
-  updateSeqNote();
+  updateAutomationUI();
   return queued;
+}
+// Upcoming scheduled letters for one contact (for the Schedule view).
+function contactSchedule(c){
+  if(!c.groupId) return [];
+  const g=groupById(c.groupId); if(!g) return [];
+  const tpls=[...templates,...(uploadedTpls||[])];
+  const enrolled=new Date(c.enrolledAt||c.firstAt||c.lastAt).getTime();
+  const out=[];
+  for(let i=(c.seqDone||1); i<g.steps.length; i++){
+    const due=new Date(enrolled+g.steps[i].day*86400000);
+    const t=tpls.find(t=>t.id===g.steps[i].tplId);
+    out.push({ when:due.toISOString().slice(0,10), date:due, tpl:(t&&t.name)||'Letter', ref:c.ref||'', address:c.address, group:g.name, district:c.district });
+  }
+  return out;
+}
+// ── Schedule view (upcoming cycle letters + references) ──
+function renderSchedule(){
+  const box=document.getElementById('sched-results'); if(!box) return;
+  loadGroups();
+  let items=[]; Object.values(contacts).forEach(c=>{ contactSchedule(c).forEach(s=>items.push(s)); });
+  items.sort((a,b)=>a.date-b.date);
+  const t=document.getElementById('sched-count'); if(t) t.textContent=items.length;
+  const ov=document.getElementById('sched-overdue'); if(ov) ov.textContent=items.filter(i=>i.date.getTime()<=Date.now()).length;
+  if(!items.length){ box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No scheduled letters yet. Print a letter, choose a cycle when prompted, and the upcoming letters appear here — each with a reference.</div>'; return; }
+  const byDate={}; items.forEach(it=>{ (byDate[it.when]=byDate[it.when]||[]).push(it); });
+  box.innerHTML=Object.keys(byDate).sort().map(date=>{
+    const d=new Date(date); const label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    const overdue=d.getTime()<=Date.now();
+    return '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:'+(overdue?'var(--amber)':'var(--text)')+';margin-bottom:7px;display:flex;align-items:center;gap:8px">📅 '+label+(overdue?' <span class="tag tag-gold">due now</span>':'')+'</div>'
+      + byDate[date].map(it=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--border)">'
+          +'<span class="tag tag-blue" style="font-family:monospace;font-weight:700">'+(it.ref||'—')+'</span>'
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">'+it.address+'</div>'
+            +'<div style="font-size:11px;color:var(--muted)">'+it.tpl+' · '+it.group+' · '+(it.district||'')+'</div></div>'
+        +'</div>').join('')
+    +'</div>';
+  }).join('');
+}
+function exportSchedule(){
+  const rows=[['Reference','Due date','Address','Letter','Cycle']];
+  Object.values(contacts).forEach(c=>contactSchedule(c).forEach(s=>rows.push([s.ref,s.when,s.address,s.tpl,s.group])));
+  const csv=rows.map(r=>r.map(x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='propmail_schedule_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  toast('Schedule exported','ok');
 }
 function loadContacts(){ try{ contacts=JSON.parse(localStorage.getItem('pmContacts')||'{}'); }catch(e){ contacts={}; } updateCampBadges(); }
 function saveContacts(){ localStorage.setItem('pmContacts', JSON.stringify(contacts)); }
@@ -1876,16 +1950,16 @@ function logContact(prop, tpl, source){
   if(contacts[k]){ contacts[k].lastAt=now; contacts[k].count=(contacts[k].count||1)+1; }
   else contacts[k]={ address:addr, postcode:prop.postcode||'', district:prop.haCode||prop.district||'',
     source:source||prop.source||'Search', template:(tpl&&tpl.name)||'', status:'sent',
-    firstAt:now, lastAt:now, count:1, enrolledAt:now, seqDone:1 };
+    firstAt:now, lastAt:now, count:1 };  // a cycle is only attached when the user picks one
   saveContacts(); updateCampBadges();
 }
 function isFollowupDue(c){
   if(['responded','instructed','dead'].includes(c.status)) return false;
-  if(sequence.enabled && sequence.steps.length>1){
-    const done=c.seqDone||1;
-    if(done>=sequence.steps.length) return false;
+  if(automation.enabled && c.groupId){
+    const g=groupById(c.groupId); const done=c.seqDone||1;
+    if(!g || done>=g.steps.length) return false;
     const enrolled=new Date(c.enrolledAt||c.firstAt||c.lastAt).getTime();
-    return Date.now() >= enrolled + sequence.steps[done].day*86400000;
+    return Date.now() >= enrolled + g.steps[done].day*86400000;
   }
   return (Date.now()-new Date(c.lastAt).getTime())/86400000 >= 21;
 }
@@ -1913,7 +1987,7 @@ function renderCampaigns(){
     return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+c.address+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+c.source+' · last letter '+when+(c.count>1?' · '+c.count+'×':'')+(due?' · <span style="color:var(--amber);font-weight:700">follow-up due</span>':'')+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+c.source+' · last letter '+when+(c.count>1?' · '+c.count+'×':'')+(c.groupId?(' · <span style="color:var(--blue);font-weight:600">'+(groupById(c.groupId)?.name||'cycle')+(c.ref?' '+c.ref:'')+'</span>'):'')+(due?' · <span style="color:var(--amber);font-weight:700">follow-up due</span>':'')+'</div>'
       +'</div>'
       +'<span class="tag '+(stColor[c.status]||'tag-blue')+'">'+(c.status||'sent')+'</span>'
       +'<select onchange="setContactStatus(\''+c.k+'\',this.value)" style="padding:5px 8px;border:1px solid var(--border2);border-radius:7px;font-family:inherit;font-size:11px">'
@@ -1932,61 +2006,59 @@ function exportCampaigns(){
 }
 function clearCampaigns(){ if(!confirm('Clear all logged contacts? This cannot be undone.')) return; contacts={}; saveContacts(); updateCampBadges(); renderCampaigns(); toast('Campaign log cleared','warn'); }
 
-// ── Post-print "start an automated cycle?" modal ──
+// ── Post-print "start an automated cycle?" modal (pick a letter group) ──
 function showCycleModal(prop){
   if(localStorage.getItem('pmCycleAsk')==='never') return;
+  if(!groups.length) loadGroups();
   const addr=prop.fullAddress||prop.displayAddress||prop.address||''; if(!addr) return;
   const c=contacts[contactKey(addr)];
-  if(sequence.enabled && c && (c.seqDone||1) < (sequence.steps?.length||1)) return; // already mid-cycle
+  if(c && c.groupId && !['responded','instructed','dead'].includes(c.status)){ const g=groupById(c.groupId); if(g && (c.seqDone||1)<g.steps.length) return; } // already cycling
   document.getElementById('cycle-modal')?.remove();
-  window._cycleProp = prop;
-  window._cycleSteps = JSON.parse(JSON.stringify((sequence.steps&&sequence.steps.length)?sequence.steps:[{tpl:'intro',day:0},{tpl:'sale',day:14}]));
+  window._cycleProp = prop; window._cycleAddr = addr;
   const ov=document.createElement('div'); ov.id='cycle-modal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
   ov.onclick=(e)=>{ if(e.target===ov) cycleClose(); };
-  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:470px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);overflow:hidden">'
+  const gopts=groups.map(g=>'<option value="'+g.id+'"'+(g.id===automation.defaultGroupId?' selected':'')+'>'+g.name+' ('+g.steps.length+' letters)</option>').join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:480px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);overflow:hidden">'
     +'<div style="padding:20px 22px;border-bottom:1px solid var(--border)"><div style="font-size:17px;font-weight:700;color:var(--text)">⏱️ Automated letter cycle</div>'
-    +'<div style="font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5">You just printed a letter for <strong style="color:var(--text)">'+addr.split(',')[0]+'</strong>. Would you like to put it on an automated follow-up cycle? Pick the letters and timings below.</div></div>'
-    +'<div style="padding:18px 22px;max-height:46vh;overflow:auto"><div id="cycle-steps"></div>'
-    +'<button class="btn bs sm-btn" style="margin-top:6px" onclick="cycleAddStep()">+ Add letter</button></div>'
+    +'<div style="font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5">You just printed a letter for <strong style="color:var(--text)">'+addr.split(',')[0]+'</strong>. Put it on one of your letter cycles?</div></div>'
+    +'<div style="padding:18px 22px">'
+      +'<label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Letter cycle</label>'
+      +'<div style="display:flex;gap:8px;align-items:center;margin:6px 0 14px">'
+        +'<select id="cycle-group" onchange="renderCyclePreview()" style="flex:1;padding:9px 11px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:13px">'+gopts+'</select>'
+        +'<button class="btn bs sm-btn" onclick="cycleNewGroup()">+ New</button>'
+      +'</div>'
+      +'<div id="cycle-preview" style="background:var(--slate);border-radius:10px;padding:10px 12px;font-size:12px"></div>'
+    +'</div>'
     +'<div style="padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-    +'<button class="btn bp" onclick="cycleConfirm(\''+contactKey(addr).replace(/\\/g,'')+'\')">✓ Start automated cycle</button>'
+    +'<button class="btn bp" onclick="cycleConfirm()">✓ Start cycle</button>'
     +'<button class="btn bs" onclick="cycleClose()">Not now</button><div style="flex:1"></div>'
     +'<button class="btn bghost sm-btn" onclick="cycleNever()">Don’t ask again</button></div></div>';
   document.body.appendChild(ov);
-  renderCycleSteps();
+  renderCyclePreview();
 }
-function renderCycleSteps(){
-  const box=document.getElementById('cycle-steps'); if(!box) return;
-  const tpls=[...templates,...(uploadedTpls||[])];
-  box.innerHTML=window._cycleSteps.map((s,i)=>{
-    const opts=tpls.map(t=>'<option value="'+t.id+'"'+(s.tpl===t.id?' selected':'')+'>'+t.name+'</option>').join('');
-    return '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
-      +'<span style="font-size:11px;font-weight:700;color:var(--muted);width:42px;flex-shrink:0">No.'+(i+1)+'</span>'
-      +'<select onchange="cycleSetStep('+i+',\'tpl\',this.value)" style="flex:1;min-width:0;padding:7px 9px;border:1px solid var(--border2);border-radius:8px;font-family:inherit;font-size:12px">'+opts+'</select>'
-      +(i===0?'<span style="font-size:11px;color:var(--muted);width:78px;flex-shrink:0;text-align:right">day 0</span>'
-        :'<label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;width:84px;flex-shrink:0;justify-content:flex-end">day<input type="number" min="1" max="60" value="'+s.day+'" onchange="cycleSetStep('+i+',\'day\',this.value)" style="width:48px;padding:5px;border:1px solid var(--border2);border-radius:6px;font-family:inherit"></label>')
-      +(i>0?'<button class="bic" onclick="cycleRemoveStep('+i+')">✕</button>':'<span style="width:22px;flex-shrink:0"></span>')
-    +'</div>';
-  }).join('');
+function renderCyclePreview(){
+  const sel=document.getElementById('cycle-group'); const box=document.getElementById('cycle-preview'); if(!sel||!box) return;
+  const g=groupById(sel.value); const tpls=[...templates,...(uploadedTpls||[])];
+  if(!g){ box.innerHTML='No cycle.'; return; }
+  box.innerHTML='<div style="font-weight:700;color:var(--text);margin-bottom:6px">'+g.name+' · reference '+refPrefix(g.name)+'-'+((automation.refSeq||1000)+1)+'</div>'
+    + g.steps.map((s,i)=>{ const t=tpls.find(t=>t.id===s.tplId); return '<div style="color:var(--text2)">'+(i+1)+'. '+((t&&t.name)||'Letter')+' <span style="color:var(--muted)">· '+(s.day===0?'on printing':'day '+s.day)+'</span></div>'; }).join('');
 }
-function cycleSetStep(i,k,v){ const s=window._cycleSteps[i]; if(!s) return; if(k==='day') s.day=Math.max(1,Math.min(60,parseInt(v)||1)); else s[k]=v; }
-function cycleAddStep(){ if(window._cycleSteps.length>=6){ toast('Maximum 6 letters in a cycle','warn'); return; } const last=window._cycleSteps[window._cycleSteps.length-1]; window._cycleSteps.push({ tpl:(templates[1]||templates[0]).id, day:Math.min(60,(last?last.day:0)+14) }); renderCycleSteps(); }
-function cycleRemoveStep(i){ if(i===0) return; window._cycleSteps.splice(i,1); renderCycleSteps(); }
+function cycleNewGroup(){ createGroup(); const sel=document.getElementById('cycle-group'); if(sel){ const last=groups[groups.length-1]; sel.innerHTML=groups.map(g=>'<option value="'+g.id+'"'+(g.id===last.id?' selected':'')+'>'+g.name+' ('+g.steps.length+' letters)</option>').join(''); } renderCyclePreview(); }
 function cycleClose(){ document.getElementById('cycle-modal')?.remove(); }
-function cycleNever(){ localStorage.setItem('pmCycleAsk','never'); cycleClose(); toast('Won’t ask again — set cycles any time in Campaigns','ok'); }
-function cycleConfirm(key){
-  sequence.steps=(window._cycleSteps||[]).slice(0,6); if(sequence.steps[0]) sequence.steps[0].day=0;
-  sequence.steps=sequence.steps.filter(s=>s.day<=60).sort((a,b)=>a.day-b.day);
-  sequence.enabled=true; localStorage.setItem('pmSequence', JSON.stringify(sequence));
+function cycleNever(){ localStorage.setItem('pmCycleAsk','never'); cycleClose(); toast('Won’t ask again — start cycles from the Campaigns tab any time','ok'); }
+function cycleConfirm(){
+  const sel=document.getElementById('cycle-group'); const g=groupById(sel?sel.value:automation.defaultGroupId); if(!g) return;
+  automation.enabled=true; saveGroups();
+  const e=document.getElementById('auto-enabled'); if(e) e.checked=true;
+  const key=contactKey(window._cycleAddr||'');
   if(!contacts[key] && window._cycleProp) logContact(window._cycleProp, templates[0], window._cycleProp.source||'Printed');
   const c=contacts[key];
-  if(c){ c.enrolledAt=new Date().toISOString(); c.seqDone=1; if(['responded','instructed','dead'].includes(c.status)) c.status='sent'; saveContacts(); }
-  cycleClose();
-  if(typeof loadSequence==='function') loadSequence();
-  runDueSequences(false);
-  updateCampBadges();
-  toast('✓ '+((c&&c.address.split(',')[0])||'Property')+' added to the automated cycle','ok');
+  if(c){ c.groupId=g.id; c.ref=newRef(g); c.enrolledAt=new Date().toISOString(); c.seqDone=1;
+    if(['responded','instructed','dead'].includes(c.status)) c.status='sent'; saveContacts(); }
+  cycleClose(); runDueSequences(false); updateCampBadges();
+  if(typeof renderCampaigns==='function') renderCampaigns();
+  toast('✓ '+((c&&c.address.split(',')[0])||'Property')+' on “'+g.name+'” cycle · ref '+(c&&c.ref||''),'ok');
 }
 
 function showPanel(n){
@@ -1996,9 +2068,10 @@ function showPanel(n){
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
-  if (n === 'campaigns') { loadContacts(); loadSequence(); runDueSequences(false); renderCampaigns(); }
+  if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
+  if (n === 'schedule')  { loadContacts(); loadGroups(); runDueSequences(true); renderSchedule(); }
   if (n === 'ha')        loadTargeting();
-  if (n === 'templates') renderTpls();
+  if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); }
   if (n === 'queue')     renderQueue();
   if (n === 'printers')  renderPrinters();
   if (n === 'bot')       updateBotUI();
