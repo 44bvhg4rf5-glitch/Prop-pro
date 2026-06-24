@@ -1940,6 +1940,64 @@ function exportSchedule(){
   a.download='propmail_schedule_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
   toast('Schedule exported','ok');
 }
+// ── Auto-print calendar ──
+let printSchedule = { enabled:false, days:[1,2,3,4,5], time:'09:00', lastRun:'' };
+const PS_DAYS = [['Mon',1],['Tue',2],['Wed',3],['Thu',4],['Fri',5],['Sat',6],['Sun',0]];
+function loadPrintSchedule(){ try{ printSchedule=Object.assign(printSchedule, JSON.parse(localStorage.getItem('pmPrintSchedule')||'{}')); }catch(e){} renderPrintSchedule(); }
+function savePrintSchedule(){ localStorage.setItem('pmPrintSchedule', JSON.stringify(printSchedule)); }
+function renderPrintSchedule(){
+  const en=document.getElementById('ps-enabled'); if(en) en.checked=!!printSchedule.enabled;
+  const tm=document.getElementById('ps-time'); if(tm) tm.value=printSchedule.time||'09:00';
+  const box=document.getElementById('ps-days'); if(box) box.innerHTML=PS_DAYS.map(([lbl,d])=>{
+    const on=printSchedule.days.includes(d);
+    return '<button class="agent-pill'+(on?' on':'')+'" onclick="togglePrintDay('+d+')"><span class="ck">✓</span>'+lbl+'</button>';
+  }).join('');
+}
+function togglePrintDay(d){ const s=new Set(printSchedule.days); s.has(d)?s.delete(d):s.add(d); printSchedule.days=[...s]; savePrintSchedule(); renderPrintSchedule(); }
+function setPrintTime(v){ printSchedule.time=v||'09:00'; savePrintSchedule(); }
+function togglePrintEnabled(){ const e=document.getElementById('ps-enabled'); printSchedule.enabled=e?e.checked:false; savePrintSchedule(); toast('Auto-print '+(printSchedule.enabled?'on — runs on the selected days':'off'), printSchedule.enabled?'ok':'warn'); }
+// Print every pending letter as a single multi-page job (one print dialog).
+function printAllDue(){
+  const pend=queue.map((q,i)=>i).filter(i=>queue[i].status==='pend');
+  if(!pend.length){ toast('No letters waiting to print','warn'); return 0; }
+  const pa=document.getElementById('pa'); if(!pa) return 0;
+  pa.innerHTML=pend.map(i=>{ const it=queue[i]; const content=buildLetter(it.tpl?.body||'', it.prop||{});
+    return '<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:36px 54px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111;page-break-after:always">'+content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'; }).join('');
+  pa.style.display='block'; window.print(); pa.style.display='none';
+  pend.forEach(i=>{ queue[i].status='done'; });
+  renderQueue(); if(typeof updQStats==='function') updQStats();
+  toast('🖨 Printed '+pend.length+' letter'+(pend.length>1?'s':''),'ok');
+  return pend.length;
+}
+// On a scheduled day/time (while the app is open), gather due letters and offer a one-tap print run.
+function checkPrintSchedule(){
+  if(!printSchedule.enabled) return;
+  const now=new Date(); const today=now.toISOString().slice(0,10);
+  if(printSchedule.lastRun===today) return;
+  if(!printSchedule.days.includes(now.getDay())) return;
+  const [h,m]=(printSchedule.time||'09:00').split(':').map(Number);
+  const sched=new Date(now); sched.setHours(h||9,m||0,0,0);
+  if(now < sched) return;
+  if(typeof runDueSequences==='function') runDueSequences(true);
+  const pending=queue.filter(x=>x.status==='pend').length;
+  printSchedule.lastRun=today; savePrintSchedule();
+  if(pending>0) showPrintRunModal(pending);
+}
+function showPrintRunModal(n){
+  document.getElementById('printrun-modal')?.remove();
+  const ov=document.createElement('div'); ov.id='printrun-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);padding:22px 24px;text-align:center">'
+    +'<div style="font-size:34px;margin-bottom:8px">🖨️</div>'
+    +'<div style="font-size:17px;font-weight:700;color:var(--text)">Scheduled print run</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin:8px 0 18px;line-height:1.5"><strong style="color:var(--text)">'+n+'</strong> letter'+(n>1?'s are':' is')+' due to go out today. Print them all now?</div>'
+    +'<div style="display:flex;gap:8px;justify-content:center">'
+      +'<button class="btn bp" onclick="document.getElementById(\'printrun-modal\').remove();printAllDue()">🖨 Print all now</button>'
+      +'<button class="btn bs" onclick="document.getElementById(\'printrun-modal\').remove()">Later</button>'
+    +'</div></div>';
+  ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
 function loadContacts(){ try{ contacts=JSON.parse(localStorage.getItem('pmContacts')||'{}'); }catch(e){ contacts={}; } updateCampBadges(); }
 function saveContacts(){ localStorage.setItem('pmContacts', JSON.stringify(contacts)); }
 function contactKey(addr){ return (addr||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
@@ -2069,7 +2127,7 @@ function showPanel(n){
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
   if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
-  if (n === 'schedule')  { loadContacts(); loadGroups(); runDueSequences(true); renderSchedule(); }
+  if (n === 'schedule')  { loadContacts(); loadGroups(); loadPrintSchedule(); runDueSequences(true); renderSchedule(); }
   if (n === 'ha')        loadTargeting();
   if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); }
   if (n === 'queue')     renderQueue();
@@ -4854,4 +4912,5 @@ function updateIntelTable(){
 // Load saved agent-targeting settings + campaign log as soon as the app is ready.
 try { if (typeof loadTargeting === 'function') loadTargeting(); } catch (e) {}
 try { if (typeof loadContacts === 'function') loadContacts(); } catch (e) {}
-try { if (typeof loadSequence === 'function') { loadSequence(); runDueSequences(false); } } catch (e) {}
+try { if (typeof loadGroups === 'function') { loadGroups(); runDueSequences(false); } } catch (e) {}
+try { if (typeof loadPrintSchedule === 'function') { loadPrintSchedule(); checkPrintSchedule(); setInterval(checkPrintSchedule, 60000); } } catch (e) {}
