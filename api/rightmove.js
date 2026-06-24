@@ -26,10 +26,15 @@ export default async function handler(req, res) {
         const id = String(p.id || (p.propertyUrl.match(/(\d+)/) || [])[1] || '');
         const price =
           (p.price && (p.price.amount || (p.price.displayPrices && p.price.displayPrices[0] && p.price.displayPrices[0].displayPrice))) || '';
+        const disp = p.displayAddress || '';
+        const pcMatch = disp.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i); // full postcode if shown
         return {
           propertyId: id,
-          address: p.displayAddress || '',
-          displayAddress: p.displayAddress || '',
+          address: disp,
+          displayAddress: disp,
+          postcode: pcMatch ? pcMatch[0].toUpperCase() : '',
+          lat: (p.location && p.location.latitude) || null,
+          lon: (p.location && p.location.longitude) || null,
           haCode: district,
           price: typeof price === 'number' ? price : 0,
           priceLabel: typeof price === 'string' ? price : price ? '£' + Number(price).toLocaleString() : '',

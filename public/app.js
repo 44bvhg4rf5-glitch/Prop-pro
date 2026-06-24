@@ -947,11 +947,12 @@ async function runLiveSearch(){
       (d.properties || []).forEach(raw => {
         const pid2  = String(raw.propertyId || '');
         const disp2 = raw.displayAddress || raw.address || '';
-        const pcM2  = disp2.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+        const pcM2  = (raw.postcode && raw.postcode.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i)) || disp2.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
         props.push({
           id: `rm-srv-${props.length}`,
           address: disp2, displayAddress: disp2,
           postcode: pcM2 ? pcM2[0].toUpperCase() : (code + ' — see listing'),
+          lat: raw.lat ?? null, lon: raw.lon ?? null,
           district: dist2?.name || code, haCode: code,
           type: raw.type || 'Property', beds: raw.beds || 0,
           price: raw.price || 0,
@@ -1286,8 +1287,9 @@ async function findFullAddress(i){
   box.innerHTML = '<span style="font-size:12px;color:var(--muted)">🔎 Searching the EPC register…</span>';
   try{
     const pc = (p.postcode||'').replace(/—.*/,'').trim();
-    if(!pc){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">No postcode to search.</span>'; return; }
-    const qs = new URLSearchParams({ postcode: pc, street: p.displayAddress||p.address||'' });
+    const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'' });
+    if(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('postcode', pc); // full postcode only
+    if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
     const r = await fetch('/api/epc?'+qs.toString());
     const d = await r.json().catch(()=>({}));
     if(!r.ok){
@@ -1296,30 +1298,54 @@ async function findFullAddress(i){
     }
     const cands = d.candidates||[];
     if(!cands.length){
-      box.innerHTML = '<span style="font-size:12px;color:var(--muted)">No EPC matches for '+pc+'. Open the Rightmove link to verify the address.</span>';
+      box.innerHTML = '<span style="font-size:12px;color:var(--muted)">'+(d.note||('No EPC matches found.'))+' Open the Rightmove link to verify.</span>';
       return;
     }
     window._epcCand = window._epcCand||{}; window._epcCand[i] = cands;
-    box.innerHTML = '<div style="border:1px solid var(--border2);border-radius:8px;padding:9px 11px;background:#fff">'
-      +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">CANDIDATE ADDRESSES · EPC register ('+d.total+') — verify before posting</div>'
-      + cands.slice(0,8).map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
-          +'<span style="font-size:12px;color:var(--text)">'+c.fullAddress+(c.band?' <span style="color:var(--muted)">· EPC '+c.band+'</span>':'')+'</span>'
-          +'<button onclick="event.stopPropagation();useEpcAddress('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>'
-        +'</div>').join('')
-      +'</div>';
+    // Task 1: auto-apply the best (top-ranked) match straight away.
+    applyEpcAddress(i, 0);
+    renderEpcBox(i);
   }catch(e){
     box.innerHTML = '<span style="font-size:12px;color:var(--amber)">⚠ '+e.message+'</span>';
   }
 }
-function useEpcAddress(i,j){
+
+// Render the candidate list, highlighting the one currently applied.
+function renderEpcBox(i){
+  const box = document.getElementById('epc-'+i); if(!box) return;
+  const cands = (window._epcCand && window._epcCand[i]) || [];
+  const chosen = props[i]._epcChosen ?? 0;
+  const shown = cands.slice(0, 5);
+  box.innerHTML = '<div style="border:1px solid var(--border2);border-radius:8px;padding:9px 11px;background:#fff">'
+    +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">'
+      +'BEST MATCH APPLIED ✓ · '+cands.length+' candidate'+(cands.length>1?'s':'')+' on this street — tap another to switch, then verify on Rightmove</div>'
+    + shown.map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
+        +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'
+          +(j===chosen?'✓ ':'')+c.fullAddress+(c.band?' <span style="color:var(--muted);font-weight:400">· EPC '+c.band+'</span>':'')+'</span>'
+        +(j===chosen
+           ? '<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">USING</span>'
+           : '<button onclick="event.stopPropagation();useEpcAddress('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>')
+      +'</div>').join('')
+    + (cands.length>shown.length?'<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(cands.length-shown.length)+' more on this street</div>':'')
+    +'</div>';
+}
+
+// Set the property's address from a candidate (data + in-place row update).
+function applyEpcAddress(i,j){
   const c = (window._epcCand && window._epcCand[i] || [])[j]; if(!c) return;
+  props[i]._epcChosen = j;
   props[i].address = c.fullAddress;
   props[i].displayAddress = c.fullAddress;
   props[i].fullAddress = c.fullAddress;
   if(c.postcode) props[i].postcode = c.postcode;
   props[i].addressSource = 'EPC register';
-  toast('Address set from EPC register — verify on the listing before posting','ok');
-  renderLiveResults();
+  const span = document.getElementById('addr-'+i);
+  if(span) span.textContent = c.fullAddress;
+}
+function useEpcAddress(i,j){
+  applyEpcAddress(i,j);
+  renderEpcBox(i);
+  toast('Address updated — verify on the listing before posting','ok');
 }
 
 function renderLiveResults(){
@@ -1363,7 +1389,7 @@ function renderLiveResults(){
         // Address line — THE key data
         +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">'
           +(isReal?'<span style="background:rgba(5,150,105,.12);color:#059669;font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">● LIVE</span>':'')
-          +'<span style="font-size:14px;font-weight:700;color:var(--text)">'+(p.displayAddress||p.address||'Address on Rightmove')+'</span>'
+          +'<span id="addr-'+i+'" style="font-size:14px;font-weight:700;color:var(--text)">'+(p.displayAddress||p.address||'Address on Rightmove')+'</span>'
         +'</div>'
         // Postcode + meta
         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
