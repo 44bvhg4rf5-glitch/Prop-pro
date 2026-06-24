@@ -1585,11 +1585,59 @@ function printSel(){ queueAllSelected(); }
 function autoSendAll(){ queueAllResults(); }
 function autoSendSel(){ queueAllSelected(); }
 
+// ── Pre-Market Radar (new-EPC monitor) ──
+let premarketItems = [];
+async function initPremarket(){
+  const days = document.getElementById('pm-days')?.value || '14';
+  const dist = document.getElementById('pm-district')?.value || '';
+  const box = document.getElementById('pm-results');
+  if(box) box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">🔎 Scanning the EPC register across HA0–HA9…</div>';
+  try{
+    const qs = new URLSearchParams({ days });
+    if(dist) qs.set('districts', dist);
+    const r = await fetch('/api/epc-monitor?'+qs.toString());
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</div>'; return; }
+    premarketItems = d.properties || [];
+    const c = document.getElementById('pm-count'); if(c) c.textContent = premarketItems.length;
+    renderPremarket();
+  }catch(e){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)">⚠ '+e.message+'</div>'; }
+}
+function renderPremarket(){
+  const box = document.getElementById('pm-results'); if(!box) return;
+  if(!premarketItems.length){ box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">No new EPCs lodged in this window. Try a longer period.</div>'; return; }
+  box.innerHTML = premarketItems.slice(0,300).map((p,i)=>{
+    const q = encodeURIComponent(p.fullAddress+' for sale');
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+p.fullAddress+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">📮 '+p.postcode+' · '+p.district+' · EPC '+(p.band||'?')+' · lodged '+p.lodged+'</div>'
+      +'</div>'
+      +'<a href="https://www.google.com/search?q='+q+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Check listings</a>'
+      +'<button onclick="queuePremarket('+i+')" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📬 Queue</button>'
+    +'</div>';
+  }).join('');
+}
+function queuePremarket(i){
+  const it = premarketItems[i]; if(!it) return;
+  const tpl = [...templates,...(uploadedTpls||[])][0] || templates[0];
+  const prop = { address:it.fullAddress, displayAddress:it.fullAddress, fullAddress:it.fullAddress,
+    postcode:it.postcode, district:it.district, haCode:it.district, type:'Property', beds:0,
+    portal:'Pre-Market', source:'Pre-Market EPC', isRealUrl:true,
+    rmUrl:'https://www.google.com/search?q='+encodeURIComponent(it.fullAddress+' for sale') };
+  queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false });
+  if(typeof updQBadge==='function') updQBadge();
+  if(typeof updQStats==='function') updQStats();
+  if(typeof updateKPIs==='function') updateKPIs();
+  toast('📬 Letter queued for '+it.fullAddress, 'ok');
+}
+
 function showPanel(n){
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(x => x.classList.remove('active'));
   document.getElementById('panel-' + n)?.classList.add('active');
   document.getElementById('nav-' + n)?.classList.add('active');
+  if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'templates') renderTpls();
   if (n === 'queue')     renderQueue();
   if (n === 'printers')  renderPrinters();
