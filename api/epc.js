@@ -1,5 +1,6 @@
 import { EPC_BASE, fetchJson, reverseGeocode, FULL_POSTCODE, sendJson } from '../lib/helpers.js';
 
+const SQFT_PER_M2 = 10.7639;
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 // The road name from a Rightmove address ("12 Hindes Road, Harrow, HA1" → "hindes road").
@@ -9,7 +10,6 @@ function streetOf(s) {
 }
 
 const FLAT_TYPE = /flat|apartment|maisonette|studio/i;
-// Does an EPC address line look like a flat (vs a whole house)?
 function looksLikeFlat(line1) {
   const l = (line1 || '').trim();
   return /\b(flat|apartment|apt|unit|maisonette|studio|room)\b/i.test(l) || /^\d+[a-z]\b/i.test(l);
@@ -26,32 +26,14 @@ export default async function handler(req, res) {
   }
 
   const u = new URL(req.url, 'http://localhost');
-
-  // Temporary probe to discover the certificate-detail schema (remove later).
-  if (u.searchParams.get('debug')) {
-    const pc = (u.searchParams.get('postcode') || 'HA1 1BA').toUpperCase();
-    const s = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=3`, EPC_API_KEY);
-    const row = ((s.json && s.json.data) || [])[0] || null;
-    const cn = row && (row.certificateNumber || row.certificate_number);
-    let detail = null;
-    if (cn) {
-      const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cn)}`, EPC_API_KEY);
-      detail = d.json;
-    }
-    sendJson(res, 200, { searchRowKeys: row ? Object.keys(row) : [], searchRow: row, certNo: cn || null, detail });
-    return;
-  }
-
   const postcodeIn = (u.searchParams.get('postcode') || '').trim().toUpperCase();
   const street = (u.searchParams.get('street') || '').trim();
   const rmType = (u.searchParams.get('type') || '').trim();
+  const listingSqft = parseInt(u.searchParams.get('size') || '0', 10) || 0; // listing floor area (ft²)
   const lat = parseFloat(u.searchParams.get('lat'));
   const lon = parseFloat(u.searchParams.get('lon'));
   const wantStreet = streetOf(street);
 
-  // Postcodes to search: a full one from the listing (if any), plus the
-  // nearest postcodes to the map pin (Rightmove offsets the pin, so we cast a
-  // small net and then keep only addresses on the listing's actual street).
   let pcList = [];
   if (FULL_POSTCODE.test(postcodeIn)) pcList.push(postcodeIn.replace(/\s+/, ' '));
   if (!Number.isNaN(lat) && !Number.isNaN(lon)) pcList.push(...await reverseGeocode(lat, lon));
@@ -65,19 +47,18 @@ export default async function handler(req, res) {
   const onStreet = (r) => wantStreet && norm([r.addressLine1, r.addressLine2, r.addressLine3].filter(Boolean).join(' ')).includes(wantStreet);
 
   try {
-    // Use the nearest postcode that actually contains the listing's street
-    // (tightest result); only widen to further postcodes if the pin was off.
+    // Use the nearest postcode that actually contains the listing's street.
     let rows = [];
     for (const pc of pcList) {
       const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
       const { status, json } = await fetchJson(url, EPC_API_KEY);
       if (status === 401 || status === 403) { sendJson(res, 502, { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.' }); return; }
       const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
-      if (!wantStreet) { rows = data; break; }          // no street to match → nearest postcode
-      if (data.some(onStreet)) { rows = data; break; }   // this postcode has the street → use it alone
+      if (!wantStreet) { rows = data; break; }
+      if (data.some(onStreet)) { rows = data; break; }
     }
 
-    // Build + de-duplicate (keep newest certificate per address).
+    // Build + de-duplicate (newest certificate per address).
     const byAddr = new Map();
     for (const r of rows) {
       const lines = [r.addressLine1, r.addressLine2, r.addressLine3, r.addressLine4].filter(Boolean);
@@ -89,6 +70,7 @@ export default async function handler(req, res) {
         uprn: r.uprn || '',
         band: r.currentEnergyEfficiencyBand || '',
         certDate: r.registrationDate || '',
+        cert: r.certificateNumber || '',
         _hay: norm(full),
       };
       const ex = byAddr.get(c._hay);
@@ -96,8 +78,7 @@ export default async function handler(req, res) {
     }
     let cands = [...byAddr.values()];
 
-    // Keep only addresses on the listing's street. If we can't confirm the
-    // street, return nothing rather than addresses from the wrong road.
+    // Keep only addresses on the listing's street; if unconfirmed, say so.
     if (wantStreet) {
       const hits = cands.filter((c) => c._hay.includes(wantStreet));
       if (!hits.length) {
@@ -107,21 +88,46 @@ export default async function handler(req, res) {
       cands = hits;
     }
 
-    // Narrow by property type (flat vs whole house) when that's unambiguous.
+    // Narrow by property kind (flat vs house) when unambiguous.
     if (rmType) {
       const rmIsFlat = FLAT_TYPE.test(rmType);
       const typed = cands.filter((c) => looksLikeFlat(c.line1) === rmIsFlat);
       if (typed.length) cands = typed;
     }
 
-    // Newest certificate first.
-    cands.sort((a, b) => (b.certDate || '').localeCompare(a.certDate || ''));
-    cands.forEach((c) => delete c._hay);
+    // Floor-area match: when the listing publishes a size, pull each
+    // candidate's EPC floor area and rank by how close it is.
+    let sizeMatched = false;
+    if (listingSqft > 0 && cands.length > 1) {
+      await Promise.all(cands.slice(0, 30).map(async (c) => {
+        if (!c.cert) return;
+        try {
+          const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(c.cert)}`, EPC_API_KEY);
+          const body = (d.json && d.json.data) ? d.json.data : d.json;
+          const m2 = parseFloat(body && body.total_floor_area);
+          if (!Number.isNaN(m2) && m2 > 0) {
+            c.sizeSqft = Math.round(m2 * SQFT_PER_M2);
+            c.sizeDiff = Math.abs(c.sizeSqft - listingSqft);
+          }
+        } catch { /* no size for this one */ }
+      }));
+      sizeMatched = cands.some((c) => c.sizeDiff != null);
+      cands.sort((a, b) => {
+        const ad = a.sizeDiff == null ? Infinity : a.sizeDiff;
+        const bd = b.sizeDiff == null ? Infinity : b.sizeDiff;
+        if (ad !== bd) return ad - bd;
+        return (b.certDate || '').localeCompare(a.certDate || '');
+      });
+    } else {
+      cands.sort((a, b) => (b.certDate || '').localeCompare(a.certDate || ''));
+    }
 
+    cands.forEach((c) => { delete c._hay; delete c.cert; });
     sendJson(res, 200, {
       postcode: cands[0] ? cands[0].postcode : pcList[0],
       street: street || null,
-      matchedStreet: Boolean(wantStreet),
+      listingSqft: listingSqft || null,
+      sizeMatched,
       total: cands.length,
       candidates: cands.slice(0, 40),
     });

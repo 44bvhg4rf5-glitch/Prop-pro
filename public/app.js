@@ -953,6 +953,7 @@ async function runLiveSearch(){
           address: disp2, displayAddress: disp2,
           postcode: pcM2 ? pcM2[0].toUpperCase() : (code + ' — see listing'),
           lat: raw.lat ?? null, lon: raw.lon ?? null,
+          sizeSqft: raw.sizeSqft ?? null, hasFloorplan: !!raw.hasFloorplan,
           district: dist2?.name || code, haCode: code,
           type: raw.type || 'Property', beds: raw.beds || 0,
           price: raw.price || 0,
@@ -1290,6 +1291,7 @@ async function findFullAddress(i){
     const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'' });
     if(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('postcode', pc); // full postcode only
     if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
+    if(p.sizeSqft>0) qs.set('size', p.sizeSqft); // floor area for size matching
     const r = await fetch('/api/epc?'+qs.toString());
     const d = await r.json().catch(()=>({}));
     if(!r.ok){
@@ -1302,6 +1304,7 @@ async function findFullAddress(i){
       return;
     }
     window._epcCand = window._epcCand||{}; window._epcCand[i] = cands;
+    window._epcMeta = window._epcMeta||{}; window._epcMeta[i] = { sizeMatched: d.sizeMatched, listingSqft: d.listingSqft, total: d.total };
     // Task 1: auto-apply the best (top-ranked) match straight away.
     applyEpcAddress(i, 0);
     renderEpcBox(i);
@@ -1310,22 +1313,28 @@ async function findFullAddress(i){
   }
 }
 
-// Render the candidate list, highlighting the one currently applied.
+// Render the (top 3) candidate list, highlighting the one currently applied.
 function renderEpcBox(i){
   const box = document.getElementById('epc-'+i); if(!box) return;
   const cands = (window._epcCand && window._epcCand[i]) || [];
+  const meta = (window._epcMeta && window._epcMeta[i]) || {};
   const chosen = props[i]._epcChosen ?? 0;
-  const shown = cands.slice(0, 5);
+  const shown = cands.slice(0, 3);
+  const fmt = n => Number(n).toLocaleString();
+  const header = meta.sizeMatched
+    ? 'CLOSEST BY FLOOR SIZE ✓ · listing is '+fmt(meta.listingSqft)+' sq ft · '+(meta.total)+' on this street — verify on Rightmove'
+    : 'BEST MATCH APPLIED ✓ · '+(meta.total||cands.length)+' candidate'+((meta.total||cands.length)>1?'s':'')+' on this street — verify on Rightmove';
   box.innerHTML = '<div style="border:1px solid var(--border2);border-radius:8px;padding:9px 11px;background:#fff">'
-    +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">'
-      +'BEST MATCH APPLIED ✓ · '+cands.length+' candidate'+(cands.length>1?'s':'')+' on this street — tap another to switch, then verify on Rightmove</div>'
-    + shown.map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
-        +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'
-          +(j===chosen?'✓ ':'')+c.fullAddress+(c.band?' <span style="color:var(--muted);font-weight:400">· EPC '+c.band+'</span>':'')+'</span>'
-        +(j===chosen
-           ? '<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">USING</span>'
-           : '<button onclick="event.stopPropagation();useEpcAddress('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>')
-      +'</div>').join('')
+    +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">'+header+'</div>'
+    + shown.map((c,j)=>{
+        const sizeTag = c.sizeSqft ? ' <span style="color:'+(c.sizeDiff!=null&&c.sizeDiff<=150?'var(--green)':'var(--muted)')+';font-weight:400">· '+fmt(c.sizeSqft)+' sq ft</span>' : '';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
+          +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'
+            +(j===chosen?'✓ ':'')+c.fullAddress+(c.band?' <span style="color:var(--muted);font-weight:400">· EPC '+c.band+'</span>':'')+sizeTag+'</span>'
+          +(j===chosen
+             ? '<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">USING</span>'
+             : '<button onclick="event.stopPropagation();useEpcAddress('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>');
+      }).join('')
     + (cands.length>shown.length?'<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(cands.length-shown.length)+' more on this street</div>':'')
     +'</div>';
 }
