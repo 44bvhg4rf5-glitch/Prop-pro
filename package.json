@@ -1,11 +1,13 @@
 {
   "name": "propmail-pro",
   "version": "1.0.0",
-  "description": "PropMail Pro \u2014 Estate Agent Intelligence Platform",
+  "description": "PropMail Pro — Estate Agent Intelligence Platform",
   "type": "module",
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js"
   },
-  "dependencies": {}
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
 }
