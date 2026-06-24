@@ -5,7 +5,7 @@ const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(
 // The road name from a Rightmove address ("12 Hindes Road, Harrow, HA1" → "hindes road").
 function streetOf(s) {
   const seg = (s || '').split(',')[0];
-  return norm(seg).replace(/^\d+[a-z]?\s+/, '');
+  return norm(seg).replace(/^\d+[a-z]?\s+/, '').replace(/^(flat|apartment|apt|unit|plot)\s+\w+\s+/, '');
 }
 
 const FLAT_TYPE = /flat|apartment|maisonette|studio/i;
@@ -33,39 +33,35 @@ export default async function handler(req, res) {
   const lon = parseFloat(u.searchParams.get('lon'));
   const wantStreet = streetOf(street);
 
-  // Resolve which postcode(s) to search: a full one if we have it, otherwise
-  // the nearest postcodes to the listing's map pin.
-  let postcodes = [];
-  if (FULL_POSTCODE.test(postcodeIn)) postcodes = [postcodeIn.replace(/\s+/, ' ')];
-  else if (!Number.isNaN(lat) && !Number.isNaN(lon)) postcodes = await reverseGeocode(lat, lon);
+  // Postcodes to search: a full one from the listing (if any), plus the
+  // nearest postcodes to the map pin (Rightmove offsets the pin, so we cast a
+  // small net and then keep only addresses on the listing's actual street).
+  let pcList = [];
+  if (FULL_POSTCODE.test(postcodeIn)) pcList.push(postcodeIn.replace(/\s+/, ' '));
+  if (!Number.isNaN(lat) && !Number.isNaN(lon)) pcList.push(...await reverseGeocode(lat, lon));
+  pcList = [...new Set(pcList)].slice(0, 8);
 
-  if (!postcodes.length) {
-    sendJson(res, 200, { postcode: null, total: 0, candidates: [], note: 'Could not resolve a full postcode for this listing — open it on Rightmove to read the area.' });
+  if (!pcList.length) {
+    sendJson(res, 200, { total: 0, candidates: [], note: 'Could not resolve a postcode for this listing — open it on Rightmove to read the area.' });
     return;
   }
 
   try {
-    // Search postcodes until we find ones on the listing's street.
+    // Gather addresses across the candidate postcodes.
     let rows = [];
-    let usedPostcode = postcodes[0];
-    for (const pc of postcodes.slice(0, 6)) {
+    for (const pc of pcList) {
       const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
       const { status, json } = await fetchJson(url, EPC_API_KEY);
       if (status === 401 || status === 403) { sendJson(res, 502, { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.' }); return; }
-      if (status !== 200) continue;
-      const data = (json && json.data) || [];
-      if (wantStreet && data.some((r) => norm([r.addressLine1, r.addressLine2, r.addressLine3].filter(Boolean).join(' ')).includes(wantStreet))) {
-        rows = data; usedPostcode = pc; break; // this postcode has the right street — use it alone
-      }
-      if (!rows.length) { rows = data; usedPostcode = pc; }
-      if (FULL_POSTCODE.test(postcodeIn)) break;
+      if (status === 200 && json && Array.isArray(json.data)) rows.push(...json.data);
     }
 
-    // Build candidates.
-    let cands = rows.map((r) => {
+    // Build + de-duplicate (keep newest certificate per address).
+    const byAddr = new Map();
+    for (const r of rows) {
       const lines = [r.addressLine1, r.addressLine2, r.addressLine3, r.addressLine4].filter(Boolean);
       const full = [...lines, r.postTown, r.postcode].filter(Boolean).join(', ');
-      return {
+      const c = {
         fullAddress: full,
         line1: r.addressLine1 || '',
         postcode: (r.postcode || '').replace(/\+/g, ' '),
@@ -74,30 +70,35 @@ export default async function handler(req, res) {
         certDate: r.registrationDate || '',
         _hay: norm(full),
       };
-    });
-
-    // De-duplicate repeat certificates for the same address (keep the newest).
-    const byAddr = new Map();
-    for (const c of cands) {
       const ex = byAddr.get(c._hay);
       if (!ex || (c.certDate || '') > (ex.certDate || '')) byAddr.set(c._hay, c);
     }
-    cands = [...byAddr.values()];
+    let cands = [...byAddr.values()];
 
-    // Keep only addresses on the listing's street (if we know it).
+    // Keep only addresses on the listing's street. If we can't confirm the
+    // street, return nothing rather than addresses from the wrong road.
     if (wantStreet) {
       const hits = cands.filter((c) => c._hay.includes(wantStreet));
-      if (hits.length) cands = hits;
+      if (!hits.length) {
+        sendJson(res, 200, { total: 0, candidates: [], note: "Couldn't confirm the exact street from the map pin. Open the listing on Rightmove to read the road." });
+        return;
+      }
+      cands = hits;
     }
 
-    // Rank: matching property type (flat vs house) first, then newest cert.
-    const rmIsFlat = FLAT_TYPE.test(rmType);
-    cands.forEach((c) => { c._typeMatch = rmType ? (looksLikeFlat(c.line1) === rmIsFlat ? 1 : 0) : 0; });
-    cands.sort((a, b) => (b._typeMatch - a._typeMatch) || (b.certDate || '').localeCompare(a.certDate || ''));
+    // Narrow by property type (flat vs whole house) when that's unambiguous.
+    if (rmType) {
+      const rmIsFlat = FLAT_TYPE.test(rmType);
+      const typed = cands.filter((c) => looksLikeFlat(c.line1) === rmIsFlat);
+      if (typed.length) cands = typed;
+    }
 
-    cands.forEach((c) => { delete c._hay; delete c._typeMatch; });
+    // Newest certificate first.
+    cands.sort((a, b) => (b.certDate || '').localeCompare(a.certDate || ''));
+    cands.forEach((c) => delete c._hay);
+
     sendJson(res, 200, {
-      postcode: usedPostcode,
+      postcode: cands[0] ? cands[0].postcode : pcList[0],
       street: street || null,
       matchedStreet: Boolean(wantStreet),
       total: cands.length,
