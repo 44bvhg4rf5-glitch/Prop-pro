@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   let pcList = [];
   if (FULL_POSTCODE.test(postcodeIn)) pcList.push(postcodeIn.replace(/\s+/, ' '));
   if (!Number.isNaN(lat) && !Number.isNaN(lon)) pcList.push(...await reverseGeocode(lat, lon));
-  pcList = [...new Set(pcList)].slice(0, 8);
+  pcList = [...new Set(pcList)].slice(0, 14);
 
   if (!pcList.length) {
     sendJson(res, 200, { total: 0, candidates: [], note: 'Could not resolve a postcode for this listing — open it on Rightmove to read the area.' });
