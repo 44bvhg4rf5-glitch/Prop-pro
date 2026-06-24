@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: propmail-pro
+    runtime: node
+    plan: free
+    branch: claude/application-website-6b87jv
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      # Optional — only needed for the AI features (chat, owner research, AI
+      # letter writing). The live Rightmove search works WITHOUT this.
+      - key: ANTHROPIC_API_KEY
+        sync: false

@@ -32,6 +32,29 @@ Then open <http://localhost:3000>.
 
 Use `PORT=8080 node server.js` to change the port.
 
+## Live property search (no API key needed)
+
+The Node server exposes `/api/rightmove`, which fetches real current Rightmove
+listings server-side (where the browser's cross-origin block doesn't apply) and
+returns clean JSON — real street/area addresses, prices, and direct
+`rightmove.co.uk/properties/...` links. The HA District Search uses this
+automatically; **no Anthropic key is required** for live search.
+
+```
+GET /api/rightmove?district=HA1&channel=sale&minBeds=2&maxPrice=600000
+```
+
+Note: Rightmove publishes the street + area, not the exact house number, so
+addresses are street-level. This requires the Node server (it cannot run on
+GitHub Pages, which only serves static files). See **Deploying** below.
+
+## Deploying to a free host
+
+`render.yaml` is included for one-click deploys on [Render](https://render.com):
+create a **New → Blueprint**, point it at this repo, and Render runs
+`node server.js` on a free web service. Add `ANTHROPIC_API_KEY` in the
+dashboard only if you want the AI features too.
+
 ## How the AI features work
 
 The browser never sees your API key. The frontend posts to a local

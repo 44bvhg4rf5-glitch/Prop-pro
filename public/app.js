@@ -923,6 +923,72 @@ async function runLiveSearch(){
             `Searching ${districts.join(', ')} for ${chanWd} listings`, 10, '…');
   addLog(`Starting search: ${districts.join(', ')} · ${chanWd}${minBeds>0?' · '+minBeds+'+ beds':''}${maxPriceV>0?' · under £'+maxPriceV.toLocaleString():''}`);
 
+  // ── Step 1: server-side Rightmove fetch (real listings, NO API key needed) ──
+  // The Node server proxies Rightmove and returns real addresses + links.
+  // If it succeeds we render and stop here. If the endpoint is unavailable
+  // (e.g. served as a static file with no backend) we fall through to AI.
+  try {
+    const chan = isSale ? 'sale' : 'rent';
+    for (let di = 0; di < districts.length; di++) {
+      const code = districts[di];
+      setStatus('Finding live properties on Rightmove…', `Fetching ${code} listings…`,
+                15 + Math.round(di * (55 / districts.length)), props.length || '…');
+      const qs = new URLSearchParams({ district: code, channel: chan });
+      if (minBeds > 0)   qs.set('minBeds', String(minBeds));
+      if (maxPriceV > 0) qs.set('maxPrice', String(maxPriceV));
+      const r = await fetch('/api/rightmove?' + qs.toString());
+      if (!r.ok) throw new Error('rightmove endpoint ' + r.status);
+      const d = await r.json();
+      const dist2  = HA_DISTRICTS.find(x => x.code === code);
+      const rmId2  = RM_IDS[code];
+      const rmCh2  = isSale ? 'property-for-sale' : 'property-to-rent';
+      const zoCh2  = isSale ? 'for-sale' : 'to-rent';
+      const zoSlug2 = ZO_SLUGS[code] || 'harrow';
+      (d.properties || []).forEach(raw => {
+        const pid2  = String(raw.propertyId || '');
+        const disp2 = raw.displayAddress || raw.address || '';
+        const pcM2  = disp2.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+        props.push({
+          id: `rm-srv-${props.length}`,
+          address: disp2, displayAddress: disp2,
+          postcode: pcM2 ? pcM2[0].toUpperCase() : (code + ' — see listing'),
+          district: dist2?.name || code, haCode: code,
+          type: raw.type || 'Property', beds: raw.beds || 0,
+          price: raw.price || 0,
+          priceLabel: raw.priceLabel || (raw.price ? '£' + Number(raw.price).toLocaleString() : ''),
+          status: isSale ? 'For Sale' : 'To Let', portal: 'Rightmove', portalCls: 'rm',
+          agent: raw.agent || '', addedDate: raw.addedDate || '',
+          description: '', isLive: true, isRealUrl: !!pid2, selected: true,
+          isNew: false, listedAt: new Date(),
+          rmUrl: raw.url || `https://www.rightmove.co.uk/${rmCh2}/find.html?locationIdentifier=OUTCODE%5E${rmId2}&sortType=6`,
+          rmAreaUrl: `https://www.rightmove.co.uk/${rmCh2}/find.html?locationIdentifier=OUTCODE%5E${rmId2}&sortType=6`,
+          rmSoldUrl: `https://www.rightmove.co.uk/house-prices/${code.toLowerCase()}.html`,
+          zoUrl: `https://www.zoopla.co.uk/${zoCh2}/property/${zoSlug2}/`,
+          otUrl: `https://www.onthemarket.com/${zoCh2}/${zoSlug2}/`,
+          rmId: rmId2, propertyId: pid2, portalUrl: raw.url || '',
+          fullAddress: disp2, source: 'Rightmove (server)'
+        });
+      });
+      addLog(`${code}: +${d.properties?.length || 0} live listings`);
+    }
+  } catch (e) {
+    addLog('Live server fetch unavailable (' + e.message + ') — trying AI search…');
+  }
+
+  if (props.length) {
+    const seenS = new Set();
+    props = props.filter(p => { const k = p.propertyId || p.address; if (seenS.has(k)) return false; seenS.add(k); return true; });
+    props = props.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
+    document.getElementById('search-status').style.display = 'none';
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Find Live Properties'; }
+    renderLiveResults();
+    const real = props.filter(p => p.propertyId && p.propertyId.length >= 6).length;
+    blog(`✅ Found ${props.length} live properties · ${real} with direct Rightmove links`, 'ok');
+    toast(`✅ ${props.length} live properties found`, 'ok');
+    updateKPIs();
+    return;
+  }
+
   // Build districtNames for the prompt
   const distNames = districts.map(c => {
     const d = HA_DISTRICTS.find(x=>x.code===c); return c + (d?' '+d.name:'');
