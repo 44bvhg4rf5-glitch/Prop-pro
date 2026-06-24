@@ -5,10 +5,7 @@
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/rightmove", "dest": "/api/rightmove.js" },
-    { "src": "/api/epc", "dest": "/api/epc.js" },
-    { "src": "/api/anthropic", "dest": "/api/anthropic.js" },
-    { "src": "/api/config", "dest": "/api/config.js" },
+    { "src": "/api/([a-zA-Z0-9_-]+)", "dest": "/api/$1.js" },
     { "src": "/", "dest": "/public/index.html" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]
