@@ -876,6 +876,63 @@ function handleGlobalSearch(e){
 // Automated: finds real listings → extracts street address → builds letter
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Agent targeting ──────────────────────────────────────────────────
+let knownAgents = [];                                 // [{name,count}]
+let targeting = { ownCompany:'', excludeOwn:true, excluded:[] };
+function loadTargeting(){
+  try{ targeting = Object.assign(targeting, JSON.parse(localStorage.getItem('pmTargeting')||'{}')); }catch(e){}
+  try{ knownAgents = JSON.parse(localStorage.getItem('pmAgents')||'[]'); }catch(e){}
+  const oc=document.getElementById('own-company'); if(oc) oc.value = targeting.ownCompany||'';
+  const eo=document.getElementById('exclude-own'); if(eo) eo.checked = targeting.excludeOwn!==false;
+  renderAgentFilter();
+}
+function saveTargeting(){
+  const oc=document.getElementById('own-company'); const eo=document.getElementById('exclude-own');
+  targeting.ownCompany = oc ? oc.value.trim() : '';
+  targeting.excludeOwn = eo ? eo.checked : true;
+  localStorage.setItem('pmTargeting', JSON.stringify(targeting));
+}
+function excludedSet(){ return new Set((targeting.excluded||[]).map(a=>a.toLowerCase())); }
+function isExcludedAgent(p){
+  const a=(p.agent||'').toLowerCase(); if(!a) return false;
+  if(excludedSet().has(a)) return true;
+  if(targeting.excludeOwn && targeting.ownCompany && a.includes(targeting.ownCompany.toLowerCase())) return true;
+  return false;
+}
+function toggleAgent(name){
+  const set=new Set(targeting.excluded||[]);
+  set.has(name) ? set.delete(name) : set.add(name);
+  targeting.excluded=[...set]; localStorage.setItem('pmTargeting', JSON.stringify(targeting));
+  renderAgentFilter(); applyTargetingNow();
+}
+function setAllAgents(on){
+  targeting.excluded = on ? [] : knownAgents.map(a=>a.name);
+  localStorage.setItem('pmTargeting', JSON.stringify(targeting));
+  renderAgentFilter(); applyTargetingNow();
+}
+function renderAgentFilter(){
+  const box=document.getElementById('agent-list'); if(!box) return;
+  if(!knownAgents.length){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">Run a search to discover the agents marketing properties in your districts.</span>'; return; }
+  const ex=excludedSet();
+  box.innerHTML = knownAgents.slice().sort((a,b)=>b.count-a.count).map(a=>{
+    const off=ex.has(a.name.toLowerCase());
+    const safe=a.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 11px;border:1.5px solid '+(off?'var(--border2)':'var(--blue)')+';border-radius:8px;cursor:pointer;background:'+(off?'transparent':'var(--blue-gl)')+';color:'+(off?'var(--muted)':'var(--text)')+';font-weight:'+(off?'400':'600')+'">'
+      +'<input type="checkbox" '+(off?'':'checked')+' onchange="toggleAgent(\''+safe+'\')"> '+a.name+' <span style="opacity:.55">('+a.count+')</span></label>';
+  }).join('');
+}
+function collectAgents(list){
+  const counts=new Map();
+  (knownAgents||[]).forEach(a=>counts.set(a.name,0));     // keep previously-seen names
+  list.forEach(p=>{ if(p.agent) counts.set(p.agent,(counts.get(p.agent)||0)+1); });
+  knownAgents=[...counts.entries()].map(([name,count])=>({name,count})).filter(a=>a.name);
+  localStorage.setItem('pmAgents', JSON.stringify(knownAgents));
+  renderAgentFilter();
+}
+function applyTargetingNow(){
+  if(window._allResolved){ props = window._allResolved.filter(p=>!isExcludedAgent(p)); renderLiveResults(); updateKPIs(); }
+}
+
 async function runLiveSearch(){
   if(!selectedHA.size){ toast('Select at least one HA district in Filters','warn'); return; }
 
@@ -982,6 +1039,12 @@ async function runLiveSearch(){
     props = props.filter(p => { const k = p.propertyId || p.address; if (seenS.has(k)) return false; seenS.add(k); return true; });
     props = props.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
 
+    // ── Agent targeting: register agents, drop excluded ones before resolve ──
+    collectAgents(props);
+    const beforeAgents = props.length;
+    props = props.filter(p => !isExcludedAgent(p));
+    if (beforeAgents !== props.length) addLog(`Agent targeting: skipped ${beforeAgents - props.length} listing(s) from excluded agencies`);
+
     // ── Auto-resolve exact EPC addresses, keep only matched listings ──
     const found = props.length;
     let done = 0, matchedCount = 0;
@@ -1011,6 +1074,7 @@ async function runLiveSearch(){
     const seenAddr = new Set();
     const deduped = matched.filter(p => { const k = (p.fullAddress||'').toLowerCase(); if(seenAddr.has(k)) return false; seenAddr.add(k); return true; });
     props = deduped.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
+    window._allResolved = props;   // master set for instant agent re-filtering
 
     document.getElementById('search-status').style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Find Live Properties'; }
@@ -1638,6 +1702,7 @@ function showPanel(n){
   document.getElementById('panel-' + n)?.classList.add('active');
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'premarket' && !premarketItems.length) initPremarket();
+  if (n === 'ha')        loadTargeting();
   if (n === 'templates') renderTpls();
   if (n === 'queue')     renderQueue();
   if (n === 'printers')  renderPrinters();
@@ -4417,3 +4482,6 @@ function updateIntelTable(){
     return`<tr><td><div style="font-weight:600;font-size:12px">${a.fullAddress}</div><div style="font-size:10px;color:var(--mut)">${a.district||''}</div></td><td><div style="font-weight:600">${o.ownerName||'—'}</div><div style="font-size:10px;color:var(--mut)">${o.ownerType||''}</div></td><td style="font-size:12px">${a.estimatedPrice||'—'}</td><td style="font-family:monospace;font-size:11px">${o.landRegTitle||'—'}</td><td>Band ${o.councilTaxBand||'—'}</td><td><span class="conf-badge cb-${cc}">${cp}%</span></td><td><button class="btn bp sm-btn" onclick="queueIntelLetter('${r.id}')">🖨</button></td></tr>`;
   }).join('')}</tbody></table></div>`;
 }
+
+// Load saved agent-targeting settings as soon as the app is ready.
+try { if (typeof loadTargeting === 'function') loadTargeting(); } catch (e) {}
