@@ -1007,7 +1007,10 @@ async function runLiveSearch(){
         matched.push(p);
       }
     });
-    props = matched.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
+    // Two listings must never resolve to the same house (one letter per address).
+    const seenAddr = new Set();
+    const deduped = matched.filter(p => { const k = (p.fullAddress||'').toLowerCase(); if(seenAddr.has(k)) return false; seenAddr.add(k); return true; });
+    props = deduped.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
 
     document.getElementById('search-status').style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Find Live Properties'; }
@@ -1331,7 +1334,7 @@ async function mapLimit(items, limit, worker){
 async function epcLookup(p, retries=1){
   try{
     const pc = (p.postcode||'').replace(/—.*/,'').trim();
-    const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'' });
+    const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'', district: p.haCode||'' });
     if(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('postcode', pc);
     if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
     if(p.sizeSqft>0) qs.set('size', p.sizeSqft);

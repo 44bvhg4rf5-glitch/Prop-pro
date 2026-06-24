@@ -33,11 +33,15 @@ export default async function handler(req, res) {
   const lat = parseFloat(u.searchParams.get('lat'));
   const lon = parseFloat(u.searchParams.get('lon'));
   const wantStreet = streetOf(street);
+  // Postcode area (e.g. "HA") — never match outside it, even if a same-named
+  // street exists elsewhere and the listing's pin was off.
+  const area = (u.searchParams.get('district') || '').toUpperCase().replace(/[0-9].*$/, '');
+  const inArea = (pc) => !area || (pc || '').toUpperCase().startsWith(area);
 
   let pcList = [];
   if (FULL_POSTCODE.test(postcodeIn)) pcList.push(postcodeIn.replace(/\s+/, ' '));
   if (!Number.isNaN(lat) && !Number.isNaN(lon)) pcList.push(...await reverseGeocode(lat, lon));
-  pcList = [...new Set(pcList)].slice(0, 14);
+  pcList = [...new Set(pcList)].filter(inArea).slice(0, 14);
 
   if (!pcList.length) {
     sendJson(res, 200, { total: 0, candidates: [], note: 'Could not resolve a postcode for this listing — open it on Rightmove to read the area.' });
@@ -77,6 +81,9 @@ export default async function handler(req, res) {
       if (!ex || (c.certDate || '') > (ex.certDate || '')) byAddr.set(c._hay, c);
     }
     let cands = [...byAddr.values()];
+
+    // Never return an address outside the listing's postcode area.
+    cands = cands.filter((c) => inArea(c.postcode));
 
     // Keep only addresses on the listing's street; if unconfirmed, say so.
     if (wantStreet) {
