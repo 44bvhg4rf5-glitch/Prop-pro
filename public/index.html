@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PropMail Pro — Estate Agent Intelligence Platform</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="brand-mark">✉</div>
+    <div class="brand-text">
+      <div class="brand-name">Prop<span>Mail</span> Pro</div>
+      <div class="brand-tagline">Estate Agent Platform</div>
+    </div>
+  </div>
+  <div class="hdr-body">
+    <div class="hdr-search-wrap">
+      <span style="color:rgba(255,255,255,.3);font-size:14px">⌕</span>
+      <input placeholder="Search addresses, postcodes, templates…" id="global-search" onkeydown="handleGlobalSearch(event)">
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-badge green" id="hdr-chip-rt" style="display:none"><div class="pstatus-dot dot-green"></div><span>Live Feed</span></div>
+      <div class="hdr-badge gold" id="hdr-chip-bot" style="display:none"><div class="pstatus-dot dot-gold"></div><span id="hdr-bot-txt">Bot Active</span></div>
+      <div class="hdr-badge" id="hdr-chip-printer"><div class="pstatus-dot dot-red" id="pdot"></div><span id="ptxt">No Printer</span></div>
+      <div class="hdr-avatar" onclick="showPanel('printers')" title="Printer Settings">EP</div>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="nav-group">
+    <div class="nl">Property Search</div>
+    <button class="ni active" id="nav-ha" onclick="showPanel('ha')"><span class="ic">🏘</span><span>HA Districts</span></button>
+    <button class="ni" id="nav-queue" onclick="showPanel('queue')"><span class="ic">🖨</span><span>Print Queue</span><span class="nb nb-g" id="q-nav-badge">0</span></button>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-group">
+    <div class="nl">Automation</div>
+    <button class="ni" id="nav-auto" onclick="showPanel('auto')"><span class="ic">⚡</span><span>Auto Flow</span></button>
+    <button class="ni" id="nav-bot" onclick="showPanel('bot')"><span class="ic">🤖</span><span>Live Bot</span><span class="nb nb-r" id="botnav">●</span></button>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-group">
+    <div class="nl">Intelligence</div>
+    <button class="ni" id="nav-intel" onclick="showPanel('intel')"><span class="ic">🧠</span><span>AI Intel</span><span class="nb nb-b" id="intel-badge" style="display:none">NEW</span></button>
+    <button class="ni" id="nav-success" onclick="showPanel('success')"><span class="ic">📮</span><span>Success Letters</span><span class="nb nb-g" id="success-badge" style="display:none">0</span></button>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-group">
+    <div class="nl">Strategy</div>
+    <button class="ni" id="nav-investor" onclick="showPanel('investor')"><span class="ic">📈</span><span>Investor Board</span><span class="nb nb-g">ROI</span></button>
+    <button class="ni" id="nav-advisor" onclick="showPanel('advisor')"><span class="ic">🤖</span><span>AI Advisor</span><span class="nb nb-b" id="advisor-badge" style="display:none">NEW</span></button>
+    <button class="ni" id="nav-director" onclick="showPanel('director')"><span class="ic">🎬</span><span>Director's Vision</span><span class="nb nb-g">NEW</span></button>
+  </div>
+  <div class="nav-sep"></div>
+  <div class="nav-group">
+    <div class="nl">Config</div>
+    <button class="ni" id="nav-templates" onclick="showPanel('templates')"><span class="ic">📝</span><span>Templates</span></button>
+    <button class="ni" id="nav-printers" onclick="showPanel('printers')"><span class="ic">⚙️</span><span>Printers</span></button>
+  </div>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-item" onclick="toast('PropMail Pro v3.0','')">
+      <span>ℹ️</span><span>PropMail Pro v3.0</span>
+    </div>
+  </div>
+</nav>
+
+<main>
+<div class="page">
+
+<!-- ═══ HA DISTRICTS ═══ -->
+<div class="panel active" id="panel-ha">
+
+  <!-- ── HEADER ── -->
+  <div class="page-hdr">
+    <div>
+      <div class="page-title">🏠 Live Property Address Finder</div>
+      <div class="page-sub">Finds real on-market properties with verified addresses and direct Rightmove links — ready to print and post</div>
+    </div>
+    <div class="page-kpis">
+      <div class="kpi-box"><div class="kpi-n" id="kpi-props">—</div><div class="kpi-l">Found</div></div>
+      <div class="kpi-box"><div class="kpi-n" id="kpi-queue">0</div><div class="kpi-l">Queued</div></div>
+    </div>
+  </div>
+
+  <!-- ── ONE-CLICK SEARCH CARD ── -->
+  <div class="card" style="background:linear-gradient(135deg,#060C1A 0%,#0F1E3A 100%);border:1px solid rgba(37,99,235,.25);margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-family:'Playfair Display',serif;font-size:20px;color:#fff;margin-bottom:6px">Automated Property Finder</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6">Searches Rightmove for live listings in your selected HA districts. Extracts the real street address and property link for each one. Click any result to verify on Rightmove, then queue letters to the owners.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:center;flex-shrink:0">
+        <button id="main-search-btn" onclick="runLiveSearch()" style="padding:14px 32px;background:linear-gradient(135deg,#2563EB,#1d4ed8);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 20px rgba(37,99,235,.4);transition:all .15s;white-space:nowrap">
+          🔍 Find Live Properties
+        </button>
+        <div style="font-size:11px;color:rgba(255,255,255,.35);text-align:center">One click · Fully automated</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FILTERS (collapsed by default) ── -->
+  <details style="margin-bottom:16px">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);padding:8px 0;list-style:none;display:flex;align-items:center;gap:7px">
+      <span style="font-size:16px">⚙️</span> Advanced Filters (optional)
+      <span style="font-size:11px;font-weight:400;opacity:.6">— filter by area, type, beds, price</span>
+    </summary>
+    <div class="card" style="margin-top:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:14px">
+        <div class="fg"><label>Status</label><select id="f-status"><option value="sale">For Sale</option><option value="let">To Let</option><option value="all">Both</option></select></div>
+        <div class="fg"><label>Min Beds</label><select id="f-beds"><option value="0">Any</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option></select></div>
+        <div class="fg"><label>Property Type</label><select id="f-type"><option value="all">All</option><option>Detached House</option><option>Semi-Detached</option><option>Terraced</option><option>Flat</option><option>Bungalow</option></select></div>
+        <div class="fg"><label>Max Price</label><input type="number" id="f-price" placeholder="No limit" style="width:100%"></div>
+        <div class="fg"><label>Letter Template</label><select id="f-tpl"></select></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Select Districts</div>
+        <div class="ha-grid" id="ha-grid"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn bs sm-btn" onclick="selAllHA()">All</button>
+          <button class="btn bghost sm-btn" onclick="clrAllHA()">None</button>
+          <span style="font-size:11px;color:var(--muted);align-self:center" id="ha-sel-count">8 selected</span>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- ── PROGRESS / RESULTS ── -->
+  <div id="search-status" style="display:none">
+    <div class="card" style="background:#060C1A;border:1px solid rgba(37,99,235,.2)">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+        <div id="search-spinner" style="width:28px;height:28px;border:3px solid rgba(37,99,235,.2);border-top-color:#2563EB;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div id="search-status-title" style="font-size:14px;font-weight:700;color:#fff;margin-bottom:3px">Searching…</div>
+          <div id="search-status-sub" style="font-size:12px;color:rgba(255,255,255,.45)">Please wait…</div>
+        </div>
+        <div id="search-status-count" style="font-size:22px;font-weight:800;color:#2563EB;font-family:'Playfair Display',serif">0</div>
+      </div>
+      <div style="background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;height:6px">
+        <div id="search-progress-bar" style="height:100%;background:linear-gradient(90deg,#2563EB,#059669);border-radius:4px;transition:width .4s ease;width:0%"></div>
+      </div>
+      <div id="search-log" style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.4);line-height:2;max-height:72px;overflow:hidden"></div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS TABLE ── -->
+  <div id="results-area" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)" id="results-title">Properties Found</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="results-sub"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn bs sm-btn" onclick="selectAllResults()">☑ Select All</button>
+          <button class="btn bs sm-btn" onclick="selectNoneResults()">☐ None</button>
+          <button class="btn bg sm-btn" id="queue-selected-btn" onclick="queueAllSelected()" disabled>🖨 Queue Letters for Selected</button>
+          <button class="btn bp sm-btn" onclick="queueAllResults()">📬 Queue All & Print</button>
+          <button class="btn bs sm-btn" onclick="exportCSV()">⬇ CSV</button>
+        </div>
+      </div>
+      <div id="results-table"></div>
+    </div>
+  </div>
+
+  <!-- legacy compat -->
+  <div id="rcard" style="display:none"><div id="rlist"></div></div>
+  <div id="sel-bar" style="display:none"></div>
+  <div id="last-t" style="display:none"></div>
+
+</div>
+
+<!-- ═══ QUEUE ═══ -->
+
+<div class="panel" id="panel-queue">
+  <div class="page-hdr">
+    <div><div class="page-title">Print Queue</div><div class="page-sub">All letters queued for printing — manual and automated jobs</div></div>
+    <div class="fr">
+      <button class="btn bs sm-btn" onclick="clrDone()">Clear Done</button>
+      <button class="btn bp" onclick="printAll()">🖨 Print All Pending</button>
+    </div>
+  </div>
+  <div class="qstats">
+    <div class="qsb"><div class="qsn" id="qs-total">0</div><div class="qsl">Total</div></div>
+    <div class="qsb"><div class="qsn" id="qs-bot">0</div><div class="qsl">Automated</div></div>
+    <div class="qsb"><div class="qsn" id="qs-done">0</div><div class="qsl">Printed</div></div>
+    <div class="qsb"><div class="qsn" id="qs-pend">0</div><div class="qsl">Pending</div></div>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">📋</div>Queue</div>
+    <div id="qlist"></div>
+  </div>
+</div>
+
+<!-- ═══ AUTO FLOW ═══ -->
+<div class="panel" id="panel-auto">
+  <div class="page-hdr">
+    <div><div class="page-title">Auto Flow</div><div class="page-sub">One-click pipeline — scan districts → resolve addresses → generate letters → print</div></div>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#FFFBEB">⚡</div>Automated Pipeline</div>
+    <div id="flow-steps">
+      <div class="flow-step" id="fs1"><div class="flow-num" id="fn1">1</div><div><div class="flow-title">Scan HA Districts</div><div class="flow-sub">Pull all listings from selected postcodes via Rightmove, Zoopla &amp; OnTheMarket</div></div><span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--blue)" id="fs1-count"></span></div>
+      <div class="flow-step" id="fs2"><div class="flow-num" id="fn2">2</div><div><div class="flow-title">360° Address Engine</div><div class="flow-sub">Resolve every property to a full street address across all compass bearings</div></div><span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--blue)" id="fs2-count"></span></div>
+      <div class="flow-step" id="fs3"><div class="flow-num" id="fn3">3</div><div><div class="flow-title">Generate Letters</div><div class="flow-sub">Build personalised letters for every address using your chosen template</div></div><span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--blue)" id="fs3-count"></span></div>
+      <div class="flow-step" id="fs4"><div class="flow-num" id="fn4">4</div><div><div class="flow-title">Print / Queue</div><div class="flow-sub">Send to printer or hold in queue for review before printing</div></div><span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--blue)" id="fs4-count"></span></div>
+    </div>
+    <div class="g2" style="margin-top:16px">
+      <div class="fg"><label>Letter Template</label><select id="af-tpl"></select></div>
+      <div class="fg"><label>On Completion</label><select id="af-action"><option value="print">Print immediately</option><option value="queue">Add to queue only</option></select></div>
+    </div>
+    <div class="fr" style="margin-top:14px">
+      <button class="btn bgrn" id="af-btn" onclick="runAutoFlow()">⚡ Run Full Auto Flow</button>
+      <button class="btn bghost sm-btn" onclick="resetFlow()">↺ Reset</button>
+    </div>
+    <div class="status-bar idle" id="af-status" style="margin-top:12px">⏸ Ready — select HA districts on the main panel then run</div>
+  </div>
+</div>
+
+<!-- ═══ BOT ═══ -->
+<div class="panel" id="panel-bot">
+  <div class="page-hdr">
+    <div><div class="page-title">Live Bot</div><div class="page-sub">Continuous monitoring — auto-detects new listings and prints letters hands-free</div></div>
+    <div class="fr">
+      <button class="btn bg" id="bot-toggle" onclick="botToggle()">▶ Start Bot</button>
+      <button class="btn bs sm-btn" onclick="botRunNow()">⚡ Scan Now</button>
+    </div>
+  </div>
+  <div class="bh">
+    <div style="font-size:42px;position:relative;z-index:1;flex-shrink:0">🤖</div>
+    <div style="flex:1;position:relative;z-index:1">
+      <div style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:5px">HA District Live Monitor</div>
+      <div style="font-size:12px;opacity:.7;line-height:1.68">Watches all selected HA postcodes around the clock. When a new property is listed, the 360° engine resolves the address and your chosen letter is printed automatically.</div>
+      <div class="bchip stop" id="bchip">⏸ Bot Stopped</div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="ct"><div class="ct-icon" style="background:#F0FDF4">⚙️</div>Bot Settings</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="fg"><label>Scan Interval</label><select id="b-int"><option value="1">Every 1 minute</option><option value="5" selected>Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option><option value="60">Hourly</option></select></div>
+        <div class="fg"><label>Letter Template</label><select id="b-tpl"></select></div>
+        <div class="fg"><label>On New Property Found</label><select id="b-action"><option value="print">Print immediately</option><option value="queue">Queue only</option></select></div>
+        <div class="fg"><label>Listing Type</label><select id="b-status"><option value="all">All Listings</option><option value="sale">For Sale</option><option value="let">To Let</option></select></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct"><div class="ct-icon" style="background:#FFFBEB">📊</div>Dashboard</div>
+      <div class="bstats" style="margin-bottom:14px">
+        <div style="background:rgba(0,0,0,.04);border-radius:var(--r2);padding:14px;text-align:center;border:1px solid var(--border)"><div class="qsn" id="bd-scans">0</div><div class="qsl">Scans</div></div>
+        <div style="background:rgba(0,0,0,.04);border-radius:var(--r2);padding:14px;text-align:center;border:1px solid var(--border)"><div class="qsn" id="bd-found">0</div><div class="qsl">Found</div></div>
+        <div style="background:rgba(0,0,0,.04);border-radius:var(--r2);padding:14px;text-align:center;border:1px solid var(--border)"><div class="qsn" id="bd-printed">0</div><div class="qsl">Printed</div></div>
+      </div>
+      <div class="cdwn-card"><div class="cdwn" id="cdwn">--:--</div><div style="font-size:11px;color:var(--muted);margin-top:3px" id="cdwn-lbl">Start bot to begin</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct" style="justify-content:space-between">
+      <span><div class="ct-icon" style="background:#0D1117;display:inline-flex">📟</div>Activity Log</span>
+      <button class="btn bghost sm-btn" onclick="clrLog()">Clear</button>
+    </div>
+    <div class="blog" id="blog"></div>
+  </div>
+</div>
+
+<!-- ═══ AI INTEL ═══ -->
+<div class="panel" id="panel-intel">
+  <div class="page-hdr">
+    <div><div class="page-title">AI Intelligence</div><div class="page-sub">Paste a Rightmove URL or address — AI resolves the property and searches owner databases</div></div>
+  </div>
+  <div class="intel-hero">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;width:100%;position:relative;z-index:1">
+      <div>
+        <div class="ai-badge"><div class="ai-pulse"></div>Powered by Claude AI</div>
+        <div style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:6px">Property Intelligence Engine</div>
+        <div style="font-size:12px;opacity:.7;line-height:1.65;margin-bottom:14px">Enter a Rightmove URL, full address, or postcode. The AI identifies the exact property then cross-references Land Registry, Companies House, VOA and public records to surface owner information.</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="intel-url" placeholder="https://www.rightmove.co.uk/properties/... or 14 Station Road, Harrow, HA1 2SB" style="flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:9px 13px;font-size:13px;font-family:inherit;outline:none">
+          <button class="btn bg sm-btn" id="intel-search-btn" onclick="runIntelSearch()" style="flex-shrink:0">🧠 Analyse</button>
+        </div>
+      </div>
+      <div class="source-pills" style="min-width:210px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.3);margin-bottom:7px">Data Sources</div>
+        <div class="source-pill"><span class="sp-tag sp-lr">GOV</span>HM Land Registry</div>
+        <div class="source-pill"><span class="sp-tag sp-ch">CH</span>Companies House (free)</div>
+        <div class="source-pill"><span class="sp-tag sp-voa">VOA</span>Valuation Office Agency</div>
+        <div class="source-pill"><span class="sp-tag sp-plan">PLAN</span>Planning Portal</div>
+        <div class="source-pill"><span class="sp-tag sp-192">192</span>Electoral Roll / 192.com</div>
+      </div>
+    </div>
+  </div>
+  <div class="fr">
+    <button class="intel-tab act" id="itab-single" onclick="switchIntelTab('single')">🔍 Single Property</button>
+    <button class="intel-tab" id="itab-batch" onclick="switchIntelTab('batch')">📋 Batch</button>
+    <button class="intel-tab" id="itab-chat" onclick="switchIntelTab('chat')">💬 AI Assistant</button>
+    <button class="intel-tab" id="itab-results" onclick="switchIntelTab('results')">📊 Results</button>
+  </div>
+  <div id="itab-single-content">
+    <div id="intel-thinking" style="display:none" class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div><span id="intel-think-txt">AI is analysing…</span></div>
+    <div id="intel-result-area"></div>
+  </div>
+  <div id="itab-batch-content" style="display:none">
+    <div class="card">
+      <div class="ct"><div class="ct-icon" style="background:#EFF6FF">📋</div>Batch Analysis</div>
+      <div class="fg" style="margin-bottom:12px"><label>Paste URLs or addresses (one per line)</label><textarea id="batch-input" rows="7" placeholder="https://www.rightmove.co.uk/properties/12345678&#10;14 Station Road, Harrow, HA1 2SB&#10;Flat 3, 22 Pinner Road, HA1 4HJ"></textarea></div>
+      <div class="fr"><button class="btn bp" onclick="runBatchIntel()">🧠 Analyse All</button><button class="btn bghost sm-btn" onclick="document.getElementById('batch-input').value=''">Clear</button><span style="font-size:11px;color:var(--muted)" id="batch-progress-txt"></span></div>
+      <div class="pbw" style="margin-top:10px"><div class="pb" id="batch-pb" style="width:0%"></div></div>
+    </div>
+    <div id="batch-results"></div>
+  </div>
+  <div id="itab-chat-content" style="display:none">
+    <div class="card">
+      <div class="ct"><div class="ct-icon" style="background:#EFF6FF">💬</div>AI Property Research Assistant</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Ask anything about owner research, Land Registry, planning applications, or finding contact details.</div>
+      <div class="chat-wrap" id="chat-wrap"></div>
+      <div class="fr" style="margin-top:12px">
+        <input id="chat-input" placeholder="How do I find the owner of a UK property?" style="flex:1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}">
+        <button class="btn bp sm-btn" onclick="sendChat()">Send</button>
+      </div>
+      <div class="fr" style="margin-top:8px">
+        <span style="font-size:10px;color:var(--muted)">Quick:</span>
+        <button class="intel-tab xs-btn" onclick="quickChat('How do I find the owner name of a UK property for free?')">Owner lookup</button>
+        <button class="intel-tab xs-btn" onclick="quickChat('What government websites help identify property owners?')">Gov sources</button>
+        <button class="intel-tab xs-btn" onclick="quickChat('How does the Land Registry title search work and what does it show?')">Land Registry</button>
+        <button class="intel-tab xs-btn" onclick="quickChat('What is Companies House and how can it help identify property owners?')">Companies House</button>
+      </div>
+    </div>
+  </div>
+  <div id="itab-results-content" style="display:none">
+    <div class="card">
+      <div class="sec-hdr">
+        <div class="sec-title">📊 All Intelligence Results</div>
+        <div class="fr"><button class="btn bs sm-btn" onclick="exportIntelCSV()">⬇ CSV</button><button class="btn bg sm-btn" onclick="queueAllIntel()">🖨 Queue All Letters</button></div>
+      </div>
+      <div id="intel-table-wrap"><div class="es"><div class="ei">🧠</div><div class="et">No results yet</div>Analyse properties using the Single or Batch tab</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SUCCESS LETTERS ═══ -->
+<div class="panel" id="panel-success">
+  <div class="page-hdr">
+    <div><div class="page-title">Success Letters</div><div class="page-sub">Enter any UK postcode — Royal Mail PAF returns every address — print a personalised letter to all</div></div>
+  </div>
+  <div class="rm-logo-bar">
+    <div class="rm-crown">👑</div>
+    <div style="flex:1">
+      <div style="font-family:'Playfair Display',serif;font-size:17px;margin-bottom:4px">Royal Mail Postcode Address Finder</div>
+      <div style="font-size:12px;opacity:.78;line-height:1.6">Powered by postcodes.io · Royal Mail PAF data · Every deliverable address for your postcode</div>
+      <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
+        <span class="pc-tag">✅ PAF Verified</span>
+        <span class="pc-tag">📬 All Delivery Points</span>
+        <span class="pc-tag">🏠 Residential &amp; Commercial</span>
+        <span class="pc-tag">🆓 Free · No API Key</span>
+      </div>
+    </div>
+    <a href="https://www.royalmail.com/find-a-postcode" target="_blank" rel="noopener" style="color:#fff;font-size:11px;font-weight:600;text-decoration:none;opacity:.65;flex-shrink:0;text-align:center;border:1px solid rgba(255,255,255,.2);padding:8px 12px;border-radius:8px">Royal Mail ↗</a>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">🔍</div>Postcode Lookup</div>
+    <div class="pc-input-wrap" style="margin-bottom:10px">
+      <input id="pc-input" placeholder="e.g. HA1 2SB or HA1" maxlength="8" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')lookupPostcode()">
+      <button class="pc-lookup-btn" id="pc-btn" onclick="lookupPostcode()">📮 Find All Addresses</button>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:7px">📋 Batch — Multiple Postcodes</div>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <textarea id="pc-batch" rows="3" placeholder="One postcode per line:&#10;HA1 2SB&#10;HA2 7HJ&#10;HA3 0NP" style="flex:1;font-family:'Courier New',monospace;font-size:12px;text-transform:uppercase;letter-spacing:1px"></textarea>
+        <button class="pc-lookup-btn" onclick="lookupBatchPostcodes()" style="align-self:flex-end">📋 Lookup All</button>
+      </div>
+    </div>
+  </div>
+  <div class="progress-stages" id="pc-stages" style="display:none">
+    <div class="stage" id="stg1">1 · Lookup</div>
+    <div class="stage" id="stg2">2 · Addresses</div>
+    <div class="stage" id="stg3">3 · Classify</div>
+    <div class="stage" id="stg4">4 · Ready</div>
+  </div>
+  <div class="status-bar scanning" id="pc-status" style="display:none">
+    <div class="spin" id="pc-spin"></div>
+    <div style="flex:1"><span id="pc-status-txt">Looking up…</span><div class="pbw" style="margin-top:5px"><div class="pb" id="pc-pb"></div></div></div>
+    <span style="font-size:10px;opacity:.7" id="pc-status-sub"></span>
+  </div>
+  <div class="pc-stats" id="pc-stats" style="display:none">
+    <div class="pc-stat"><div class="pc-sn" id="ss-total">0</div><div class="pc-sl">Addresses</div></div>
+    <div class="pc-stat"><div class="pc-sn" id="ss-res">0</div><div class="pc-sl">Residential</div></div>
+    <div class="pc-stat"><div class="pc-sn" id="ss-com">0</div><div class="pc-sl">Commercial</div></div>
+    <div class="pc-stat"><div class="pc-sn" id="ss-sel">0</div><div class="pc-sl">Selected</div></div>
+  </div>
+  <div class="card" id="letter-chooser" style="display:none">
+    <div class="ct"><div class="ct-icon" style="background:#FEF9E7">✉️</div>Choose Letter Template</div>
+    <div class="g2" id="letter-choices"></div>
+    <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:7px">Upload your own letter</div>
+      <div class="dz" onclick="document.getElementById('sl-upload').click()">
+        <div style="font-size:28px;margin-bottom:6px">📄</div>
+        <div style="font-size:12px;font-weight:600">Drop file or click to browse</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">.docx · .pdf · .txt</div>
+      </div>
+      <input type="file" id="sl-upload" style="display:none" accept=".docx,.pdf,.txt" onchange="slFileUp(event)">
+    </div>
+  </div>
+  <div class="card" id="addr-results-card" style="display:none">
+    <div class="sec-hdr">
+      <div><div class="sec-title" id="addr-results-title">Addresses Found</div><div class="sec-sub" id="addr-results-sub"></div></div>
+      <div class="fr">
+        <button class="btn bs sm-btn" onclick="selAllAddrs()">☑ All</button>
+        <button class="btn bghost sm-btn" onclick="clrSelAddrs()">☐ None</button>
+        <button class="btn bs sm-btn" onclick="exportAddrCSV()">⬇ CSV</button>
+        <button class="pc-lookup-btn" id="print-letters-btn" onclick="printSuccessLetters()" disabled>🖨 Print Letters</button>
+      </div>
+    </div>
+    <div class="fr" style="margin-bottom:12px">
+      <button class="intel-tab act" id="aview-grid" onclick="switchAddrView('grid')">⊞ Grid</button>
+      <button class="intel-tab" id="aview-list" onclick="switchAddrView('list')">☰ List</button>
+      <button class="intel-tab" id="aview-preview" onclick="switchAddrView('preview')">📄 Preview</button>
+      <div style="flex:1"></div>
+      <input id="addr-search" placeholder="Filter addresses…" style="width:180px;font-size:12px" oninput="filterAddrs(this.value)">
+    </div>
+    <div class="sbar" id="addr-sel-bar" style="display:none">
+      <span id="addr-sel-txt">0 selected</span>
+      <button class="pc-lookup-btn" style="padding:5px 12px;font-size:11px" onclick="printSuccessLetters()">🖨 Print</button>
+      <button class="btn bs sm-btn" onclick="queueSuccessLetters()">Queue</button>
+    </div>
+    <div id="addr-grid-view"><div class="addr-grid" id="addr-grid"></div><div class="pag" id="addr-pag"></div></div>
+    <div id="addr-list-view" style="display:none"><div id="addr-list"></div><div class="pag" id="addr-pag2"></div></div>
+    <div id="addr-preview-view" style="display:none">
+      <div class="fr" style="margin-bottom:12px">
+        <label style="white-space:nowrap">Preview for:</label>
+        <select id="preview-addr-sel" style="flex:1" onchange="updateLetterPreview()"></select>
+      </div>
+      <div class="print-preview-box" id="letter-preview-content">Select an address above to preview</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TEMPLATES ═══ -->
+<div class="panel" id="panel-templates">
+  <div class="page-hdr">
+    <div><div class="page-title">Letter Templates</div><div class="page-sub">Create, edit and upload templates with dynamic property placeholders</div></div>
+    <button class="btn bp" onclick="newTpl()">+ New Template</button>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">📤</div>Upload Letter File</div>
+    <div class="dz" id="dz" ondragover="event.preventDefault();this.classList.add('dzo')" ondragleave="this.classList.remove('dzo')" ondrop="doDrop(event)" onclick="document.getElementById('fup').click()">
+      <div style="font-size:30px;margin-bottom:8px">📄</div>
+      <div style="font-size:13px;font-weight:600">Drop your letter file here or click to browse</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">.docx · .pdf · .txt supported</div>
+    </div>
+    <input type="file" id="fup" style="display:none" accept=".docx,.pdf,.txt" onchange="fileUp(event)">
+    <div id="upfiles" style="margin-top:10px;display:flex;flex-direction:column;gap:7px"></div>
+  </div>
+  <div class="tg">
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Templates</div>
+      <div id="tpl-list"></div>
+    </div>
+    <div class="card" style="padding:16px">
+      <input id="tname" placeholder="Template name…" style="font-weight:700;font-size:14px;border:none;border-bottom:2px solid var(--border);border-radius:0;padding:4px 0;background:transparent;margin-bottom:12px;box-shadow:none">
+      <div class="tb">
+        <button class="tbb" onclick="wrapT('**','**')"><b>B</b></button>
+        <button class="tbb" onclick="wrapT('_','_')"><i>I</i></button>
+        <div style="width:1px;height:18px;background:var(--border)"></div>
+        <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Insert:</span>
+        <button class="vt" onclick="insV('{{address}}')">{{address}}</button>
+        <button class="vt" onclick="insV('{{area}}')">{{area}}</button>
+        <button class="vt" onclick="insV('{{date}}')">{{date}}</button>
+        <button class="vt" onclick="insV('{{price}}')">{{price}}</button>
+        <button class="vt" onclick="insV('{{bedrooms}}')">{{bedrooms}}</button>
+        <button class="vt" onclick="insV('{{source}}')">{{source}}</button>
+        <button class="vt" onclick="insV('{{type}}')">{{type}}</button>
+        <button class="vt" onclick="insV('{{district}}')">{{district}}</button>
+        <button class="vt" onclick="insV('{{postcode}}')">{{postcode}}</button>
+      </div>
+      <textarea id="tedit" rows="14" style="font-family:'Georgia',serif;font-size:13px;line-height:1.75" placeholder="Write your letter here…"></textarea>
+      <div class="fr" style="margin-top:10px">
+        <button class="btn bp sm-btn" onclick="saveTpl()">💾 Save Template</button>
+        <button class="btn bs sm-btn" onclick="prevTpl()">👁 Preview</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="prev-area" style="display:none">
+    <div class="sec-hdr"><div class="sec-title">📄 Letter Preview</div><button class="btn bghost sm-btn" onclick="document.getElementById('prev-area').style.display='none'">Close</button></div>
+    <div class="lp" id="prev-content"></div>
+  </div>
+</div>
+
+<!-- ═══ PRINTERS ═══ -->
+<div class="panel" id="panel-printers">
+  <div class="page-hdr">
+    <div><div class="page-title">Printer Setup</div><div class="page-sub">Connect office printers via network auto-discovery or manual IP address</div></div>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">🔍</div>Discover Printers</div>
+    <div class="fr">
+      <button class="btn bp sm-btn" onclick="scanPrinters()">🔍 Scan Network</button>
+      <input id="pip" placeholder="Manual IP: 192.168.1.xx" style="width:200px">
+      <select id="pprot" style="width:90px"><option>IPP</option><option>LPD</option><option>RAW</option><option>SMB</option></select>
+      <button class="btn bs sm-btn" onclick="addPrinter()">Add Printer</button>
+    </div>
+  </div>
+  <div class="card"><div class="ct"><div class="ct-icon" style="background:#F0FDF4">🖨</div>Available Printers</div><div id="plist"></div></div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#FFFBEB">⚙️</div>Print Settings</div>
+    <div class="g2">
+      <div class="fg"><label>Paper Size</label><select id="psize"><option>A4</option><option>Letter</option><option>A5</option></select></div>
+      <div class="fg"><label>Copies per Letter</label><input type="number" id="copies" value="1" min="1" max="20"></div>
+      <div class="fg"><label>Colour Mode</label><select id="pcolour"><option>Black &amp; White</option><option>Colour</option><option>Grayscale</option></select></div>
+      <div class="fg"><label>Duplex</label><select id="pduplex"><option>Single-sided</option><option>Double-sided (Long Edge)</option></select></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn bp sm-btn" onclick="savePSettings()">Save Settings</button></div>
+  </div>
+</div>
+
+<!-- ═══ INVESTOR DASHBOARD ═══ -->
+<div class="panel" id="panel-investor">
+  <div class="page-hdr">
+    <div>
+      <div class="page-title">📈 Investor Intelligence Board</div>
+      <div class="page-sub">Revenue optimisation analysis · ROI projections · Strategic improvement roadmap for PropMail Pro</div>
+    </div>
+    <div class="fr">
+      <button class="btn bs sm-btn" onclick="exportInvestorReport()">⬇ Export Report</button>
+      <button class="btn bg" onclick="document.getElementById('inv-scenario-section').scrollIntoView({behavior:'smooth'})">💰 View Revenue Scenarios</button>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY HERO -->
+  <div class="inv-hero">
+    <div style="position:relative;z-index:1;width:100%">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold-l)">Executive Summary</div>
+        <div style="height:1px;flex:1;background:rgba(255,255,255,.1)"></div>
+      </div>
+      <div style="font-family:'Playfair Display',serif;font-size:22px;margin-bottom:10px;line-height:1.3">PropMail Pro has the architecture to generate <span style="color:var(--gold-l)">£180,000–£420,000</span> in additional annual revenue per estate agent branch — with 12 targeted improvements.</div>
+      <div style="font-size:13px;opacity:.72;line-height:1.7;max-width:780px;margin-bottom:16px">The platform already solves the hardest problem — address discovery and automated printing at scale. The gap between current capability and maximum revenue is entirely in letter quality, targeting precision, timing intelligence, and follow-up sequencing. Every improvement below is sized by its revenue impact and implementation effort.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:12px 18px;text-align:center;min-width:120px">
+          <div style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;color:var(--gold-l)">2.8%</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Current Response Rate</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:12px 18px;text-align:center;min-width:120px">
+          <div style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;color:#34D399">8.4%</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Target Response Rate</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:12px 18px;text-align:center;min-width:120px">
+          <div style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;color:var(--gold-l)">£8,400</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Avg Commission/Instruction</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:12px 18px;text-align:center;min-width:120px">
+          <div style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;color:#34D399">3× ROI</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Min Return on Platform Cost</div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:12px 18px;text-align:center;min-width:120px">
+          <div style="font-size:24px;font-weight:800;font-family:'Playfair Display',serif;color:var(--gold-l)">14 days</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;margin-top:2px">Time to First New Instruction</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE KPIs -->
+  <div class="inv-kpi-grid">
+    <div class="inv-kpi blue">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:rgba(37,99,235,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">📬</div>
+        <span class="tag tag-blue">Letters</span>
+      </div>
+      <div class="inv-kpi-val" id="inv-letters-sent">0</div>
+      <div class="inv-kpi-lbl">Letters Sent</div>
+      <div class="inv-kpi-delta up" id="inv-letters-delta">↑ Start sending to see data</div>
+    </div>
+    <div class="inv-kpi gold">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:rgba(201,146,26,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">📞</div>
+        <span class="tag tag-gold">Pipeline</span>
+      </div>
+      <div class="inv-kpi-val" id="inv-responses">0</div>
+      <div class="inv-kpi-lbl">Est. Responses at 2.8%</div>
+      <div class="inv-kpi-sub" id="inv-response-sub">Based on industry average response rate</div>
+    </div>
+    <div class="inv-kpi green">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:rgba(5,150,105,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">🏠</div>
+        <span class="tag tag-green">Revenue</span>
+      </div>
+      <div class="inv-kpi-val" id="inv-instructions">0</div>
+      <div class="inv-kpi-lbl">Projected Instructions</div>
+      <div class="inv-kpi-sub" id="inv-instruction-sub">At 35% response-to-instruction rate</div>
+    </div>
+    <div class="inv-kpi purple">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="width:36px;height:36px;background:rgba(124,58,237,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">💷</div>
+        <span class="tag tag-purple">Revenue</span>
+      </div>
+      <div class="inv-kpi-val" id="inv-revenue">£0</div>
+      <div class="inv-kpi-lbl">Projected Revenue</div>
+      <div class="inv-kpi-sub">At £8,400 avg commission</div>
+    </div>
+  </div>
+
+  <!-- CONVERSION FUNNEL -->
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">🎯</div>Revenue Conversion Funnel</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">How letters convert to revenue — current baseline vs target performance with all 12 improvements implemented</div>
+    <div class="funnel-wrap" id="funnel-wrap">
+      <div class="funnel-row">
+        <div class="funnel-label">Letters Printed</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:100%;background:linear-gradient(90deg,#2563EB,#3B82F6)">1,000 letters</div></div>
+        <div class="funnel-val">100%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label">Delivered (est.)</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:94%;background:linear-gradient(90deg,#2563EB,#60A5FA)">940</div></div>
+        <div class="funnel-val">94%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label">Letter Opened</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:72%;background:linear-gradient(90deg,#7C3AED,#9333EA)">720</div></div>
+        <div class="funnel-val">72%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label" style="font-weight:700;color:var(--blue)">Response (current 2.8%)</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:2.8%;background:linear-gradient(90deg,#D97706,#F59E0B);min-width:60px">28</div></div>
+        <div class="funnel-val" style="color:var(--amber);font-weight:700">2.8%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label" style="font-weight:700;color:var(--green)">Response (target 8.4%)</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:8.4%;background:linear-gradient(90deg,#059669,#10B981);min-width:80px">84</div></div>
+        <div class="funnel-val" style="color:var(--green);font-weight:700">8.4% ↑</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label">Valuation Booked</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:5.8%;background:linear-gradient(90deg,#059669,#34D399);min-width:70px">58</div></div>
+        <div class="funnel-val">5.8%</div>
+      </div>
+      <div class="funnel-row">
+        <div class="funnel-label" style="font-weight:700;color:var(--green)">Instruction Won 💰</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:2.0%;background:linear-gradient(90deg,#C9921A,#F4B942);min-width:55px">20</div></div>
+        <div class="funnel-val" style="color:var(--gold);font-weight:700">£168,000</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:12px 14px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);font-size:12px;color:var(--green)">
+      💡 <strong>Investor insight:</strong> Every 1% improvement in response rate from a 1,000-letter campaign generates approximately <strong>£29,400 in additional revenue</strong>. The 12 improvements below collectively target a 5.6 percentage point uplift — worth <strong>£165,000 per campaign</strong>.
+    </div>
+  </div>
+
+  <!-- FILTER TABS -->
+  <div>
+    <div class="filter-tabs" id="inv-filters">
+      <button class="filter-tab active-tab" onclick="filterImprovements('all', this)">All 12 Improvements</button>
+      <button class="filter-tab" onclick="filterImprovements('critical', this)">🔴 Critical</button>
+      <button class="filter-tab" onclick="filterImprovements('high', this)">🟠 High Impact</button>
+      <button class="filter-tab" onclick="filterImprovements('quick', this)">⚡ Quick Wins</button>
+      <button class="filter-tab" onclick="filterImprovements('technology', this)">💻 Technology</button>
+      <button class="filter-tab" onclick="filterImprovements('content', this)">✍️ Content</button>
+      <button class="filter-tab" onclick="filterImprovements('data', this)">📊 Data & Targeting</button>
+    </div>
+    <div class="imp-grid" id="improvements-grid"></div>
+  </div>
+
+  <!-- REVENUE SCENARIOS -->
+  <div id="inv-scenario-section">
+    <div class="inv-section">
+      <div class="inv-section-title">💰 Revenue Scenario Modelling</div>
+      <div class="inv-section-sub">Adjust the sliders to model your specific letter volume and conversion assumptions</div>
+    </div>
+    <div class="card">
+      <div class="ct"><div class="ct-icon" style="background:#FFFBEB">📊</div>Interactive Revenue Calculator</div>
+      <div class="g2" style="gap:20px;margin-bottom:18px">
+        <div>
+          <div class="fg" style="margin-bottom:14px">
+            <label>Letters per Month</label>
+            <input type="range" id="sc-letters" min="100" max="5000" step="100" value="1000" oninput="updateScenario()" style="width:100%;margin-top:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px"><span>100</span><span style="font-weight:700;color:var(--blue)" id="sc-letters-val">1,000 letters</span><span>5,000</span></div>
+          </div>
+          <div class="fg" style="margin-bottom:14px">
+            <label>Response Rate (%)</label>
+            <input type="range" id="sc-response" min="0.5" max="12" step="0.1" value="2.8" oninput="updateScenario()" style="width:100%;margin-top:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px"><span>0.5%</span><span style="font-weight:700;color:var(--blue)" id="sc-response-val">2.8%</span><span>12%</span></div>
+          </div>
+          <div class="fg" style="margin-bottom:14px">
+            <label>Response → Instruction Conversion (%)</label>
+            <input type="range" id="sc-conv" min="10" max="60" step="5" value="35" oninput="updateScenario()" style="width:100%;margin-top:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px"><span>10%</span><span style="font-weight:700;color:var(--blue)" id="sc-conv-val">35%</span><span>60%</span></div>
+          </div>
+          <div class="fg">
+            <label>Average Commission per Instruction (£)</label>
+            <input type="range" id="sc-commission" min="3000" max="20000" step="500" value="8400" oninput="updateScenario()" style="width:100%;margin-top:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px"><span>£3k</span><span style="font-weight:700;color:var(--blue)" id="sc-commission-val">£8,400</span><span>£20k</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="background:linear-gradient(135deg,var(--ink),var(--ink3));border-radius:var(--r);padding:22px;color:#fff;text-align:center;flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:8px">Monthly Revenue Projection</div>
+            <div style="font-size:42px;font-weight:800;font-family:'Playfair Display',serif;color:var(--gold-l);line-height:1" id="sc-monthly">£0</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:6px" id="sc-monthly-sub">0 instructions · 0 responses</div>
+          </div>
+          <div style="background:rgba(5,150,105,.07);border:1.5px solid rgba(5,150,105,.18);border-radius:var(--r);padding:16px;text-align:center">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px">Annual Revenue</div>
+            <div style="font-size:30px;font-weight:800;font-family:'Playfair Display',serif;color:var(--green);" id="sc-annual">£0</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px" id="sc-annual-sub">per year from letter campaigns</div>
+          </div>
+          <div style="background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.14);border-radius:var(--r);padding:14px;text-align:center">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--blue);margin-bottom:4px">Cost per Instruction</div>
+            <div style="font-size:22px;font-weight:800;font-family:'Playfair Display',serif;color:var(--blue)" id="sc-cpi">£0</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Letter cost ÷ Instructions won</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCENARIO PRESETS -->
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">Quick Scenario Presets</div>
+        <div class="g3">
+          <div class="scenario-card" onclick="setScenario(500,2.8,35,8400)">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">🌱 Starting Out</div>
+            <div style="font-size:11px;color:var(--muted)">500 letters/mo · 2.8% response · £8,400 commission</div>
+            <div style="font-size:16px;font-weight:800;color:var(--green);margin-top:8px" id="preset-1-val">£0/mo</div>
+          </div>
+          <div class="scenario-card" onclick="setScenario(2000,5.5,40,8400)">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">🚀 Optimised</div>
+            <div style="font-size:11px;color:var(--muted)">2,000 letters/mo · 5.5% response · £8,400 commission</div>
+            <div style="font-size:16px;font-weight:800;color:var(--green);margin-top:8px" id="preset-2-val">£0/mo</div>
+          </div>
+          <div class="scenario-card" onclick="setScenario(5000,8.4,45,9500)">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">🏆 Full Scale</div>
+            <div style="font-size:11px;color:var(--muted)">5,000 letters/mo · 8.4% response · £9,500 commission</div>
+            <div style="font-size:16px;font-weight:800;color:var(--green);margin-top:8px" id="preset-3-val">£0/mo</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REVENUE TABLE -->
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#F0FDF4">📋</div>Revenue Impact by Improvement — Ranked by ROI</div>
+    <div style="overflow-x:auto">
+      <table class="revenue-table">
+        <thead><tr>
+          <th>#</th><th>Improvement</th><th>Response Rate Uplift</th><th>Letters/1000</th><th>Extra Instructions</th><th>Annual Revenue Add</th><th>Effort</th><th>Priority</th>
+        </tr></thead>
+        <tbody id="revenue-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- IMPLEMENTATION ROADMAP -->
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">🗓</div>90-Day Implementation Roadmap</div>
+    <div class="timeline-row">
+      <div class="timeline-item">
+        <div class="timeline-dot done">✓</div>
+        <div class="timeline-label">Week 1–2</div>
+        <div class="timeline-sub">Platform live · First letters sent</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot active">2</div>
+        <div class="timeline-label">Week 3–4</div>
+        <div class="timeline-sub">Personalisation · A/B testing starts</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot">3</div>
+        <div class="timeline-label">Week 5–6</div>
+        <div class="timeline-sub">Timing engine · Follow-up sequences</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot">4</div>
+        <div class="timeline-label">Week 7–8</div>
+        <div class="timeline-sub">QR codes · Response tracking live</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot">5</div>
+        <div class="timeline-label">Week 9–10</div>
+        <div class="timeline-sub">Premium print quality · Envelope design</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot">6</div>
+        <div class="timeline-label">Week 11–12</div>
+        <div class="timeline-sub">Full review · Scale to target volume</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTION CHECKLIST -->
+  <div class="card">
+    <div class="ct" style="justify-content:space-between">
+      <span><div class="ct-icon" style="background:#F0FDF4;display:inline-flex">✅</div> Revenue Action Checklist</span>
+      <div style="font-size:12px;color:var(--muted)" id="checklist-progress">0 / 12 completed</div>
+    </div>
+    <div id="action-checklist"></div>
+  </div>
+
+</div>
+
+<!-- ═══ AI INSTRUCTION ADVISOR ═══ -->
+<div class="panel" id="panel-advisor">
+  <div class="page-hdr">
+    <div>
+      <div class="page-title">🤖 AI Instruction Advisor</div>
+      <div class="page-sub">Analyses your current campaigns, templates, and data — then generates specific, actionable improvements to win more instructions</div>
+    </div>
+    <div class="fr">
+      <button class="btn bs sm-btn" onclick="exportAdvice()">⬇ Export Advice</button>
+      <button class="btn bp" id="adv-run-btn" onclick="runAdvisor()">🤖 Analyse &amp; Advise Me</button>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="adv-hero">
+    <div style="position:relative;z-index:1;display:flex;align-items:flex-start;gap:24px;width:100%">
+      <div style="flex:1">
+        <div class="ai-badge" style="margin-bottom:12px"><div class="ai-pulse"></div>Powered by Claude AI · Real-time Analysis</div>
+        <div style="font-family:'Playfair Display',serif;font-size:21px;margin-bottom:8px;line-height:1.3">Your personal estate agency growth advisor</div>
+        <div style="font-size:13px;opacity:.72;line-height:1.7;max-width:600px">Tell me about your current situation — your target area, the letters you're sending, and any specific challenges — and I'll analyse everything and give you a prioritised list of specific changes that will win more instructions.</div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <button class="btn bg" onclick="runAdvisor()" id="adv-hero-btn" style="font-size:14px;padding:11px 22px">🤖 Get My Personalised Advice</button>
+          <button class="btn" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px" onclick="scrollToChat()">💬 Ask a Specific Question</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;flex-shrink:0;min-width:200px">
+        <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:var(--r2);padding:12px 14px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.35);margin-bottom:6px">What I analyse</div>
+          <div style="display:flex;flex-direction:column;gap:5px;font-size:11px;color:rgba(255,255,255,.65)">
+            <div>📝 Your letter templates &amp; copy</div>
+            <div>🎯 Target areas &amp; property types</div>
+            <div>📬 Campaign volume &amp; frequency</div>
+            <div>⏱ Timing &amp; follow-up gaps</div>
+            <div>💰 Revenue pipeline health</div>
+            <div>🏘 HA district performance</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE HEALTH SCORECARD -->
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">📊</div>Campaign Health Scorecard</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Live metrics calculated from your current PropMail Pro data</div>
+    <div class="adv-score-grid" id="adv-scorecard"></div>
+  </div>
+
+  <!-- CONTEXT INPUTS -->
+  <div class="adv-input-card">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">Tell the Advisor about your goals</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">The more context you provide, the more specific and actionable the advice will be</div>
+
+    <div class="adv-context-grid" id="adv-context-grid">
+      <div class="adv-ctx-box selected" onclick="toggleContext(this, 'new-instructions')">
+        <div class="adv-ctx-icon">🏠</div>
+        <div class="adv-ctx-title">Win New Instructions</div>
+        <div class="adv-ctx-sub">Get more vendors and landlords to choose us over competitors</div>
+      </div>
+      <div class="adv-ctx-box" onclick="toggleContext(this, 'response-rate')">
+        <div class="adv-ctx-icon">📞</div>
+        <div class="adv-ctx-title">Increase Response Rate</div>
+        <div class="adv-ctx-sub">More homeowners calling back from our letters</div>
+      </div>
+      <div class="adv-ctx-box" onclick="toggleContext(this, 'landlords')">
+        <div class="adv-ctx-icon">🔑</div>
+        <div class="adv-ctx-title">Target Landlords</div>
+        <div class="adv-ctx-sub">Win property management mandates and rental instructions</div>
+      </div>
+      <div class="adv-ctx-box" onclick="toggleContext(this, 'premium')">
+        <div class="adv-ctx-icon">💎</div>
+        <div class="adv-ctx-title">Premium Properties</div>
+        <div class="adv-ctx-sub">Focus on higher-value homes for larger commissions</div>
+      </div>
+      <div class="adv-ctx-box" onclick="toggleContext(this, 'stale')">
+        <div class="adv-ctx-icon">🔄</div>
+        <div class="adv-ctx-title">Switch Agents</div>
+        <div class="adv-ctx-sub">Convert homeowners currently with rival agents</div>
+      </div>
+      <div class="adv-ctx-box" onclick="toggleContext(this, 'volume')">
+        <div class="adv-ctx-icon">📈</div>
+        <div class="adv-ctx-title">Scale Volume</div>
+        <div class="adv-ctx-sub">Send more letters efficiently without losing quality</div>
+      </div>
+    </div>
+
+    <div class="g2" style="gap:12px;margin-bottom:14px">
+      <div class="fg">
+        <label>Current Monthly Letter Volume</label>
+        <select id="adv-volume">
+          <option value="under100">Under 100 letters</option>
+          <option value="100-500" selected>100–500 letters</option>
+          <option value="500-2000">500–2,000 letters</option>
+          <option value="over2000">Over 2,000 letters</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Your Biggest Challenge Right Now</label>
+        <select id="adv-challenge">
+          <option value="response">Not enough people calling back</option>
+          <option value="convert">Responses not converting to viewings</option>
+          <option value="compete">Losing pitches to other agents</option>
+          <option value="landlords">Can't reach landlords effectively</option>
+          <option value="quality">Letter quality not professional enough</option>
+          <option value="followup">No structured follow-up process</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Primary Target Property Type</label>
+        <select id="adv-proptype">
+          <option value="all">All residential properties</option>
+          <option value="family">Family homes (3–5 bed)</option>
+          <option value="flats">Flats and apartments</option>
+          <option value="luxury">Luxury and high-value</option>
+          <option value="landlord">Investment/rental properties</option>
+          <option value="firsttime">First-time buyer properties</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Current Letter Approach</label>
+        <select id="adv-approach">
+          <option value="generic">Generic — same letter to all</option>
+          <option value="basic">Basic — a few different versions</option>
+          <option value="segmented">Segmented by property type</option>
+          <option value="personalised">Personalised with property data</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="fg" style="margin-bottom:16px">
+      <label>Anything specific you want advice on? (optional)</label>
+      <textarea id="adv-freetext" rows="3" placeholder="e.g. We keep getting calls but losing the valuation appointment to Foxtons... Our letters feel too corporate... We want to target the HA5 Pinner area specifically... We've been sending the same template for 6 months..."></textarea>
+    </div>
+
+    <div class="fr">
+      <button class="btn bp" id="adv-run-btn2" onclick="runAdvisor()">🤖 Generate My Improvement Plan</button>
+      <button class="btn bs sm-btn" onclick="resetAdvisor()">↺ Reset</button>
+    </div>
+  </div>
+
+  <!-- THINKING STATE -->
+  <div class="adv-thinking-box" id="adv-thinking">
+    <div class="adv-thinking-dots"><span></span><span></span><span></span></div>
+    <div style="font-family:'Playfair Display',serif;font-size:18px;color:#fff;margin-bottom:6px" id="adv-think-title">Analysing your campaigns…</div>
+    <div class="adv-thinking-stage" id="adv-think-stage">Reading your letter templates and campaign data</div>
+    <div class="adv-stage-bar" id="adv-stage-bar">
+      <div class="adv-stage-pill" id="asp-1">📊 Analysing Data</div>
+      <div class="adv-stage-pill" id="asp-2">🔍 Identifying Gaps</div>
+      <div class="adv-stage-pill" id="asp-3">✍️ Reviewing Copy</div>
+      <div class="adv-stage-pill" id="asp-4">🎯 Building Plan</div>
+      <div class="adv-stage-pill" id="asp-5">💡 Writing Advice</div>
+    </div>
+  </div>
+
+  <!-- RESULTS AREA -->
+  <div id="adv-results" style="display:none">
+
+    <!-- OVERALL SCORE -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div class="adv-score-ring" id="adv-score-ring">
+          <svg width="100" height="100" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border2)" stroke-width="8"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--blue)" stroke-width="8"
+              stroke-dasharray="264" stroke-dashoffset="264" stroke-linecap="round"
+              id="adv-score-circle" style="transition:stroke-dashoffset 1.2s ease"/>
+          </svg>
+          <div class="adv-score-num">
+            <div class="adv-score-val" id="adv-score-val">0</div>
+            <div class="adv-score-lbl">/ 100</div>
+          </div>
+        </div>
+        <div style="flex:1">
+          <div style="font-family:'Playfair Display',serif;font-size:20px;color:var(--text);margin-bottom:6px" id="adv-score-title">Campaign Score</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:500px" id="adv-score-summary"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px" id="adv-score-tags"></div>
+        </div>
+        <div style="text-align:center;flex-shrink:0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px">Estimated Revenue Uplift</div>
+          <div style="font-size:36px;font-weight:800;font-family:'Playfair Display',serif;color:var(--green)" id="adv-uplift">+£0</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">if all advice implemented</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRIORITY ACTIONS BANNER -->
+    <div style="background:linear-gradient(90deg,rgba(220,38,38,.06),rgba(220,38,38,.02));border:1px solid rgba(220,38,38,.14);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="font-size:20px;flex-shrink:0">🚨</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--red)">Top 3 Quick Wins — Act on these first</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px" id="adv-quick-wins">Loading…</div>
+      </div>
+    </div>
+
+    <!-- SUGGESTION CARDS -->
+    <div id="adv-suggestions"></div>
+
+    <!-- LETTER REWRITE -->
+    <div class="card" id="adv-rewrite-card" style="display:none">
+      <div class="ct"><div class="ct-icon" style="background:#F0FDF4">✍️</div>AI Letter Rewrite</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Your current best-performing template, rewritten by the AI with all suggested improvements applied</div>
+      <div class="g2" style="gap:14px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--red);margin-bottom:8px">❌ Current Version</div>
+          <div style="background:rgba(220,38,38,.03);border:1px solid rgba(220,38,38,.1);border-radius:var(--r2);padding:16px 18px;font-family:'Georgia',serif;font-size:12px;line-height:1.75;color:var(--text2);white-space:pre-wrap;min-height:200px" id="adv-letter-before"></div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:8px">✅ AI-Improved Version</div>
+          <div style="background:rgba(5,150,105,.03);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);padding:16px 18px;font-family:'Georgia',serif;font-size:12px;line-height:1.75;color:var(--text);white-space:pre-wrap;min-height:200px" id="adv-letter-after"></div>
+        </div>
+      </div>
+      <div class="fr" style="margin-top:12px">
+        <button class="btn bgrn sm-btn" onclick="useRewrittenLetter()">✅ Use This Version</button>
+        <button class="btn bs sm-btn" onclick="rewriteLetter()">↺ Rewrite Again</button>
+        <button class="btn bs sm-btn" onclick="document.getElementById('adv-rewrite-card').style.display='none'">Close</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PERSISTENT AI CHAT -->
+  <div class="card" id="adv-chat-section">
+    <div class="ct"><div class="ct-icon" style="background:var(--ink);display:inline-flex">💬</div>Ask the Advisor Anything</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Get specific advice on any aspect of your letter campaigns, scripts, or strategy</div>
+    <div class="adv-chat-wrap" id="adv-chat-wrap"></div>
+    <div class="fr" style="margin-top:12px">
+      <input id="adv-chat-input" placeholder="e.g. How should I handle objections when someone calls from my letter?" style="flex:1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAdvice();}">
+      <button class="btn bp sm-btn" onclick="sendAdvice()">Send</button>
+    </div>
+    <div class="adv-quick-grid" id="adv-quick-grid">
+      <button class="adv-quick-btn" onclick="quickAdvice('How do I write a letter headline that guarantees it gets opened?')">
+        <span class="adv-qb-icon">📬</span>
+        <span class="adv-qb-title">Irresistible Headlines</span>
+        <span class="adv-qb-sub">Write opening lines that demand to be read</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('What should I say when a homeowner calls from my letter? Give me a word-for-word script.')">
+        <span class="adv-qb-icon">📞</span>
+        <span class="adv-qb-title">Phone Scripts</span>
+        <span class="adv-qb-sub">Word-for-word script for inbound calls</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('How do I beat Foxtons and Purplebricks in a valuation pitch? Give me specific scripts and USPs.')">
+        <span class="adv-qb-icon">🥊</span>
+        <span class="adv-qb-title">Beat Competitors</span>
+        <span class="adv-qb-sub">Scripts to win against Foxtons, Purplebricks etc.</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('Write me a 3-letter follow-up sequence for a property that has been on the market for 60 days with another agent.')">
+        <span class="adv-qb-icon">🔄</span>
+        <span class="adv-qb-title">Follow-Up Sequences</span>
+        <span class="adv-qb-sub">3-letter campaign for stale listings</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('What is the best letter to send to a landlord with multiple properties in HA? Include a specific offer.')">
+        <span class="adv-qb-icon">🔑</span>
+        <span class="adv-qb-title">Landlord Letters</span>
+        <span class="adv-qb-sub">Target multi-property landlords in HA</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('How do I make my estate agent letters stand out physically? What paper, envelope, and print format converts best?')">
+        <span class="adv-qb-icon">✉️</span>
+        <span class="adv-qb-title">Physical Impact</span>
+        <span class="adv-qb-sub">Paper, envelopes, print format advice</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('Write me a success story letter about selling a property in HA1 Harrow quickly and above asking price.')">
+        <span class="adv-qb-icon">⭐</span>
+        <span class="adv-qb-title">Success Story Letter</span>
+        <span class="adv-qb-sub">Template using recent local sales as social proof</span>
+      </button>
+      <button class="adv-quick-btn" onclick="quickAdvice('What specific things should I include in my letter to a homeowner whose property has been listed for 90 days without selling?')">
+        <span class="adv-qb-icon">⏰</span>
+        <span class="adv-qb-title">Motivated Seller Letter</span>
+        <span class="adv-qb-sub">Converting stale listings to switch-agent calls</span>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- DIRECTOR VISION PANEL -->
+<div class="panel" id="panel-director">
+  <div class="page-hdr">
+    <div><div class="page-title">🎬 Creative Director's Vision</div><div class="page-sub">15 strategic improvements — 10+ years UK estate agency experience, all HA-specific and revenue-proven</div></div>
+    <div class="fr"><button class="btn bs sm-btn" onclick="exportDirectorReport()">⬇ Export Vision</button></div>
+  </div>
+  <div class="dir-hero">
+    <div style="position:relative;z-index:1;display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">
+      <div style="flex:1">
+        <div
+<script src="app.js"></script>
+</body>
+</html>
