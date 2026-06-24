@@ -9,6 +9,7 @@ import rightmove from './api/rightmove.js';
 import listings from './api/listings.js';
 import epc from './api/epc.js';
 import epcMonitor from './api/epc-monitor.js';
+import landregistry from './api/landregistry.js';
 import anthropic from './api/anthropic.js';
 import config from './api/config.js';
 
@@ -29,6 +30,7 @@ const server = http.createServer((req, res) => {
   // ── API endpoints (shared with api/*.js) ──
   if (req.url.startsWith('/api/listings'))  { listings(req, res); return; }
   if (req.url.startsWith('/api/rightmove')) { rightmove(req, res); return; }
+  if (req.url.startsWith('/api/landregistry')) { landregistry(req, res); return; }
   if (req.url.startsWith('/api/epc-monitor')) { epcMonitor(req, res); return; }
   if (req.url.startsWith('/api/epc'))       { epc(req, res); return; }
   if (req.url === '/api/anthropic')         { anthropic(req, res); return; }

@@ -39,6 +39,8 @@
     <div class="nl">Property Search</div>
     <button class="ni active" id="nav-ha" onclick="showPanel('ha')"><span class="ic">🏘</span><span>HA Districts</span></button>
     <button class="ni" id="nav-premarket" onclick="showPanel('premarket')"><span class="ic">🔑</span><span>Pre-Market Radar</span><span class="nb nb-g">NEW</span></button>
+    <button class="ni" id="nav-sold" onclick="showPanel('sold')"><span class="ic">🏆</span><span>Sold Board</span><span class="nb nb-g">NEW</span></button>
+    <button class="ni" id="nav-campaigns" onclick="showPanel('campaigns')"><span class="ic">📇</span><span>Campaigns</span><span class="nb nb-b" id="camp-nav-badge" style="display:none">0</span></button>
     <button class="ni" id="nav-queue" onclick="showPanel('queue')"><span class="ic">🖨</span><span>Print Queue</span><span class="nb nb-g" id="q-nav-badge">0</span></button>
   </div>
   <div class="nav-sep"></div>
@@ -1157,6 +1159,54 @@
     <span style="font-size:11px;color:var(--muted);max-width:280px">A fresh EPC is a strong signal an owner is preparing to sell or let — reach them first.</span>
   </div>
   <div class="card" id="pm-results"><div style="text-align:center;padding:32px;color:var(--muted)">Loading pre-market leads…</div></div>
+</div>
+
+<!-- SOLD BOARD (LAND REGISTRY) -->
+<div class="panel" id="panel-sold">
+  <div class="page-hdr">
+    <div><div class="page-title">🏆 Sold Board</div><div class="page-sub">Recently registered sales across HA0–HA9 from HM Land Registry. Write to the street while it's hot — "we just sold nearby, here's what we achieved".</div></div>
+    <div class="page-kpis"><div class="kpi-box"><div class="kpi-n" id="sold-count">—</div><div class="kpi-l">Recent sales</div></div></div>
+  </div>
+  <div class="card card-sm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <label style="font-size:12px;color:var(--muted);font-weight:600">Sold in last
+      <select id="sold-days" onchange="initSold()" style="margin-left:6px;padding:6px 10px;border:1px solid var(--border2);border-radius:8px;font-family:inherit">
+        <option value="90">3 months</option><option value="180" selected>6 months</option><option value="365">12 months</option>
+      </select>
+    </label>
+    <label style="font-size:12px;color:var(--muted);font-weight:600">District
+      <select id="sold-district" onchange="initSold()" style="margin-left:6px;padding:6px 10px;border:1px solid var(--border2);border-radius:8px;font-family:inherit">
+        <option value="">All HA</option>
+        <option>HA0</option><option>HA1</option><option>HA2</option><option>HA3</option><option>HA4</option>
+        <option>HA5</option><option>HA6</option><option>HA7</option><option>HA8</option><option>HA9</option>
+      </select>
+    </label>
+    <button class="btn bp sm-btn" onclick="initSold()">🔄 Refresh</button>
+    <div style="flex:1"></div>
+    <span style="font-size:11px;color:var(--muted);max-width:280px">Land Registry data lags completion by 1–3 months — ideal timing for a "sold in your street" letter.</span>
+  </div>
+  <div class="card" id="sold-results"><div style="text-align:center;padding:32px;color:var(--muted)">Loading recent sales…</div></div>
+</div>
+
+<!-- CAMPAIGNS (CRM-LITE) -->
+<div class="panel" id="panel-campaigns">
+  <div class="page-hdr">
+    <div><div class="page-title">📇 Campaign Tracker</div><div class="page-sub">Every address you've lettered, in one place — avoid double-posting, track responses, and see who's due a follow-up.</div></div>
+    <div class="page-kpis">
+      <div class="kpi-box"><div class="kpi-n" id="camp-total">0</div><div class="kpi-l">Contacted</div></div>
+      <div class="kpi-box"><div class="kpi-n" id="camp-followups">0</div><div class="kpi-l">Follow-ups due</div></div>
+    </div>
+  </div>
+  <div class="card card-sm" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <input id="camp-filter" oninput="renderCampaigns()" placeholder="Search address…" style="padding:8px 12px;border:1px solid var(--border2);border-radius:9px;font-size:13px;font-family:inherit;min-width:200px">
+    <select id="camp-status-filter" onchange="renderCampaigns()" style="padding:8px 10px;border:1px solid var(--border2);border-radius:9px;font-family:inherit;font-size:13px">
+      <option value="">All statuses</option><option value="sent">Sent</option><option value="due">Follow-up due</option>
+      <option value="responded">Responded</option><option value="instructed">Instructed</option><option value="dead">Dead</option>
+    </select>
+    <div style="flex:1"></div>
+    <button class="btn bs sm-btn" onclick="exportCampaigns()">⬇ Export CSV</button>
+    <button class="btn bghost sm-btn" onclick="clearCampaigns()">Clear all</button>
+  </div>
+  <div class="card" id="camp-results"><div style="text-align:center;padding:32px;color:var(--muted)">No letters logged yet. Queue letters from any panel and they'll appear here.</div></div>
 </div>
 
 <script src="app.js"></script>

@@ -58,7 +58,9 @@ let templates = [
   {id:'let',name:'Landlord Letter',desc:'For rental properties',
    body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nI noticed your {{type}} at {{address}} listed for {{price}} on {{source}}.\n\nWe are a specialist letting agency covering all HA postcodes with a strong pipeline of pre-vetted tenants. We handle everything from viewings to referencing.\n\nIf you would like to discuss our full property management service, please do get in touch.\n\nYours sincerely,\n\n[Your Name]\n[Letting Agency]`},
   {id:'cash',name:'Cash Buyer Offer',desc:'Investor / cash buyer outreach',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Property Owner,\n\nI am reaching out about your property in {{district}}.\n\nWe are cash buyers with funds immediately available, looking to acquire properties across the HA postcode area. We can move quickly, complete on your timeline, and require no mortgage approvals.\n\nIf you would consider a no-obligation cash offer, we would love to hear from you.\n\nYours faithfully,\n\n[Your Name]\n[Company Name]`}
+   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Property Owner,\n\nI am reaching out about your property in {{district}}.\n\nWe are cash buyers with funds immediately available, looking to acquire properties across the HA postcode area. We can move quickly, complete on your timeline, and require no mortgage approvals.\n\nIf you would consider a no-obligation cash offer, we would love to hear from you.\n\nYours faithfully,\n\n[Your Name]\n[Company Name]`},
+  {id:'sold',name:'Sold in Your Street',desc:'After a nearby sale (Land Registry)',
+   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\nWe have just sold a property in your street and have buyers still looking in {{district}}.\n\nThe sale generated strong interest, and several of our registered buyers missed out — they remain keen to purchase in your immediate area.\n\nIf you have ever wondered what your home might be worth in today's market, we would be glad to provide a free, no-obligation valuation.\n\nYours sincerely,\n\n[Your Name]\n[Company Name]\n[Phone] | [Email]`}
 ];
 
 /* ═══════════════════════════════════════════
@@ -302,6 +304,7 @@ function queueOne(i){
   const tId=document.getElementById('f-tpl').value;
   const tpl=[...templates,...uploadedTpls].find(t=>t.id===tId)||templates[0];
   queue.push({id:Date.now()+Math.random(),prop:props[i],tpl,status:'pend',at:new Date(),auto:false});
+  if(typeof logContact==='function') logContact(props[i], tpl, props[i]?.source||'Live search');
   updQBadge(); updQStats();
   toast('Letter queued','ok');
 }
@@ -1613,6 +1616,7 @@ function quickQueueOne(i){
   const tplEl = document.getElementById('f-tpl');
   const tpl   = [...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro')) || templates[0];
   queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
+  logContact(p, tpl, p.source||'Live search');
   updQBadge(); updQStats(); updateKPIs();
   toast(`📬 Letter queued for ${p.displayAddress||p.address}`, 'ok');
 }
@@ -1712,11 +1716,135 @@ function queuePremarket(i){
     portal:'Pre-Market', source:'Pre-Market EPC', isRealUrl:true,
     rmUrl:'https://www.google.com/search?q='+encodeURIComponent(it.fullAddress+' for sale') };
   queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false });
+  logContact(prop, tpl, 'Pre-Market EPC');
   if(typeof updQBadge==='function') updQBadge();
   if(typeof updQStats==='function') updQStats();
   if(typeof updateKPIs==='function') updateKPIs();
   toast('📬 Letter queued for '+it.fullAddress, 'ok');
 }
+
+// ── Sold Board (Land Registry "sold in your street") ──
+let soldItems = [];
+async function initSold(){
+  const days=document.getElementById('sold-days')?.value||'180';
+  const dist=document.getElementById('sold-district')?.value||'';
+  const box=document.getElementById('sold-results');
+  if(box) box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">🔎 Loading recent sales from HM Land Registry…</div>';
+  try{
+    const qs=new URLSearchParams({days}); if(dist) qs.set('districts',dist);
+    const r=await fetch('/api/landregistry?'+qs.toString());
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</div>'; return; }
+    soldItems=d.properties||[];
+    const c=document.getElementById('sold-count'); if(c) c.textContent=soldItems.length;
+    renderSold();
+  }catch(e){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)">⚠ '+e.message+'</div>'; }
+}
+function renderSold(){
+  const box=document.getElementById('sold-results'); if(!box) return;
+  if(!soldItems.length){ box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No registered sales in this window.</div>'; return; }
+  box.innerHTML=soldItems.slice(0,300).map((s,i)=>{
+    const done=alreadyContacted(s.fullAddress);
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+s.fullAddress+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">💷 <strong style="color:var(--green)">£'+Number(s.price).toLocaleString()+'</strong> · '+s.type+' · sold '+s.date+' · '+s.district+'</div>'
+      +'</div>'
+      +'<a href="https://www.rightmove.co.uk/house-prices/'+encodeURIComponent(s.postcode)+'.html" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Sold prices</a>'
+      +'<button onclick="queueStreetLetters('+i+',this)" style="flex-shrink:0;padding:6px 13px;background:'+(done?'var(--slate2)':'var(--blue)')+';color:'+(done?'var(--muted)':'#fff')+';border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📬 Letter the street</button>'
+    +'</div>';
+  }).join('');
+}
+async function queueStreetLetters(i, btn){
+  const s=soldItems[i]; if(!s) return;
+  if(!s.postcode){ toast('No postcode for this sale','warn'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Finding neighbours…'; }
+  try{
+    const qs=new URLSearchParams({ postcode:s.postcode, street:s.street, district:s.district });
+    const r=await fetch('/api/epc?'+qs.toString());
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ toast('Could not find neighbours: '+(d.error||r.status),'warn'); }
+    const neighbours=(d.candidates||[]).filter(c=>contactKey(c.fullAddress)!==contactKey(s.fullAddress));
+    const tpl=[...templates,...(uploadedTpls||[])].find(t=>/sold/i.test(t.name)) || templates[0];
+    let n=0;
+    neighbours.forEach(c=>{
+      const prop={ address:c.fullAddress, displayAddress:c.fullAddress, fullAddress:c.fullAddress,
+        postcode:c.postcode||s.postcode, district:s.district, haCode:s.district, type:'Property', beds:0,
+        portal:'Sold Board', source:'Sold in street', isRealUrl:true,
+        rmUrl:'https://www.rightmove.co.uk/house-prices/'+encodeURIComponent(s.postcode)+'.html',
+        soldRef:s.fullAddress, soldPrice:s.price };
+      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false, sold:true });
+      logContact(prop, tpl, 'Sold in street'); n++;
+    });
+    if(typeof updQBadge==='function') updQBadge();
+    if(typeof updQStats==='function') updQStats();
+    if(typeof updateKPIs==='function') updateKPIs();
+    renderSold();
+    toast(n ? ('📬 Queued '+n+' "sold in your street" letters near '+s.street) : 'No neighbour addresses found for that street', n?'ok':'warn');
+  }catch(e){ toast('Could not fetch neighbours: '+e.message,'warn'); }
+  if(btn){ btn.disabled=false; btn.textContent='📬 Letter the street'; }
+}
+
+// ── Campaign Tracker (CRM-lite, stored in this browser) ──
+let contacts = {};
+function loadContacts(){ try{ contacts=JSON.parse(localStorage.getItem('pmContacts')||'{}'); }catch(e){ contacts={}; } updateCampBadges(); }
+function saveContacts(){ localStorage.setItem('pmContacts', JSON.stringify(contacts)); }
+function contactKey(addr){ return (addr||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+function alreadyContacted(addr){ return !!contacts[contactKey(addr)]; }
+function logContact(prop, tpl, source){
+  const addr=prop.fullAddress||prop.displayAddress||prop.address||''; if(!addr) return;
+  const k=contactKey(addr); if(!k) return; const now=new Date().toISOString();
+  if(contacts[k]){ contacts[k].lastAt=now; contacts[k].count=(contacts[k].count||1)+1; }
+  else contacts[k]={ address:addr, postcode:prop.postcode||'', district:prop.haCode||prop.district||'',
+    source:source||prop.source||'Search', template:(tpl&&tpl.name)||'', status:'sent', firstAt:now, lastAt:now, count:1 };
+  saveContacts(); updateCampBadges();
+}
+function isFollowupDue(c){
+  if(['responded','instructed','dead'].includes(c.status)) return false;
+  return (Date.now()-new Date(c.lastAt).getTime())/86400000 >= 21;
+}
+function updateCampBadges(){
+  const list=Object.values(contacts);
+  const due=list.filter(isFollowupDue).length;
+  const t=document.getElementById('camp-total'); if(t) t.textContent=list.length;
+  const f=document.getElementById('camp-followups'); if(f) f.textContent=due;
+  const nb=document.getElementById('camp-nav-badge'); if(nb){ if(due>0){ nb.style.display='inline-flex'; nb.textContent=due; } else nb.style.display='none'; }
+}
+function setContactStatus(k, status){ if(contacts[k]){ contacts[k].status=status; saveContacts(); updateCampBadges(); renderCampaigns(); } }
+function renderCampaigns(){
+  const box=document.getElementById('camp-results'); if(!box) return;
+  let list=Object.entries(contacts).map(([k,c])=>({k,...c}));
+  const f=(document.getElementById('camp-filter')?.value||'').toLowerCase().trim();
+  const sf=document.getElementById('camp-status-filter')?.value||'';
+  if(f) list=list.filter(c=>c.address.toLowerCase().includes(f));
+  if(sf==='due') list=list.filter(isFollowupDue); else if(sf) list=list.filter(c=>c.status===sf);
+  list.sort((a,b)=> new Date(b.lastAt)-new Date(a.lastAt));
+  if(!list.length){ box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No matching letters logged yet.</div>'; return; }
+  const stColor={sent:'tag-blue',responded:'tag-gold',instructed:'tag-green',dead:'tag-grey'};
+  box.innerHTML=list.slice(0,400).map(c=>{
+    const due=isFollowupDue(c);
+    const when=new Date(c.lastAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+c.address+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+c.source+' · last letter '+when+(c.count>1?' · '+c.count+'×':'')+(due?' · <span style="color:var(--amber);font-weight:700">follow-up due</span>':'')+'</div>'
+      +'</div>'
+      +'<span class="tag '+(stColor[c.status]||'tag-blue')+'">'+(c.status||'sent')+'</span>'
+      +'<select onchange="setContactStatus(\''+c.k+'\',this.value)" style="padding:5px 8px;border:1px solid var(--border2);border-radius:7px;font-family:inherit;font-size:11px">'
+        +['sent','responded','instructed','dead'].map(st=>'<option value="'+st+'"'+(c.status===st?' selected':'')+'>'+st+'</option>').join('')
+      +'</select>'
+    +'</div>';
+  }).join('');
+}
+function exportCampaigns(){
+  const rows=[['Address','Postcode','District','Source','Template','Status','First letter','Last letter','Count']];
+  Object.values(contacts).forEach(c=>rows.push([c.address,c.postcode,c.district,c.source,c.template,c.status,c.firstAt,c.lastAt,c.count]));
+  const csv=rows.map(r=>r.map(x=>'"'+String(x==null?'':x).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='propmail_campaigns_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  toast('Campaign list exported','ok');
+}
+function clearCampaigns(){ if(!confirm('Clear all logged contacts? This cannot be undone.')) return; contacts={}; saveContacts(); updateCampBadges(); renderCampaigns(); toast('Campaign log cleared','warn'); }
 
 function showPanel(n){
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -1724,6 +1852,8 @@ function showPanel(n){
   document.getElementById('panel-' + n)?.classList.add('active');
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'premarket' && !premarketItems.length) initPremarket();
+  if (n === 'sold' && !soldItems.length) initSold();
+  if (n === 'campaigns') { loadContacts(); renderCampaigns(); }
   if (n === 'ha')        loadTargeting();
   if (n === 'templates') renderTpls();
   if (n === 'queue')     renderQueue();
@@ -4505,5 +4635,6 @@ function updateIntelTable(){
   }).join('')}</tbody></table></div>`;
 }
 
-// Load saved agent-targeting settings as soon as the app is ready.
+// Load saved agent-targeting settings + campaign log as soon as the app is ready.
 try { if (typeof loadTargeting === 'function') loadTargeting(); } catch (e) {}
+try { if (typeof loadContacts === 'function') loadContacts(); } catch (e) {}
