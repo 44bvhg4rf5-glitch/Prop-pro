@@ -46,14 +46,19 @@ export default async function handler(req, res) {
     return;
   }
 
+  const onStreet = (r) => wantStreet && norm([r.addressLine1, r.addressLine2, r.addressLine3].filter(Boolean).join(' ')).includes(wantStreet);
+
   try {
-    // Gather addresses across the candidate postcodes.
+    // Use the nearest postcode that actually contains the listing's street
+    // (tightest result); only widen to further postcodes if the pin was off.
     let rows = [];
     for (const pc of pcList) {
       const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
       const { status, json } = await fetchJson(url, EPC_API_KEY);
       if (status === 401 || status === 403) { sendJson(res, 502, { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.' }); return; }
-      if (status === 200 && json && Array.isArray(json.data)) rows.push(...json.data);
+      const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
+      if (!wantStreet) { rows = data; break; }          // no street to match → nearest postcode
+      if (data.some(onStreet)) { rows = data; break; }   // this postcode has the street → use it alone
     }
 
     // Build + de-duplicate (keep newest certificate per address).
