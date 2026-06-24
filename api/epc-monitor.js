@@ -17,33 +17,6 @@ export default async function handler(req, res) {
   }
 
   const u = new URL(req.url, 'http://localhost');
-
-  // Diagnostics: discover the real council value + whether date filtering works.
-  if (u.searchParams.get('debug')) {
-    const pc = (u.searchParams.get('pc') || 'HA1 1BA').toUpperCase();
-    const s1 = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=50`, EPC_API_KEY);
-    const rows1 = (s1.json && s1.json.data) || [];
-    const councilsSeen = [...new Set(rows1.map((r) => r.council).filter(Boolean))];
-    const sampleRow = rows1[0] || null;
-    const council = u.searchParams.get('council') || councilsSeen[0] || 'Harrow';
-    const e = new Date(); const st = new Date(); st.setDate(st.getDate() - 30);
-    const base = `council%5B%5D=${encodeURIComponent(council)}`;
-    const variants = {
-      docExampleDates: `date_start=2021-07-10&date_end=2021-08-10`,
-      myRange: `date_start=${ymd(st)}&date_end=${ymd(e)}`,
-      fromTo: `from=${ymd(st)}&to=${ymd(e)}`,
-      startOnly: `date_start=${ymd(st)}`,
-      slashFmt: `date_start=${ymd(st).replace(/-/g, '/')}&date_end=${ymd(e).replace(/-/g, '/')}`,
-    };
-    const out = {};
-    for (const [k, v] of Object.entries(variants)) {
-      const r = await fetchJson(`${EPC_BASE}/api/domestic/search?${base}&${v}&page_size=2`, EPC_API_KEY);
-      out[k] = { status: r.status, total: (r.json && r.json.pagination && r.json.pagination.totalRecords), err: r.status !== 200 ? (r.body || '').slice(0, 120) : undefined, firstDate: r.json && r.json.data && r.json.data[0] && r.json.data[0].registrationDate };
-    }
-    sendJson(res, 200, { council, sampleCouncil: sampleRow && sampleRow.council, dateVariants: out });
-    return;
-  }
-
   const days = Math.min(parseInt(u.searchParams.get('days') || '14', 10) || 14, 90);
   const districts = (u.searchParams.get('districts') || ALL_HA.join(','))
     .toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
@@ -51,8 +24,10 @@ export default async function handler(req, res) {
   const councils = (u.searchParams.get('councils') || COUNCILS.join(','))
     .split(',').map((s) => s.trim()).filter(Boolean);
 
+  // The EPC register rejects a range that includes today, so end at yesterday.
   const end = new Date();
-  const start = new Date();
+  end.setDate(end.getDate() - 1);
+  const start = new Date(end);
   start.setDate(start.getDate() - days);
 
   try {
