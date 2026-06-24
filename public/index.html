@@ -92,19 +92,37 @@
   </div>
 
   <!-- ── ONE-CLICK SEARCH CARD ── -->
-  <div class="card" style="background:linear-gradient(135deg,#060C1A 0%,#0F1E3A 100%);border:1px solid rgba(37,99,235,.25);margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-      <div style="flex:1;min-width:200px">
-        <div style="font-family:'Playfair Display',serif;font-size:20px;color:#fff;margin-bottom:6px">Automated Property Finder</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6">Searches Rightmove for live listings in your selected HA districts. Extracts the real street address and property link for each one. Click any result to verify on Rightmove, then queue letters to the owners.</div>
+  <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,#FFFFFF 0%,#F1F6FF 100%);border:1px solid #DBE6FB;position:relative;overflow:hidden">
+    <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,#3470FF,#2150E3)"></div>
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding-left:6px">
+      <div style="flex:1;min-width:220px">
+        <div style="font-family:'Playfair Display',serif;font-size:21px;color:var(--text);margin-bottom:6px">Automated Property Finder</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6">Searches <strong>Rightmove + OnTheMarket</strong> for live listings across your selected HA districts, finds each property's full address from the EPC register, and gets it ready to print and post — one click.</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;align-items:center;flex-shrink:0">
-        <button id="main-search-btn" onclick="runLiveSearch()" style="padding:14px 32px;background:linear-gradient(135deg,#2563EB,#1d4ed8);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 20px rgba(37,99,235,.4);transition:all .15s;white-space:nowrap">
+        <button id="main-search-btn" onclick="runLiveSearch()" style="padding:14px 34px;background:linear-gradient(135deg,#3470FF,#2150E3);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 6px 22px rgba(37,99,235,.34);transition:all .15s;white-space:nowrap">
           🔍 Find Live Properties
         </button>
-        <div style="font-size:11px;color:rgba(255,255,255,.35);text-align:center">One click · Fully automated</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center">One click · Rightmove + OnTheMarket</div>
       </div>
     </div>
+  </div>
+
+  <!-- ── AGENT TARGETING ── -->
+  <div class="card" id="targeting-card" style="margin-bottom:16px">
+    <div style="margin-bottom:12px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">🎯 Agent Targeting</div>
+      <div style="font-size:12px;color:var(--muted)">Pick which agencies' listings to target. Unticked agents are removed from results — and no letters go to them.</div>
+    </div>
+    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+      <div class="fg" style="flex:1;min-width:220px"><label>Your agency (never targeted)</label><input type="text" id="own-company" placeholder="e.g. Foxtons" oninput="saveTargeting()"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);font-weight:500;padding-bottom:10px;cursor:pointer;text-transform:none;letter-spacing:normal;white-space:nowrap"><input type="checkbox" id="exclude-own" onchange="saveTargeting();applyTargetingNow()"> Exclude my own listings</label>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:9px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">Agents in your area
+      <button class="btn bs sm-btn" style="font-size:10px;padding:3px 9px" onclick="setAllAgents(true)">Target all</button>
+      <button class="btn bghost sm-btn" style="font-size:10px;padding:3px 9px" onclick="setAllAgents(false)">None</button>
+    </div>
+    <div id="agent-list" style="display:flex;flex-wrap:wrap;gap:8px"><span style="font-size:12px;color:var(--muted)">Run a search to discover the agents marketing properties in your districts.</span></div>
   </div>
 
   <!-- ── FILTERS (collapsed by default) ── -->
