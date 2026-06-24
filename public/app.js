@@ -912,14 +912,36 @@ function setAllAgents(on){
 }
 function renderAgentFilter(){
   const box=document.getElementById('agent-list'); if(!box) return;
-  if(!knownAgents.length){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">Run a search to discover the agents marketing properties in your districts.</span>'; return; }
+  const summary=document.getElementById('agent-summary');
   const ex=excludedSet();
-  box.innerHTML = knownAgents.slice().sort((a,b)=>b.count-a.count).map(a=>{
-    const off=ex.has(a.name.toLowerCase());
+  const targeted=knownAgents.filter(a=>!ex.has(a.name.toLowerCase())).length;
+  if(summary) summary.textContent = knownAgents.length ? `· targeting ${targeted} of ${knownAgents.length}` : '';
+  if(!knownAgents.length){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">Run a search, or tap “Discover all”, to list the agencies across HA0–HA9.</span>'; return; }
+  const f=(document.getElementById('agent-filter')?.value||'').toLowerCase().trim();
+  let list=knownAgents.slice().sort((a,b)=>(b.count-a.count)||a.name.localeCompare(b.name));
+  if(f) list=list.filter(a=>a.name.toLowerCase().includes(f));
+  if(!list.length){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">No agency matches “'+f+'”.</span>'; return; }
+  box.innerHTML = list.map(a=>{
+    const on=!ex.has(a.name.toLowerCase());
     const safe=a.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 11px;border:1.5px solid '+(off?'var(--border2)':'var(--blue)')+';border-radius:8px;cursor:pointer;background:'+(off?'transparent':'var(--blue-gl)')+';color:'+(off?'var(--muted)':'var(--text)')+';font-weight:'+(off?'400':'600')+'">'
-      +'<input type="checkbox" '+(off?'':'checked')+' onchange="toggleAgent(\''+safe+'\')"> '+a.name+' <span style="opacity:.55">('+a.count+')</span></label>';
+    return '<button class="agent-pill'+(on?' on':'')+'" title="'+(on?'Targeted — tap to exclude':'Excluded — tap to target')+'" onclick="toggleAgent(\''+safe+'\')">'
+      +'<span class="ck">✓</span>'+a.name+(a.count?'<span class="cnt">'+a.count+'</span>':'')+'</button>';
   }).join('');
+}
+// Scan every HA district to discover the full set of active agencies.
+async function scanAllAgents(btn){
+  const chan = (document.getElementById('f-status')?.value||'sale')==='let' ? 'rent' : 'sale';
+  const districts=['HA0','HA1','HA2','HA3','HA4','HA5','HA6','HA7','HA8','HA9'];
+  if(btn){ btn.disabled=true; btn.textContent='⟳ Scanning…'; }
+  const all=[];
+  await mapLimit(districts, 4, async (code)=>{
+    try{ const r=await fetch('/api/listings?district='+code+'&channel='+chan);
+      const d=await r.json(); (d.properties||[]).forEach(p=>{ if(p.agent) all.push({agent:p.agent}); });
+    }catch(e){}
+  });
+  collectAgents(all);
+  if(btn){ btn.disabled=false; btn.textContent='⟳ Discover all'; }
+  toast('Found '+knownAgents.length+' agencies across HA0–HA9', 'ok');
 }
 function collectAgents(list){
   const counts=new Map();
