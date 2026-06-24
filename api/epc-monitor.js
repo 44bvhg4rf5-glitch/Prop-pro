@@ -26,16 +26,21 @@ export default async function handler(req, res) {
     const councilsSeen = [...new Set(rows1.map((r) => r.council).filter(Boolean))];
     const sampleRow = rows1[0] || null;
     const council = u.searchParams.get('council') || councilsSeen[0] || 'Harrow';
-    const sNoDate = await fetchJson(`${EPC_BASE}/api/domestic/search?council%5B%5D=${encodeURIComponent(council)}&page_size=5`, EPC_API_KEY);
     const e = new Date(); const st = new Date(); st.setDate(st.getDate() - 30);
-    const sDate = await fetchJson(`${EPC_BASE}/api/domestic/search?council%5B%5D=${encodeURIComponent(council)}&date_start=${ymd(st)}&date_end=${ymd(e)}&page_size=5`, EPC_API_KEY);
-    sendJson(res, 200, {
-      pc, councilsSeen, council,
-      sampleRowKeys: sampleRow ? Object.keys(sampleRow) : [],
-      sampleCouncil: sampleRow && sampleRow.council,
-      councilNoDate: { status: sNoDate.status, total: (sNoDate.json && sNoDate.json.pagination && sNoDate.json.pagination.totalRecords) ?? ((sNoDate.json && sNoDate.json.data) || []).length },
-      councilWithDate: { status: sDate.status, total: (sDate.json && sDate.json.pagination && sDate.json.pagination.totalRecords) ?? ((sDate.json && sDate.json.data) || []).length },
-    });
+    const base = `council%5B%5D=${encodeURIComponent(council)}`;
+    const variants = {
+      docExampleDates: `date_start=2021-07-10&date_end=2021-08-10`,
+      myRange: `date_start=${ymd(st)}&date_end=${ymd(e)}`,
+      fromTo: `from=${ymd(st)}&to=${ymd(e)}`,
+      startOnly: `date_start=${ymd(st)}`,
+      slashFmt: `date_start=${ymd(st).replace(/-/g, '/')}&date_end=${ymd(e).replace(/-/g, '/')}`,
+    };
+    const out = {};
+    for (const [k, v] of Object.entries(variants)) {
+      const r = await fetchJson(`${EPC_BASE}/api/domestic/search?${base}&${v}&page_size=2`, EPC_API_KEY);
+      out[k] = { status: r.status, total: (r.json && r.json.pagination && r.json.pagination.totalRecords), err: r.status !== 200 ? (r.body || '').slice(0, 120) : undefined, firstDate: r.json && r.json.data && r.json.data[0] && r.json.data[0].registrationDate };
+    }
+    sendJson(res, 200, { council, sampleCouncil: sampleRow && sampleRow.council, dateVariants: out });
     return;
   }
 
