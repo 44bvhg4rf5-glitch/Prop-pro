@@ -11,6 +11,10 @@ const PORT = process.env.PORT || 3000;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_VERSION = process.env.ANTHROPIC_VERSION || '2023-06-01';
 
+// Free GOV.UK EPC register bearer token (for the full-address lookup).
+const EPC_API_KEY = process.env.EPC_API_KEY || '';
+const EPC_BASE = 'https://api.get-energy-performance-data.communities.gov.uk';
+
 const MIME = {
   '.html': 'text/html',
   '.css':  'text/css',
@@ -199,6 +203,85 @@ async function handleRightmove(req, res) {
   }
 }
 
+// GET a URL as JSON with a Bearer token (used for the EPC register).
+function fetchJson(url, token) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, { headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' } }, (r) => {
+        let body = '';
+        r.on('data', (c) => (body += c));
+        r.on('end', () => {
+          let json = null;
+          try { json = JSON.parse(body); } catch { /* leave null */ }
+          resolve({ status: r.statusCode, json, body });
+        });
+      })
+      .on('error', reject);
+  });
+}
+
+// Look up candidate full addresses (with house numbers) from the public EPC
+// register for a given postcode, optionally ranked by street name.
+async function handleEpc(req, res) {
+  const send = (code, obj) => {
+    res.writeHead(code, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  };
+
+  if (!EPC_API_KEY) {
+    send(503, {
+      error: 'No EPC_API_KEY configured. Register free at ' +
+        'https://get-energy-performance-data.communities.gov.uk and set EPC_API_KEY in the environment.',
+    });
+    return;
+  }
+
+  const u = new URL(req.url, 'http://localhost');
+  const postcode = (u.searchParams.get('postcode') || '').trim().toUpperCase();
+  const street = (u.searchParams.get('street') || '').trim().toLowerCase();
+  if (!postcode) { send(400, { error: 'postcode is required' }); return; }
+
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Pull just the road name out of a Rightmove displayAddress like
+  // "Hatton Road, Wembley, HA0" → "hatton road".
+  const streetName = norm(street.split(',')[0]);
+
+  const epcUrl = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(postcode).replace(/%20/g, '+')}&page_size=500`;
+
+  try {
+    const { status, json, body } = await fetchJson(epcUrl, EPC_API_KEY);
+    if (status === 401 || status === 403) { send(502, { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.' }); return; }
+    if (status !== 200) { send(502, { error: 'EPC register returned HTTP ' + status, detail: (body || '').slice(0, 200) }); return; }
+
+    const rows = (json && json.data) || [];
+    const candidates = rows.map((r) => {
+      const lines = [r.addressLine1, r.addressLine2, r.addressLine3, r.addressLine4].filter(Boolean);
+      const full = [...lines, r.postTown, r.postcode].filter(Boolean).join(', ');
+      return {
+        fullAddress: full,
+        line1: r.addressLine1 || '',
+        postcode: (r.postcode || '').replace(/\+/g, ' '),
+        uprn: r.uprn || '',
+        band: r.currentEnergyEfficiencyBand || '',
+        certDate: r.registrationDate || '',
+        _hay: norm(full),
+      };
+    });
+
+    // Rank: addresses whose text contains the listing's street come first.
+    let ranked = candidates;
+    if (streetName) {
+      const hits = candidates.filter((c) => c._hay.includes(streetName));
+      ranked = hits.length ? hits : candidates;
+    }
+    ranked.forEach((c) => delete c._hay);
+
+    send(200, { postcode, street: street || null, total: ranked.length, candidates: ranked.slice(0, 60) });
+  } catch (e) {
+    send(502, { error: 'EPC lookup failed: ' + e.message });
+  }
+}
+
 const server = http.createServer((req, res) => {
   // ── Rightmove live search ──
   if (req.url.startsWith('/api/rightmove')) {
@@ -206,7 +289,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // ── API proxy ──
+  // ── EPC full-address lookup ──
+  if (req.url.startsWith('/api/epc')) {
+    handleEpc(req, res);
+    return;
+  }
+
   if (req.url === '/api/anthropic') {
     if (req.method !== 'POST') {
       res.writeHead(405, { 'Content-Type': 'application/json' });

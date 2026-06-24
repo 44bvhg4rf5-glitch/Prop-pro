@@ -11,3 +11,8 @@ services:
       # letter writing). The live Rightmove search works WITHOUT this.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional — free GOV.UK EPC register token, powers the "Find full
+      # address" (house-number) lookup. Register at
+      # https://get-energy-performance-data.communities.gov.uk
+      - key: EPC_API_KEY
+        sync: false

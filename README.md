@@ -48,6 +48,19 @@ Note: Rightmove publishes the street + area, not the exact house number, so
 addresses are street-level. This requires the Node server (it cannot run on
 GitHub Pages, which only serves static files). See **Deploying** below.
 
+### Full-address (house number) lookup — EPC register
+
+Each result has a **🔑 Find full address** button. It queries the public
+GOV.UK EPC register (`/api/epc?postcode=HA1+1SL&street=Hindes+Road`) and returns
+candidate full addresses — real house numbers — on that street/postcode to
+verify against the listing. Set a free `EPC_API_KEY` (register with GOV.UK One
+Login at <https://get-energy-performance-data.communities.gov.uk>). Without it,
+the button explains how to enable the feature.
+
+These are *candidates to verify*, not a guaranteed single match — the EPC pin
+is the registered certificate address, so always confirm against the Rightmove
+listing before posting.
+
 ## Deploying to a free host
 
 `render.yaml` is included for one-click deploys on [Render](https://render.com):

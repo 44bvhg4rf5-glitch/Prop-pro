@@ -1279,6 +1279,49 @@ ${rawText.slice(0,10000)}`
 async function doHASearch(){ return runLiveSearch(); }
 
 // ── Render the results table ──
+// ── Find the full house-number address via the public EPC register ──
+async function findFullAddress(i){
+  const p = props[i]; if(!p) return;
+  const box = document.getElementById('epc-'+i); if(!box) return;
+  box.innerHTML = '<span style="font-size:12px;color:var(--muted)">🔎 Searching the EPC register…</span>';
+  try{
+    const pc = (p.postcode||'').replace(/—.*/,'').trim();
+    if(!pc){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">No postcode to search.</span>'; return; }
+    const qs = new URLSearchParams({ postcode: pc, street: p.displayAddress||p.address||'' });
+    const r = await fetch('/api/epc?'+qs.toString());
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){
+      box.innerHTML = '<span style="font-size:12px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</span>';
+      return;
+    }
+    const cands = d.candidates||[];
+    if(!cands.length){
+      box.innerHTML = '<span style="font-size:12px;color:var(--muted)">No EPC matches for '+pc+'. Open the Rightmove link to verify the address.</span>';
+      return;
+    }
+    window._epcCand = window._epcCand||{}; window._epcCand[i] = cands;
+    box.innerHTML = '<div style="border:1px solid var(--border2);border-radius:8px;padding:9px 11px;background:#fff">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">CANDIDATE ADDRESSES · EPC register ('+d.total+') — verify before posting</div>'
+      + cands.slice(0,8).map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
+          +'<span style="font-size:12px;color:var(--text)">'+c.fullAddress+(c.band?' <span style="color:var(--muted)">· EPC '+c.band+'</span>':'')+'</span>'
+          +'<button onclick="event.stopPropagation();useEpcAddress('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>'
+        +'</div>').join('')
+      +'</div>';
+  }catch(e){
+    box.innerHTML = '<span style="font-size:12px;color:var(--amber)">⚠ '+e.message+'</span>';
+  }
+}
+function useEpcAddress(i,j){
+  const c = (window._epcCand && window._epcCand[i] || [])[j]; if(!c) return;
+  props[i].address = c.fullAddress;
+  props[i].displayAddress = c.fullAddress;
+  props[i].fullAddress = c.fullAddress;
+  if(c.postcode) props[i].postcode = c.postcode;
+  props[i].addressSource = 'EPC register';
+  toast('Address set from EPC register — verify on the listing before posting','ok');
+  renderLiveResults();
+}
+
 function renderLiveResults(){
   const area = document.getElementById('results-area');
   if(area) area.style.display = 'block';
@@ -1345,11 +1388,15 @@ function renderLiveResults(){
           )
           // Queue letter button
           +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'">📬 Queue Letter</button>'
+          // Find full address (EPC register)
+          +'<button onclick="event.stopPropagation();findFullAddress('+i+')" style="padding:7px 13px;background:rgba(201,146,26,.12);color:#9a6b00;border:1.5px solid rgba(201,146,26,.35);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔑 Find full address</button>'
           // Zoopla cross-check
           +'<a href="'+p.zoUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:11px;font-weight:600;color:#7C3AED;text-decoration:none;background:rgba(124,58,237,.06)">Zoopla</a>'
           // Sold prices
           +'<a href="'+p.rmSoldUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(5,150,105,.22);border-radius:7px;font-size:11px;font-weight:600;color:var(--green);text-decoration:none;background:rgba(5,150,105,.06)">Sold Prices</a>'
         +'</div>'
+        // EPC candidate-address results appear here
+        +'<div id="epc-'+i+'" style="margin-top:8px"></div>'
         +(p.description?'<div style="margin-top:7px;font-size:11px;color:var(--muted);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.description+'</div>':'')
       +'</div>'
       // Letter footer
