@@ -8,6 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "ioredis": "^5.11.1",
     "pdf-lib": "^1.17.1"
   }
 }
