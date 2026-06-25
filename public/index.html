@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260625-os2">
+  <link rel="stylesheet" href="styles.css?v=20260625-os3">
 </head>
 <body>
 <!-- HEADER -->
@@ -401,6 +401,14 @@
       <div style="display:flex;gap:8px;align-items:flex-start">
         <textarea id="pc-batch" rows="3" placeholder="One postcode per line:&#10;HA1 2SB&#10;HA2 7HJ&#10;HA3 0NP" style="flex:1;font-family:'Courier New',monospace;font-size:12px;text-transform:uppercase;letter-spacing:1px"></textarea>
         <button class="pc-lookup-btn" onclick="lookupBatchPostcodes()" style="align-self:flex-end">📋 Lookup All</button>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">🛣️ Whole Street</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px">Every address on a street, across all its postcodes. Add the town for accuracy.</div>
+      <div class="pc-input-wrap">
+        <input id="st-input" placeholder="e.g. Roxeth Green Avenue, Harrow" onkeydown="if(event.key==='Enter')lookupStreet()">
+        <button class="pc-lookup-btn" id="st-btn" onclick="lookupStreet()">🛣️ Find Street</button>
       </div>
     </div>
   </div>
@@ -1271,6 +1279,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260625-os2"></script>
+<script src="app.js?v=20260625-os3"></script>
 </body>
 </html>

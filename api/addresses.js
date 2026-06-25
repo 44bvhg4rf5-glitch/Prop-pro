@@ -19,15 +19,79 @@ function tcAddr(s) {
     /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1));
 }
 
-// All addresses at a postcode. Uses the OS Places API (Royal Mail PAF) when an
-// OS_PLACES_KEY is configured; otherwise falls back to the EPC register.
+// Normalise a street/town for loose comparison.
+function norm(s) { return (s || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
+
+// Map an OS Places DPA record to our address shape.
+function mapDpa(d, fallbackPc) {
+  const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
+  const line1 = tcAddr([d.SUB_BUILDING_NAME, d.BUILDING_NAME, d.BUILDING_NUMBER, d.THOROUGHFARE_NAME].filter(Boolean).join(' ').trim());
+  return {
+    line1,
+    fullAddress: tcAddr(d.ADDRESS || ''),
+    postcode: d.POSTCODE || fallbackPc || '',
+    type: cls.startsWith('R') ? 'Residential' : cls.startsWith('C') ? 'Commercial' : 'Other',
+  };
+}
+
+// Street search: every address on a named street, across all its postcodes,
+// via the OS Places free-text "find" endpoint (paged). OS key required.
+async function streetSearch(res, street, OS) {
+  if (!OS) {
+    sendJson(res, 200, { street, total: 0, addresses: [], error: 'Street search needs an OS Places key (the EPC register can only look up by postcode).' });
+    return;
+  }
+  const parts = street.split(',').map((s) => s.trim()).filter(Boolean);
+  const streetName = norm(parts[0]);
+  const town = norm(parts.slice(1).join(' '));
+  const wanted = [];
+  let total = 0;
+  for (let offset = 0; offset < 500; offset += 100) {
+    const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(street)}`
+      + `&dataset=DPA&maxresults=100&offset=${offset}&key=${encodeURIComponent(OS)}`;
+    const { status, json } = await getJson(url);
+    if (status !== 200 || !json || !Array.isArray(json.results)) break;
+    json.results.map((r) => r.DPA).filter(Boolean).forEach((d) => {
+      const thoro = norm(d.THOROUGHFARE_NAME);
+      const depThoro = norm(d.DEPENDENT_THOROUGHFARE_NAME);
+      const onStreet = streetName && (thoro === streetName || depThoro === streetName);
+      const inTown = !town || norm(d.POST_TOWN).includes(town) || norm(d.ADDRESS).includes(town);
+      if (onStreet && inTown) wanted.push(mapDpa(d));
+    });
+    total = (json.header && json.header.totalresults) || 0;
+    if (offset + 100 >= total) break;
+  }
+  // De-duplicate and drop commercial (we only post to homes).
+  const seen = new Map();
+  wanted.filter((a) => a.type !== 'Commercial' && a.fullAddress).forEach((a) => {
+    const k = a.fullAddress.toLowerCase();
+    if (!seen.has(k)) seen.set(k, a);
+  });
+  const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+  const postcodes = [...new Set(addresses.map((a) => a.postcode).filter(Boolean))];
+  sendJson(res, 200, {
+    street, source: 'Royal Mail / OS Places', total: addresses.length, addresses, postcodes,
+    note: addresses.length ? `${addresses.length} homes across ${postcodes.length} postcode(s).`
+      : 'No matching addresses — check the street name and include the town (e.g. "Roxeth Green Avenue, Harrow").',
+  });
+}
+
+// All addresses at a postcode (or street). Uses the OS Places API (Royal Mail
+// PAF) when an OS_PLACES_KEY is configured; otherwise falls back to the EPC
+// register for postcode lookups.
 export default async function handler(req, res) {
   const u = new URL(req.url, 'http://localhost');
+  const OS_KEY = process.env.OS_PLACES_KEY || '';
+
+  // Street mode takes precedence when a ?street= is supplied.
+  const street = (u.searchParams.get('street') || '').trim();
+  if (street) { await streetSearch(res, street, OS_KEY); return; }
+
   const postcode = (u.searchParams.get('postcode') || '').trim().toUpperCase();
-  if (!postcode) { sendJson(res, 400, { error: 'postcode is required' }); return; }
+  if (!postcode) { sendJson(res, 400, { error: 'postcode or street is required' }); return; }
 
   // 1. OS Places — full Royal Mail PAF address list.
-  const OS = process.env.OS_PLACES_KEY || '';
+  const OS = OS_KEY;
   const debug = u.searchParams.get('debug') === '1';
   let osDiag = { osKeyPresent: !!OS, osStatus: null, osError: null };
   if (OS) {
@@ -37,16 +101,8 @@ export default async function handler(req, res) {
       const { status, json } = await getJson(url);
       osDiag.osStatus = status;
       if (status === 200 && json && Array.isArray(json.results)) {
-        const addresses = json.results.map((r) => r.DPA).filter(Boolean).map((d) => {
-          const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
-          const line1 = tcAddr([d.SUB_BUILDING_NAME, d.BUILDING_NAME, d.BUILDING_NUMBER, d.THOROUGHFARE_NAME].filter(Boolean).join(' ').trim());
-          return {
-            line1,
-            fullAddress: tcAddr(d.ADDRESS || ''),
-            postcode: d.POSTCODE || postcode,
-            type: cls.startsWith('R') ? 'Residential' : cls.startsWith('C') ? 'Commercial' : 'Other',
-          };
-        }).filter((a) => a.fullAddress);
+        const addresses = json.results.map((r) => r.DPA).filter(Boolean)
+          .map((d) => mapDpa(d, postcode)).filter((a) => a.fullAddress);
         sendJson(res, 200, { postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses });
         return;
       }
