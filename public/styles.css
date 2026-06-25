@@ -59,7 +59,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--slate);color:var(
 .ni{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--r3);color:rgba(255,255,255,.48);cursor:pointer;font-size:13px;font-weight:500;transition:all .14s;border:none;background:none;width:100%;text-align:left;margin-bottom:1px}
 .ni:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.82)}
 .ni.active{background:linear-gradient(90deg,rgba(37,99,235,.22),rgba(37,99,235,.08));color:#fff;font-weight:600;border-left:2.5px solid var(--blue-l);padding-left:8px}
-.ni .ic{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.ni .ic{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.ni .ic svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.sidebar-footer-item svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 .nb{margin-left:auto;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700;line-height:1.5}
 .nb-g{background:var(--gold);color:var(--ink)}
 .nb-r{background:#EF4444;color:#fff;display:none}
