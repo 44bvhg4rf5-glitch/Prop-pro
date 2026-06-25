@@ -4500,12 +4500,15 @@ async function doPostcodeLookup(postcodes){
     if(!foundAddresses.length){
       let geo=null;
       try{
-        const geoResp = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
+        const ctrl=new AbortController();
+        const to=setTimeout(()=>ctrl.abort(),4000);
+        const geoResp = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`,{signal:ctrl.signal});
+        clearTimeout(to);
         if(geoResp.ok){ geo=(await geoResp.json()).result; }
-      }catch(e){ /* ignore */ }
+      }catch(e){ /* offline or slow — fall back to outcode area name */ }
       foundAddresses = generatePAFAddresses(pc, geo||{admin_ward:pc.split(' ')[0]}, 40);
       foundAddresses = foundAddresses.map((a,i)=>({...a, idx:allResults.length+i, isLive:false}));
-      blog(`${pc}: Generated ${foundAddresses.length} addresses (live lookup unavailable)`,'inf');
+      blog(`${pc}: Showing ${foundAddresses.length} sample addresses (no live address key set)`,'inf');
     }
 
     // Count types
@@ -4519,7 +4522,7 @@ async function doPostcodeLookup(postcodes){
 
   slAddresses = allResults;
   slFiltered = [...slAddresses];
-  slSelected = new Set(slAddresses.filter(a=>a.type==='Residential').map((_,i)=>i));
+  slSelected = new Set(slAddresses.filter(a=>a.type==='Residential').map(a=>a.idx));
 
   // Update UI
   const countEl = document.getElementById('pc-count');
