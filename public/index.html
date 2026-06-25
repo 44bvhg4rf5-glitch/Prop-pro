@@ -1252,8 +1252,9 @@
       <div style="flex:1"></div>
       <label style="font-size:12px;color:var(--muted)">Run at <input type="time" id="ps-time" value="09:00" onchange="setPrintTime(this.value)" style="padding:6px 8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit"></label>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin:8px 0 10px">On the ticked days, when the app is open at this time, all due letters are gathered into a <strong>one-tap print run</strong>. If you weren't open at the time, it catches up and asks next time you open the app.</div>
+    <div style="font-size:12px;color:var(--muted);margin:8px 0 10px">On the ticked days, when the app is open at this time, all due letters are gathered into a <strong>one-tap print run</strong> (or printed silently if your PrintNode printer is connected). If you weren't open, you'll get a "letters due today" prompt next time you log in.</div>
     <div id="ps-days" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    <div style="margin-top:12px"><button class="btn bs sm-btn" onclick="exportCalendar()">📅 Add a reminder to Google Calendar</button> <span style="font-size:11px;color:var(--muted)">— get a free phone reminder on these days to open the app and print.</span></div>
   </div>
   <div class="card card-sm" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--muted)">Each letter carries a <strong>reference</strong> (e.g. REN‑1042) so you can track the campaign across the app or your diary.</span>
