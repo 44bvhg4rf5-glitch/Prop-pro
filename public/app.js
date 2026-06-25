@@ -763,6 +763,11 @@ async function lookupBatchPostcodes(){
   if(!codes.length){toast('No valid postcodes found','warn');return;}
   await doPostcodeLookup(codes);
 }
+async function lookupStreet(){
+  const raw=(document.getElementById('st-input')||{}).value?.trim();
+  if(!raw){toast('Enter a street name (e.g. Roxeth Green Avenue, Harrow)','warn');return;}
+  await doStreetLookup(raw);
+}
 function selAllAddrs(){
   slFiltered.forEach(a=>{slSelected.add(a.idx);a.selected=true;});
   renderAddrResults();updAddrSel();
@@ -4516,33 +4521,48 @@ async function doPostcodeLookup(postcodes){
     allResults.push(...foundAddresses);
   }
 
+  finishAddressLookup(allResults, lastSource, liveCount);
+}
+
+// Shared finish step for postcode/batch/street lookups: hide commercial,
+// reveal the results UI, populate counters, render and scroll into view.
+function finishAddressLookup(rawResults, lastSource, liveCount){
+  // Hide commercial premises completely — we only write to homes.
+  let allResults = rawResults.filter(a=>a.type!=='Commercial');
+  allResults.forEach((a,i)=>{ a.idx=i; a.selected=true; });
+
   setStage(3);
-  const srcLabel = lastSource ? ` · via ${lastSource}` : '';
-  showPCStatus('ok',`Found ${allResults.length} addresses`,100,`${residential} residential · ${commercial} commercial${srcLabel}`);
+  showPCStatus('ok',`Found ${allResults.length} addresses`,100,
+    `${allResults.length} residential${lastSource?' · via '+lastSource:''}`);
 
   slAddresses = allResults;
   slFiltered = [...slAddresses];
-  slSelected = new Set(slAddresses.filter(a=>a.type==='Residential').map(a=>a.idx));
+  slSelected = new Set(slAddresses.map(a=>a.idx)); // pre-tick all (commercial already removed)
+  slAddrPage = 0;
 
   // ── Reveal the results UI (these cards start hidden) ──
   const show = (id)=>{ const el=document.getElementById(id); if(el) el.style.display=''; };
   show('pc-stats'); show('letter-chooser'); show('addr-results-card');
 
+  // Hide the now-unused Commercial stat tile.
+  const comTile = document.getElementById('ss-com');
+  if(comTile && comTile.closest('.pc-stat')) comTile.closest('.pc-stat').style.display='none';
+
   // Stat counters
   const setTxt = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
   setTxt('ss-total', allResults.length);
-  setTxt('ss-res', residential);
-  setTxt('ss-com', commercial);
+  setTxt('ss-res', allResults.length);
   setTxt('ss-sel', slSelected.size);
 
   // Results card heading
-  const pcList = [...new Set(allResults.map(a=>a.postcode))].join(', ');
+  const pcList = [...new Set(allResults.map(a=>a.postcode))].filter(Boolean).join(', ');
   setTxt('addr-results-title', `${allResults.length} Addresses Found`);
   setTxt('addr-results-sub', `${pcList}${lastSource?' · '+lastSource:''} · tick the ones to write to`);
 
   setStage(4);
 
-  const btn2 = document.getElementById('pc-btn'); if(btn2) btn2.disabled=false;
+  const btn=document.getElementById('pc-btn'); if(btn) btn.disabled=false;
+  const sBtn=document.getElementById('st-btn'); if(sBtn) sBtn.disabled=false;
 
   renderLetterChoices();
   renderAddrGrid();
@@ -4552,7 +4572,52 @@ async function doPostcodeLookup(postcodes){
   const card = document.getElementById('addr-results-card');
   if(card && card.scrollIntoView) { try{ card.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){} }
 
+  if(!allResults.length){ toast('No residential addresses found — try a different postcode or street', 'warn'); return; }
   toast(`${allResults.length} addresses found${liveCount?' ('+liveCount+' live)':''}`, 'ok');
+}
+
+// Street mode — find every address on a named street, across all its postcodes.
+async function doStreetLookup(street){
+  street=(street||'').trim();
+  if(!street){ toast('Enter a street name','warn'); return; }
+  slAddresses=[]; slFiltered=[]; slSelected=new Set(); slAddrPage=0;
+
+  const btn=document.getElementById('st-btn'); if(btn) btn.disabled=true;
+  document.getElementById('pc-stages').style.display='flex';
+  setStage(1);
+  showPCStatus('scanning',`Searching "${street}"…`,10,'Finding every address on this street…');
+
+  const allResults=[]; let lastSource='';
+  try{
+    setStage(2);
+    const resp = await fetch(`/api/addresses?street=${encodeURIComponent(street)}`);
+    if(resp.ok){
+      const data = await resp.json();
+      const list = Array.isArray(data.addresses) ? data.addresses : [];
+      lastSource = data.source || '';
+      list.forEach((a,i)=>{
+        const type = a.type === 'Commercial' ? 'Commercial' : 'Residential';
+        const line1 = a.line1 || (a.fullAddress||'').split(',')[0] || '';
+        allResults.push({
+          line1, line2:'',
+          area: (a.fullAddress||'').split(',').slice(-2,-1)[0]?.trim() || '',
+          postcode: a.postcode || '',
+          type,
+          fullAddress: a.fullAddress || line1,
+          selected:true, isLive:true, sortKey:i, idx:i
+        });
+      });
+      if(data.error) blog(`Street search: ${data.error}`,'warn');
+      const pcs=[...new Set(allResults.map(a=>a.postcode).filter(Boolean))];
+      blog(`🔎 "${street}": ${allResults.length} addresses across ${pcs.length} postcode${pcs.length===1?'':'s'}`,'ok');
+    } else {
+      blog(`Street search failed (HTTP ${resp.status})`,'warn');
+    }
+  }catch(e){
+    blog(`Street search error — ${e.message}`,'warn');
+  }
+
+  finishAddressLookup(allResults, lastSource, allResults.length);
 }
 
 const FLAT_PREFIXES=['Flat','Apartment','Unit','Suite'];
