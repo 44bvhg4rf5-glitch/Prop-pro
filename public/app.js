@@ -6,6 +6,7 @@ let rtTimer=null;
 let uploadedTpls=[];
 let slAddresses=[], slFiltered=[], slSelected=new Set(), slActiveLetter=null, slAddrPage=0;
 const SL_PG=30;
+let pmBlocked=[], pmBlockedConfigured=false; // do-not-mail suppression list
 let intelResults=[], chatHistory=[];
 let bdQueued=0;
 let activeTpl=null, selPrinter=null;
@@ -788,7 +789,10 @@ function exportAddrCSV(){
 }
 function printSuccessLetters(){
   if(!slActiveLetter){toast('Choose a letter template first','warn');return;}
-  const selected=slAddresses.filter(a=>slSelected.has(a.idx));
+  let selected=slAddresses.filter(a=>slSelected.has(a.idx));
+  const before=selected.length;
+  selected=selected.filter(a=>!isBlockedAddr(a)); // final safety net — never print a blocked address
+  if(before!==selected.length){ toast(`${before-selected.length} blocked address(es) removed from this run`,'warn'); }
   if(!selected.length){toast('Select addresses first','warn');return;}
 
   toast(`Printing ${selected.length} letters…`,'ok');
@@ -838,7 +842,11 @@ function switchAddrView(v){
 }
 function queueSuccessLetters(){
   if(!slActiveLetter){toast('Choose a letter first','warn');return;}
-  const selected=slAddresses.filter(a=>slSelected.has(a.idx));
+  let selected=slAddresses.filter(a=>slSelected.has(a.idx));
+  const before=selected.length;
+  selected=selected.filter(a=>!isBlockedAddr(a)); // final safety net — never queue a blocked address
+  if(before!==selected.length){ toast(`${before-selected.length} blocked address(es) skipped`,'warn'); }
+  if(!selected.length){toast('No addresses to queue','warn');return;}
   selected.forEach(a=>{
     const prop={
       address: a.fullAddress,
@@ -2277,6 +2285,8 @@ function showPanel(n){
   if (n === 'ha')        loadTargeting();
   if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); }
   if (n === 'queue')     renderQueue();
+  if (n === 'blocked')   { loadBlocklist().then(renderBlockedPanel); renderBlockedPanel(); }
+  if (n === 'success')   loadBlocklist();
   if (n === 'printers')  { renderPrinters(); renderPrintNodeUI(); }
   if (n === 'bot')       updateBotUI();
   if (n === 'investor'  && typeof initInvestorDashboard === 'function') initInvestorDashboard();
@@ -2556,7 +2566,7 @@ function renderAddrGrid(){
   slFiltered.slice(start, start + SL_PG).forEach(a => {
     const i = a.idx; const d = document.createElement('div');
     d.className = 'addr-card' + (slSelected.has(i) ? ' sel' : ''); d.id = 'ac-' + i;
-    d.innerHTML = '<div class="pck' + (slSelected.has(i) ? ' on' : '') + '" id="apk-' + i + '" onclick="event.stopPropagation();toggleAddr(' + i + ')"></div><div><div style="font-size:13px;font-weight:600;color:var(--text)">' + a.line1 + '</div>' + (a.line2 ? '<div style="font-size:12px;color:var(--text2)">' + a.line2 + '</div>' : '') + '<div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px">' + a.area + ' · <strong>' + a.postcode + '</strong><span class="tag ' + (a.type === 'Residential' ? 'tag-green' : 'tag-blue') + '" style="font-size:9px">' + a.type + '</span></div></div>';
+    d.innerHTML = '<div class="pck' + (slSelected.has(i) ? ' on' : '') + '" id="apk-' + i + '" onclick="event.stopPropagation();toggleAddr(' + i + ')"></div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">' + a.line1 + '</div>' + (a.line2 ? '<div style="font-size:12px;color:var(--text2)">' + a.line2 + '</div>' : '') + '<div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px">' + a.area + ' · <strong>' + a.postcode + '</strong><span class="tag ' + (a.type === 'Residential' ? 'tag-green' : 'tag-blue') + '" style="font-size:9px">' + a.type + '</span></div></div><button class="addr-block-btn" title="Block — never send letters here" onclick="event.stopPropagation();blockFromGrid(' + i + ')">🚫</button>';
     d.onclick = () => toggleAddr(i); grid.appendChild(d);
   });
   renderAddrPag('addr-pag');
@@ -2599,6 +2609,7 @@ function renderIntelResult(result, container){
     updateBotUI();
     startRTFeed();
     blog('PropMail Pro ready — click 🔍 Find Live Properties to start.', 'inf');
+    loadBlocklist();
     setTimeout(() => {
       try {
         const s1 = genHAProps('HA1', 'all', 'all', '0', '', 1, 12345).slice(0, 8);
@@ -4528,7 +4539,9 @@ async function doPostcodeLookup(postcodes){
 // reveal the results UI, populate counters, render and scroll into view.
 function finishAddressLookup(rawResults, lastSource, liveCount){
   // Hide commercial premises completely — we only write to homes.
-  let allResults = rawResults.filter(a=>a.type!=='Commercial');
+  // Also strip any do-not-mail addresses (server already filters when the
+  // cloud list is configured; this also covers this-device-only mode).
+  let allResults = rawResults.filter(a=>a.type!=='Commercial' && !isBlockedAddr(a));
   // For large lists (e.g. a whole district), don't pre-tick — avoids an
   // accidental mass print. Smaller lists stay fully pre-selected.
   const PRESELECT_MAX = 500;
@@ -4623,6 +4636,151 @@ async function doStreetLookup(street){
   }
 
   finishAddressLookup(allResults, lastSource, allResults.length);
+}
+
+/* ═══════════════════════════════════════════
+   DO-NOT-MAIL / SUPPRESSION LIST
+   Blocked addresses never appear in results and
+   are stripped again before printing/queueing.
+═══════════════════════════════════════════ */
+function blkNorm(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function blkDespacePc(s){ return (s||'').toUpperCase().replace(/\s+/g,''); }
+
+// Client-side mirror of the server matcher (defense in depth).
+function isBlockedAddr(a){
+  if(!pmBlocked.length) return false;
+  const uprn = a.uprn ? String(a.uprn) : '';
+  const full = blkNorm(a.fullAddress);
+  const apc  = blkDespacePc(a.postcode);
+  const nl1  = blkNorm(a.line1 || (a.fullAddress||'').split(',')[0]);
+  for(const e of pmBlocked){
+    if(uprn && e.uprn && String(e.uprn)===uprn) return true;
+    if(e.fullAddress && blkNorm(e.fullAddress)===full && full) return true;
+    if(e.postcode && e.house && blkDespacePc(e.postcode)===apc && apc){
+      const nh = blkNorm(e.house);
+      if(nh && (nl1===nh || nl1.startsWith(nh+' ') || (' '+nl1+' ').includes(' '+nh+' '))) return true;
+    }
+  }
+  return false;
+}
+
+async function loadBlocklist(){
+  try{
+    const r = await fetch('/api/suppress');
+    if(r.ok){
+      const d = await r.json();
+      if(d.configured){
+        pmBlockedConfigured = true;
+        pmBlocked = Array.isArray(d.entries) ? d.entries : [];
+        localStorage.setItem('pmBlocked', JSON.stringify(pmBlocked));
+      } else {
+        pmBlockedConfigured = false;
+        pmBlocked = JSON.parse(localStorage.getItem('pmBlocked')||'[]');
+      }
+    }
+  }catch(e){
+    pmBlockedConfigured = false;
+    try{ pmBlocked = JSON.parse(localStorage.getItem('pmBlocked')||'[]'); }catch(_){ pmBlocked=[]; }
+  }
+  updateBlockedBadge();
+}
+
+function updateBlockedBadge(){
+  const b = document.getElementById('blocked-nav-badge');
+  if(b){ b.textContent = pmBlocked.length; b.style.display = pmBlocked.length ? 'inline-flex' : 'none'; }
+}
+
+// Add an address to the block list (server when configured, else localStorage).
+async function blockAdd(payload){
+  // payload: { fullAddress?, postcode?, house?, uprn?, line1?, reason? }
+  if(pmBlockedConfigured){
+    try{
+      const r = await fetch('/api/suppress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const d = await r.json();
+      if(r.ok && d.configured){ pmBlocked = d.entries||pmBlocked; localStorage.setItem('pmBlocked',JSON.stringify(pmBlocked)); updateBlockedBadge(); return true; }
+      if(d && d.error){ toast(d.error,'warn'); return false; }
+    }catch(e){ toast('Could not reach the block list — saved on this device.','warn'); }
+  }
+  // localStorage fallback
+  const entry = { id:'b'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+    uprn:(payload.uprn||'').toString(), fullAddress:payload.fullAddress||'', postcode:payload.postcode||'',
+    house:payload.house||'', line1:payload.line1||(payload.fullAddress||'').split(',')[0]||'', reason:payload.reason||'',
+    addedAt:new Date().toISOString() };
+  if(!entry.fullAddress && !(entry.postcode && entry.house)){ toast('Enter a full address, or a postcode and house number.','warn'); return false; }
+  pmBlocked.push(entry); localStorage.setItem('pmBlocked',JSON.stringify(pmBlocked)); updateBlockedBadge();
+  return true;
+}
+
+async function blockRemove(id){
+  if(pmBlockedConfigured){
+    try{
+      const r = await fetch('/api/suppress?id='+encodeURIComponent(id),{method:'DELETE'});
+      const d = await r.json();
+      if(r.ok && d.configured){ pmBlocked = d.entries||pmBlocked; localStorage.setItem('pmBlocked',JSON.stringify(pmBlocked)); updateBlockedBadge(); renderBlockedPanel(); return; }
+    }catch(e){ /* fall through to local */ }
+  }
+  pmBlocked = pmBlocked.filter(e=>e.id!==id);
+  localStorage.setItem('pmBlocked',JSON.stringify(pmBlocked)); updateBlockedBadge(); renderBlockedPanel();
+}
+
+// Block an address straight from a results card.
+async function blockFromGrid(idx){
+  const a = slAddresses[idx]; if(!a) return;
+  if(!confirm(`Block this address from all future letters?\n\n${a.fullAddress}\n\nThey will be removed now and never appear again.`)) return;
+  const ok = await blockAdd({ uprn:a.uprn||'', fullAddress:a.fullAddress, postcode:a.postcode, line1:a.line1 });
+  if(!ok) return;
+  // Remove from current results immediately
+  slAddresses = slAddresses.filter(x=>x.idx!==idx);
+  slFiltered  = slFiltered.filter(x=>x.idx!==idx);
+  slSelected.delete(idx);
+  renderAddrResults(); updAddrSel();
+  toast('Address blocked — it won\'t receive letters','ok');
+}
+
+async function addBlockedManual(){
+  const full = (document.getElementById('blk-full')||{}).value?.trim()||'';
+  const house = (document.getElementById('blk-house')||{}).value?.trim()||'';
+  const pc = (document.getElementById('blk-pc')||{}).value?.trim().toUpperCase()||'';
+  const reason = (document.getElementById('blk-reason')||{}).value?.trim()||'';
+  if(!full && !(house && pc)){ toast('Enter a full address, or a postcode and house number/name.','warn'); return; }
+  const ok = await blockAdd({ fullAddress:full, postcode:pc, house, reason });
+  if(!ok) return;
+  ['blk-full','blk-house','blk-pc','blk-reason'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  renderBlockedPanel();
+  toast('Address added to the do-not-mail list','ok');
+}
+
+function renderBlockedPanel(){
+  const card = document.getElementById('blocked-status-card');
+  if(card) card.style.display = pmBlockedConfigured ? 'none' : '';
+  const sub = document.getElementById('blocked-count-sub');
+  if(sub) sub.textContent = `${pmBlocked.length} blocked${pmBlockedConfigured?' · stored in the cloud':' · this device only'}`;
+  const list = document.getElementById('blocked-list'); if(!list) return;
+  const q = blkNorm((document.getElementById('blk-search')||{}).value||'');
+  const rows = pmBlocked
+    .filter(e=>!q || blkNorm((e.fullAddress||'')+' '+(e.postcode||'')+' '+(e.house||'')+' '+(e.reason||'')).includes(q))
+    .sort((a,b)=>(b.addedAt||'').localeCompare(a.addedAt||''));
+  if(!rows.length){ list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No blocked addresses yet.</div>'; return; }
+  list.innerHTML = rows.map(e=>{
+    const label = e.fullAddress || `${e.house||''}, ${e.postcode||''}`;
+    const when = (e.addedAt||'').slice(0,10);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${label}</div>
+        <div style="font-size:11px;color:var(--muted)">${e.reason?('“'+e.reason+'” · '):''}${when?('blocked '+when):''}</div>
+      </div>
+      <button class="btn bs sm-btn" onclick="blockRemove('${e.id}')">Unblock</button>
+    </div>`;
+  }).join('');
+}
+
+function exportBlocked(){
+  if(!pmBlocked.length){ toast('Nothing to export','warn'); return; }
+  const h=['Full Address','House','Postcode','UPRN','Reason','Blocked At'];
+  const rows=pmBlocked.map(e=>[e.fullAddress,e.house,e.postcode,e.uprn,e.reason,e.addedAt].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  const b=new Blob([[h.join(','),...rows].join('\n')],{type:'text/csv'});
+  const el=document.createElement('a'); el.href=URL.createObjectURL(b); el.download=`do-not-mail_${new Date().toISOString().slice(0,10)}.csv`; el.click();
+  toast('Do-not-mail list exported','ok');
 }
 
 const FLAT_PREFIXES=['Flat','Apartment','Unit','Suite'];

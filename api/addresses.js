@@ -1,5 +1,6 @@
 import https from 'https';
 import { EPC_BASE, fetchJson, sendJson } from '../lib/helpers.js';
+import { getBlocklist, buildMatcher, isSuppressed } from '../lib/blocklist.js';
 
 function getJson(url) {
   return new Promise((resolve) => {
@@ -30,6 +31,7 @@ function mapDpa(d, fallbackPc) {
     line1,
     fullAddress: tcAddr(d.ADDRESS || ''),
     postcode: d.POSTCODE || fallbackPc || '',
+    uprn: d.UPRN ? String(d.UPRN) : '',
     type: cls.startsWith('R') ? 'Residential' : cls.startsWith('C') ? 'Commercial' : 'Other',
   };
 }
@@ -87,7 +89,7 @@ async function osPaged(kind, value, OS, maxAddr) {
 // via the OS Places free-text "find" endpoint (paged). OS key required.
 // An optional postcode/outcode in the query (e.g. "Kenton Road HA3") narrows
 // results to that district.
-async function streetSearch(res, rawStreet, OS) {
+async function streetSearch(res, rawStreet, OS, notBlocked = () => true) {
   if (!OS) {
     sendJson(res, 200, { street: rawStreet, total: 0, addresses: [], error: 'Street search needs an OS Places key (the EPC register can only look up by postcode).' });
     return;
@@ -105,7 +107,7 @@ async function streetSearch(res, rawStreet, OS) {
     const inPrefix = !prefix || (d.POSTCODE || '').toUpperCase().replace(/\s+/g, '').startsWith(prefix);
     return onStreet && inTown && inPrefix;
   }).map((d) => mapDpa(d));
-  const addresses = cleanAddresses(wanted);
+  const addresses = cleanAddresses(wanted).filter(notBlocked);
   const postcodes = [...new Set(addresses.map((a) => a.postcode).filter(Boolean))];
   sendJson(res, 200, {
     street: rawStreet, source: 'Royal Mail / OS Places', total: addresses.length, addresses, postcodes,
@@ -121,9 +123,15 @@ export default async function handler(req, res) {
   const u = new URL(req.url, 'http://localhost');
   const OS_KEY = process.env.OS_PLACES_KEY || '';
 
+  // Load the do-not-mail list once; blocked addresses are stripped from every
+  // result path so a suppressed property can never surface.
+  const block = await getBlocklist();
+  const matcher = buildMatcher(block.entries);
+  const notBlocked = (a) => !isSuppressed(a, matcher);
+
   // Street mode takes precedence when a ?street= is supplied.
   const street = (u.searchParams.get('street') || '').trim();
-  if (street) { await streetSearch(res, street, OS_KEY); return; }
+  if (street) { await streetSearch(res, street, OS_KEY, notBlocked); return; }
 
   const postcode = (u.searchParams.get('postcode') || '').trim().toUpperCase();
   if (!postcode) { sendJson(res, 400, { error: 'postcode or street is required' }); return; }
@@ -140,7 +148,7 @@ export default async function handler(req, res) {
       const { status, results, total } = await osPaged('postcode', postcode, OS, cap);
       osDiag.osStatus = status;
       if (status === 200) {
-        const addresses = cleanAddresses(results.map((d) => mapDpa(d, postcode)));
+        const addresses = cleanAddresses(results.map((d) => mapDpa(d, postcode))).filter(notBlocked);
         sendJson(res, 200, {
           postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses,
           totalAvailable: total,
@@ -171,9 +179,9 @@ export default async function handler(req, res) {
         const pc = (r.postcode || '').replace(/\+/g, ' ');
         const full = [...lines, r.postTown, pc].filter(Boolean).join(', ');
         const key = full.toLowerCase();
-        if (full && !seen.has(key)) seen.set(key, { line1: r.addressLine1 || lines[0] || '', fullAddress: full, postcode: pc, type: 'Residential' });
+        if (full && !seen.has(key)) seen.set(key, { line1: r.addressLine1 || lines[0] || '', fullAddress: full, postcode: pc, uprn: r.uprn ? String(r.uprn) : '', type: 'Residential' });
       });
-      const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+      const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true })).filter(notBlocked);
       sendJson(res, 200, {
         postcode, source: 'EPC register', total: addresses.length, addresses,
         note: addresses.length

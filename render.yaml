@@ -23,3 +23,11 @@ services:
       # https://osdatahub.os.uk (free OS Places API plan).
       - key: OS_PLACES_KEY
         sync: false
+      # Do-Not-Mail / suppression list storage (durable, cross-device). On
+      # Vercel: Storage → Create Database → KV auto-adds these. Elsewhere, create
+      # a free Upstash Redis DB and copy its REST URL + token here. Without them
+      # the block list falls back to per-device browser storage.
+      - key: KV_REST_API_URL
+        sync: false
+      - key: KV_REST_API_TOKEN
+        sync: false
