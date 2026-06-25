@@ -1961,6 +1961,58 @@ function exportSchedule(){
   a.download='propmail_schedule_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
   toast('Schedule exported','ok');
 }
+// How many cycle letters are due now (would be queued).
+function dueLettersCount(){
+  if(typeof automation==='undefined' || !automation.enabled) return 0;
+  let n=0;
+  Object.values(contacts).forEach(c=>{
+    if(!c.groupId || ['responded','instructed','dead'].includes(c.status)) return;
+    const g=groupById(c.groupId); if(!g) return;
+    const enrolled=new Date(c.enrolledAt||c.firstAt||c.lastAt).getTime(); let done=c.seqDone||1;
+    while(done<g.steps.length){ if(Date.now()>=enrolled+g.steps[done].day*86400000){ n++; done++; } else break; }
+  });
+  return n;
+}
+// "Letters due today" prompt shown when the app is opened.
+function showLoginDueNotice(){
+  if(document.getElementById('printrun-modal')) return;
+  let due=0; try{ due=dueLettersCount(); }catch(e){}
+  const pending=queue.filter(x=>x.status==='pend').length;
+  const total=due+pending; if(total<=0) return;
+  document.getElementById('login-notice')?.remove();
+  const ov=document.createElement('div'); ov.id='login-notice';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
+  const detail = due ? (due+' from your letter cycles'+(pending?' + '+pending+' waiting in the queue':'')) : (pending+' waiting in the print queue');
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:430px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);padding:24px;text-align:center">'
+    +'<div style="font-size:34px;margin-bottom:8px">📬</div>'
+    +'<div style="font-size:18px;font-weight:700;color:var(--text)">'+total+' letter'+(total>1?'s':'')+' due today</div>'
+    +'<div style="font-size:13px;color:var(--muted);margin:8px 0 18px;line-height:1.5">'+detail+'. Queue and print them now?</div>'
+    +'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+      +'<button class="btn bp" onclick="loginQueuePrint()">📬 Queue &amp; print</button>'
+      +'<button class="btn bs" onclick="loginReview()">Review in queue</button>'
+      +'<button class="btn bghost sm-btn" onclick="document.getElementById(\'login-notice\').remove()">Later</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+function loginQueuePrint(){ document.getElementById('login-notice')?.remove(); if(typeof runDueSequences==='function') runDueSequences(true); printAllDue(); }
+function loginReview(){ document.getElementById('login-notice')?.remove(); if(typeof runDueSequences==='function') runDueSequences(true); showPanel('queue'); }
+// Free Google Calendar reminder: a recurring event on the chosen days/time.
+function exportCalendar(){
+  const days=(printSchedule.days&&printSchedule.days.length)?printSchedule.days:[1,2,3,4,5];
+  const byday=days.map(d=>['SU','MO','TU','WE','TH','FR','SA'][d]).join(',');
+  const [h,m]=(printSchedule.time||'09:00').split(':');
+  const dt=new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//PropMail Pro//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',
+    'UID:propmail-print-'+Date.now()+'@propmailpro','DTSTART:'+dt+'T'+h+m+'00',
+    'DURATION:PT15M','RRULE:FREQ=WEEKLY;BYDAY='+byday,'SUMMARY:Print due letters (PropMail Pro)',
+    'DESCRIPTION:Open PropMail Pro and print today\'s due letters.',
+    'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:Print due letters','END:VALARM',
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const a=document.createElement('a'); a.href='data:text/calendar;charset=utf-8,'+encodeURIComponent(ics);
+  a.download='propmail-print-reminders.ics'; a.click();
+  toast('Reminder downloaded — open it to add to Google Calendar','ok');
+}
 // ── PrintNode (cloud printing to a real printer) ──
 function getPrintNode(){ try{ return JSON.parse(localStorage.getItem('pmPrintNode')||'{}'); }catch(e){ return {}; } }
 function savePrintNode(v){ localStorage.setItem('pmPrintNode', JSON.stringify(v)); }
@@ -5001,5 +5053,6 @@ function updateIntelTable(){
 // Load saved agent-targeting settings + campaign log as soon as the app is ready.
 try { if (typeof loadTargeting === 'function') loadTargeting(); } catch (e) {}
 try { if (typeof loadContacts === 'function') loadContacts(); } catch (e) {}
-try { if (typeof loadGroups === 'function') { loadGroups(); runDueSequences(false); } } catch (e) {}
+try { if (typeof loadGroups === 'function') loadGroups(); } catch (e) {}
 try { if (typeof loadPrintSchedule === 'function') { loadPrintSchedule(); checkPrintSchedule(); setInterval(checkPrintSchedule, 60000); } } catch (e) {}
+try { if (typeof showLoginDueNotice === 'function') setTimeout(showLoginDueNotice, 600); } catch (e) {}
