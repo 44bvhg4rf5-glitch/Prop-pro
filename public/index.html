@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260625-block">
+  <link rel="stylesheet" href="styles.css?v=20260625-autofill">
 </head>
 <body>
 <!-- HEADER -->
@@ -493,9 +493,10 @@
     <div class="ct"><div class="ct-icon" style="background:#FEF2F2">✋</div>Add an address to block</div>
     <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">When someone complains, add their address here. It will never appear in a search or get a letter again.</div>
     <div style="display:grid;gap:10px;max-width:560px">
-      <div>
-        <label style="font-size:11px;font-weight:600;color:var(--muted)">Full address (best)</label>
-        <input id="blk-full" placeholder="e.g. 12 Hindes Road, Harrow, HA1 1SH" style="width:100%">
+      <div style="position:relative">
+        <label style="font-size:11px;font-weight:600;color:var(--muted)">Full address (best) — start typing and pick from the list</label>
+        <input id="blk-full" autocomplete="off" placeholder="Start typing… e.g. 12 Hindes Road" style="width:100%" oninput="blkSuggest(this.value)" onblur="blkSuggestBlur()">
+        <div id="blk-suggest" class="suggest-box" style="display:none"></div>
       </div>
       <div style="text-align:center;font-size:11px;color:var(--muted)">— or block by postcode + house —</div>
       <div style="display:flex;gap:8px">
@@ -1321,6 +1322,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260625-block"></script>
+<script src="app.js?v=20260625-autofill"></script>
 </body>
 </html>

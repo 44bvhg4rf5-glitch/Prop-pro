@@ -123,6 +123,23 @@ export default async function handler(req, res) {
   const u = new URL(req.url, 'http://localhost');
   const OS_KEY = process.env.OS_PLACES_KEY || '';
 
+  // Autocomplete suggestions — handled first (fires per keystroke, so no
+  // blocklist/Redis lookup here; keep it fast and light).
+  const suggest = u.searchParams.get('suggest');
+  if (suggest !== null) {
+    const text = (suggest || '').trim();
+    let suggestions = [];
+    if (OS_KEY && text.length >= 3) {
+      const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(text)}&dataset=DPA&maxresults=10&key=${encodeURIComponent(OS_KEY)}`;
+      const { status, json } = await getJson(url);
+      if (status === 200 && json && Array.isArray(json.results)) {
+        suggestions = json.results.map((r) => r.DPA).filter(Boolean).map((d) => mapDpa(d)).filter((a) => a.fullAddress).slice(0, 10);
+      }
+    }
+    sendJson(res, 200, { suggestions });
+    return;
+  }
+
   // Load the do-not-mail list once; blocked addresses are stripped from every
   // result path so a suppressed property can never surface.
   const block = await getBlocklist();
