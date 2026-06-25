@@ -11,6 +11,14 @@ function getJson(url) {
   });
 }
 
+// Title-case an UPPER-CASE PAF address for letters: capitalise each word, but
+// keep any token containing a digit fully upper (house numbers like 75A and
+// postcode parts like HA2 / 8AB stay correct).
+function tcAddr(s) {
+  return (s || '').toLowerCase().replace(/\b[\w']+\b/g, (w) =>
+    /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1));
+}
+
 // All addresses at a postcode. Uses the OS Places API (Royal Mail PAF) when an
 // OS_PLACES_KEY is configured; otherwise falls back to the EPC register.
 export default async function handler(req, res) {
@@ -31,9 +39,10 @@ export default async function handler(req, res) {
       if (status === 200 && json && Array.isArray(json.results)) {
         const addresses = json.results.map((r) => r.DPA).filter(Boolean).map((d) => {
           const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
+          const line1 = tcAddr([d.SUB_BUILDING_NAME, d.BUILDING_NAME, d.BUILDING_NUMBER, d.THOROUGHFARE_NAME].filter(Boolean).join(' ').trim());
           return {
-            line1: [d.SUB_BUILDING_NAME, d.BUILDING_NAME, d.BUILDING_NUMBER, d.THOROUGHFARE_NAME].filter(Boolean).join(' ').trim(),
-            fullAddress: d.ADDRESS || '',
+            line1,
+            fullAddress: tcAddr(d.ADDRESS || ''),
             postcode: d.POSTCODE || postcode,
             type: cls.startsWith('R') ? 'Residential' : cls.startsWith('C') ? 'Commercial' : 'Other',
           };
