@@ -47,23 +47,27 @@ export default async function handler(req, res) {
     try {
       const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(postcode).replace(/%20/g, '+')}&page_size=500`;
       const { status, json } = await fetchJson(url, KEY);
-      if (status === 200 && json && Array.isArray(json.data)) {
-        const seen = new Map();
-        json.data.forEach((r) => {
-          const lines = [r.addressLine1, r.addressLine2, r.addressLine3, r.addressLine4].filter(Boolean);
-          const pc = (r.postcode || '').replace(/\+/g, ' ');
-          const full = [...lines, r.postTown, pc].filter(Boolean).join(', ');
-          const key = full.toLowerCase();
-          if (full && !seen.has(key)) seen.set(key, { line1: r.addressLine1 || lines[0] || '', fullAddress: full, postcode: pc, type: 'Residential' });
-        });
-        const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
-        sendJson(res, 200, {
-          postcode, source: 'EPC register', total: addresses.length, addresses,
-          note: 'Homes with an Energy Certificate. Add a free OS Places key for the complete Royal Mail list.',
-        });
-        return;
-      }
-    } catch { /* fall through */ }
+      // The EPC register returns 200 with a data array when there are records,
+      // and 404 (or 200 with no data) for a postcode with no certificates.
+      // Both are valid "we looked, here's what's registered" answers.
+      const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
+      const seen = new Map();
+      data.forEach((r) => {
+        const lines = [r.addressLine1, r.addressLine2, r.addressLine3, r.addressLine4].filter(Boolean);
+        const pc = (r.postcode || '').replace(/\+/g, ' ');
+        const full = [...lines, r.postTown, pc].filter(Boolean).join(', ');
+        const key = full.toLowerCase();
+        if (full && !seen.has(key)) seen.set(key, { line1: r.addressLine1 || lines[0] || '', fullAddress: full, postcode: pc, type: 'Residential' });
+      });
+      const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+      sendJson(res, 200, {
+        postcode, source: 'EPC register', total: addresses.length, addresses,
+        note: addresses.length
+          ? 'Homes with an Energy Certificate. Add a free OS Places key for the complete Royal Mail list.'
+          : 'No registered Energy Certificates at this postcode (common for town-centre / commercial postcodes). Add a free OS Places key for the complete Royal Mail list.',
+      });
+      return;
+    } catch { /* fall through to the no-source response */ }
   }
 
   sendJson(res, 200, { postcode, total: 0, addresses: [], error: 'No address source available. Set EPC_API_KEY or OS_PLACES_KEY.' });
