@@ -20,11 +20,14 @@ export default async function handler(req, res) {
 
   // 1. OS Places — full Royal Mail PAF address list.
   const OS = process.env.OS_PLACES_KEY || '';
+  const debug = u.searchParams.get('debug') === '1';
+  let osDiag = { osKeyPresent: !!OS, osStatus: null, osError: null };
   if (OS) {
     try {
       const url = `https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}`
         + `&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`;
       const { status, json } = await getJson(url);
+      osDiag.osStatus = status;
       if (status === 200 && json && Array.isArray(json.results)) {
         const addresses = json.results.map((r) => r.DPA).filter(Boolean).map((d) => {
           const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
@@ -38,8 +41,11 @@ export default async function handler(req, res) {
         sendJson(res, 200, { postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses });
         return;
       }
-    } catch { /* fall through to EPC */ }
+      // Non-200 or unexpected shape — capture the OS message (no key leaked).
+      osDiag.osError = (json && (json.error?.message || json.error || json.message)) || 'unexpected response';
+    } catch (e) { osDiag.osError = e.message; }
   }
+  if (debug) { sendJson(res, 200, { postcode, debug: osDiag, hasEpcKey: !!(process.env.EPC_API_KEY || '') }); return; }
 
   // 2. EPC register fallback (works with the existing key).
   const KEY = process.env.EPC_API_KEY || '';
