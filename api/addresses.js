@@ -34,20 +34,71 @@ function mapDpa(d, fallbackPc) {
   };
 }
 
+// De-duplicate by full address, drop commercial, sort house-number order.
+function cleanAddresses(list) {
+  const seen = new Map();
+  list.filter((a) => a.type !== 'Commercial' && a.fullAddress).forEach((a) => {
+    const k = a.fullAddress.toLowerCase();
+    if (!seen.has(k)) seen.set(k, a);
+  });
+  return [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+}
+
+// Pull a UK postcode / outcode token out of free text, returning the cleaned
+// street and the prefix (e.g. "Kenton Road HA3" → {street:'Kenton Road', prefix:'HA3'}).
+function splitStreetPostcode(input) {
+  const re = /\b[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?\b/gi;
+  let m, last = null;
+  while ((m = re.exec(input)) !== null) last = m;
+  if (!last) return { prefix: '', street: input.trim() };
+  const token = last[0];
+  const prefix = token.toUpperCase().replace(/\s+/g, '');
+  const street = (input.slice(0, last.index) + input.slice(last.index + token.length))
+    .replace(/\s+/g, ' ').replace(/\s+,/g, ',').replace(/,\s*,/g, ',').replace(/[,\s]+$/, '').trim();
+  return { prefix, street };
+}
+
+// Page the OS Places postcode endpoint (parallel, capped) to pull a whole
+// postcode/sector/district. Returns { status, results, total }.
+async function osPostcodePaged(postcode, OS, maxAddr) {
+  const pageUrl = (offset) => `https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}`
+    + `&dataset=DPA&maxresults=100&offset=${offset}&key=${encodeURIComponent(OS)}`;
+  const first = await getJson(pageUrl(0));
+  if (first.status !== 200 || !first.json || !Array.isArray(first.json.results)) {
+    return { status: first.status, results: [], total: 0 };
+  }
+  const results = first.json.results.map((r) => r.DPA).filter(Boolean);
+  const total = (first.json.header && first.json.header.totalresults) || results.length;
+  const want = Math.min(total, maxAddr);
+  const offsets = [];
+  for (let o = 100; o < want; o += 100) offsets.push(o);
+  const CONC = 6;
+  for (let i = 0; i < offsets.length; i += CONC) {
+    const rs = await Promise.all(offsets.slice(i, i + CONC).map((o) => getJson(pageUrl(o))));
+    rs.forEach((r) => {
+      if (r.status === 200 && r.json && Array.isArray(r.json.results)) results.push(...r.json.results.map((x) => x.DPA).filter(Boolean));
+    });
+  }
+  return { status: 200, results, total };
+}
+
 // Street search: every address on a named street, across all its postcodes,
 // via the OS Places free-text "find" endpoint (paged). OS key required.
-async function streetSearch(res, street, OS) {
+// An optional postcode/outcode in the query (e.g. "Kenton Road HA3") narrows
+// results to that district.
+async function streetSearch(res, rawStreet, OS) {
   if (!OS) {
-    sendJson(res, 200, { street, total: 0, addresses: [], error: 'Street search needs an OS Places key (the EPC register can only look up by postcode).' });
+    sendJson(res, 200, { street: rawStreet, total: 0, addresses: [], error: 'Street search needs an OS Places key (the EPC register can only look up by postcode).' });
     return;
   }
+  const { prefix, street } = splitStreetPostcode(rawStreet);
   const parts = street.split(',').map((s) => s.trim()).filter(Boolean);
   const streetName = norm(parts[0]);
   const town = norm(parts.slice(1).join(' '));
   const wanted = [];
   let total = 0;
   for (let offset = 0; offset < 500; offset += 100) {
-    const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(street)}`
+    const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(rawStreet)}`
       + `&dataset=DPA&maxresults=100&offset=${offset}&key=${encodeURIComponent(OS)}`;
     const { status, json } = await getJson(url);
     if (status !== 200 || !json || !Array.isArray(json.results)) break;
@@ -56,23 +107,18 @@ async function streetSearch(res, street, OS) {
       const depThoro = norm(d.DEPENDENT_THOROUGHFARE_NAME);
       const onStreet = streetName && (thoro === streetName || depThoro === streetName);
       const inTown = !town || norm(d.POST_TOWN).includes(town) || norm(d.ADDRESS).includes(town);
-      if (onStreet && inTown) wanted.push(mapDpa(d));
+      const inPrefix = !prefix || (d.POSTCODE || '').toUpperCase().replace(/\s+/g, '').startsWith(prefix);
+      if (onStreet && inTown && inPrefix) wanted.push(mapDpa(d));
     });
     total = (json.header && json.header.totalresults) || 0;
     if (offset + 100 >= total) break;
   }
-  // De-duplicate and drop commercial (we only post to homes).
-  const seen = new Map();
-  wanted.filter((a) => a.type !== 'Commercial' && a.fullAddress).forEach((a) => {
-    const k = a.fullAddress.toLowerCase();
-    if (!seen.has(k)) seen.set(k, a);
-  });
-  const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+  const addresses = cleanAddresses(wanted);
   const postcodes = [...new Set(addresses.map((a) => a.postcode).filter(Boolean))];
   sendJson(res, 200, {
-    street, source: 'Royal Mail / OS Places', total: addresses.length, addresses, postcodes,
-    note: addresses.length ? `${addresses.length} homes across ${postcodes.length} postcode(s).`
-      : 'No matching addresses — check the street name and include the town (e.g. "Roxeth Green Avenue, Harrow").',
+    street: rawStreet, source: 'Royal Mail / OS Places', total: addresses.length, addresses, postcodes,
+    note: addresses.length ? `${addresses.length} homes across ${postcodes.length} postcode(s)${prefix ? ' in ' + prefix : ''}.`
+      : `No matching addresses — check the street name${prefix ? ' / district ' + prefix : ''} and include the town (e.g. "Kenton Road, Harrow, HA3").`,
   });
 }
 
@@ -90,24 +136,29 @@ export default async function handler(req, res) {
   const postcode = (u.searchParams.get('postcode') || '').trim().toUpperCase();
   if (!postcode) { sendJson(res, 400, { error: 'postcode or street is required' }); return; }
 
-  // 1. OS Places — full Royal Mail PAF address list.
+  // 1. OS Places — full Royal Mail PAF address list. A full postcode pulls that
+  // postcode; an outcode/sector (e.g. "HA3" or "HA3 5") pulls the whole district.
   const OS = OS_KEY;
   const debug = u.searchParams.get('debug') === '1';
+  const isFull = /\d[A-Z]{2}$/.test(postcode.replace(/\s+/g, ''));
+  const cap = isFull ? 500 : 3000;
   let osDiag = { osKeyPresent: !!OS, osStatus: null, osError: null };
   if (OS) {
     try {
-      const url = `https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}`
-        + `&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`;
-      const { status, json } = await getJson(url);
+      const { status, results, total } = await osPostcodePaged(postcode, OS, cap);
       osDiag.osStatus = status;
-      if (status === 200 && json && Array.isArray(json.results)) {
-        const addresses = json.results.map((r) => r.DPA).filter(Boolean)
-          .map((d) => mapDpa(d, postcode)).filter((a) => a.fullAddress);
-        sendJson(res, 200, { postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses });
+      if (status === 200) {
+        const addresses = cleanAddresses(results.map((d) => mapDpa(d, postcode)));
+        sendJson(res, 200, {
+          postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses,
+          totalAvailable: total,
+          note: total > cap
+            ? `District ${postcode} has ${total} addresses; showing the first ${addresses.length}. Search a sector (e.g. "${postcode} 5") for specific areas.`
+            : undefined,
+        });
         return;
       }
-      // Non-200 or unexpected shape — capture the OS message (no key leaked).
-      osDiag.osError = (json && (json.error?.message || json.error || json.message)) || 'unexpected response';
+      osDiag.osError = 'unexpected response';
     } catch (e) { osDiag.osError = e.message; }
   }
   if (debug) { sendJson(res, 200, { postcode, debug: osDiag, hasEpcKey: !!(process.env.EPC_API_KEY || '') }); return; }
