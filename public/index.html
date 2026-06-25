@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260625-os3">
+  <link rel="stylesheet" href="styles.css?v=20260625-os4">
 </head>
 <body>
 <!-- HEADER -->
@@ -392,10 +392,11 @@
   </div>
   <div class="card">
     <div class="ct"><div class="ct-icon" style="background:#FEF2F2">🔍</div>Postcode Lookup</div>
-    <div class="pc-input-wrap" style="margin-bottom:10px">
-      <input id="pc-input" placeholder="e.g. HA1 2SB or HA1" maxlength="8" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')lookupPostcode()">
+    <div class="pc-input-wrap" style="margin-bottom:4px">
+      <input id="pc-input" placeholder="Postcode or whole district — e.g. HA1 2SB or HA3" maxlength="9" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')lookupPostcode()">
       <button class="pc-lookup-btn" id="pc-btn" onclick="lookupPostcode()">📮 Find All Addresses</button>
     </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Enter a full postcode for one street, or just a district like <strong>HA3</strong> to pull every address in it.</div>
     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
       <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:7px">📋 Batch — Multiple Postcodes</div>
       <div style="display:flex;gap:8px;align-items:flex-start">
@@ -405,9 +406,9 @@
     </div>
     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
       <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">🛣️ Whole Street</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:7px">Every address on a street, across all its postcodes. Add the town for accuracy.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px">Every address on a street. Add a town or district to narrow it — e.g. <strong>Kenton Road HA3</strong>.</div>
       <div class="pc-input-wrap">
-        <input id="st-input" placeholder="e.g. Roxeth Green Avenue, Harrow" onkeydown="if(event.key==='Enter')lookupStreet()">
+        <input id="st-input" placeholder="e.g. Kenton Road, Harrow  or  Kenton Road HA3" onkeydown="if(event.key==='Enter')lookupStreet()">
         <button class="pc-lookup-btn" id="st-btn" onclick="lookupStreet()">🛣️ Find Street</button>
       </div>
     </div>
@@ -1279,6 +1280,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260625-os3"></script>
+<script src="app.js?v=20260625-os4"></script>
 </body>
 </html>
