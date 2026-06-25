@@ -58,10 +58,11 @@ function splitStreetPostcode(input) {
   return { prefix, street };
 }
 
-// Page the OS Places postcode endpoint (parallel, capped) to pull a whole
-// postcode/sector/district. Returns { status, results, total }.
-async function osPostcodePaged(postcode, OS, maxAddr) {
-  const pageUrl = (offset) => `https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}`
+// Page an OS Places endpoint ('postcode' or 'find') in parallel, capped.
+// Returns { status, results:[DPA…], total }.
+async function osPaged(kind, value, OS, maxAddr) {
+  const param = kind === 'find' ? 'query' : 'postcode';
+  const pageUrl = (offset) => `https://api.os.uk/search/places/v1/${kind}?${param}=${encodeURIComponent(value)}`
     + `&dataset=DPA&maxresults=100&offset=${offset}&key=${encodeURIComponent(OS)}`;
   const first = await getJson(pageUrl(0));
   if (first.status !== 200 || !first.json || !Array.isArray(first.json.results)) {
@@ -72,7 +73,7 @@ async function osPostcodePaged(postcode, OS, maxAddr) {
   const want = Math.min(total, maxAddr);
   const offsets = [];
   for (let o = 100; o < want; o += 100) offsets.push(o);
-  const CONC = 6;
+  const CONC = 8;
   for (let i = 0; i < offsets.length; i += CONC) {
     const rs = await Promise.all(offsets.slice(i, i + CONC).map((o) => getJson(pageUrl(o))));
     rs.forEach((r) => {
@@ -95,24 +96,15 @@ async function streetSearch(res, rawStreet, OS) {
   const parts = street.split(',').map((s) => s.trim()).filter(Boolean);
   const streetName = norm(parts[0]);
   const town = norm(parts.slice(1).join(' '));
-  const wanted = [];
-  let total = 0;
-  for (let offset = 0; offset < 500; offset += 100) {
-    const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(rawStreet)}`
-      + `&dataset=DPA&maxresults=100&offset=${offset}&key=${encodeURIComponent(OS)}`;
-    const { status, json } = await getJson(url);
-    if (status !== 200 || !json || !Array.isArray(json.results)) break;
-    json.results.map((r) => r.DPA).filter(Boolean).forEach((d) => {
-      const thoro = norm(d.THOROUGHFARE_NAME);
-      const depThoro = norm(d.DEPENDENT_THOROUGHFARE_NAME);
-      const onStreet = streetName && (thoro === streetName || depThoro === streetName);
-      const inTown = !town || norm(d.POST_TOWN).includes(town) || norm(d.ADDRESS).includes(town);
-      const inPrefix = !prefix || (d.POSTCODE || '').toUpperCase().replace(/\s+/g, '').startsWith(prefix);
-      if (onStreet && inTown && inPrefix) wanted.push(mapDpa(d));
-    });
-    total = (json.header && json.header.totalresults) || 0;
-    if (offset + 100 >= total) break;
-  }
+  const { results } = await osPaged('find', rawStreet, OS, 600);
+  const wanted = results.filter((d) => {
+    const thoro = norm(d.THOROUGHFARE_NAME);
+    const depThoro = norm(d.DEPENDENT_THOROUGHFARE_NAME);
+    const onStreet = streetName && (thoro === streetName || depThoro === streetName);
+    const inTown = !town || norm(d.POST_TOWN).includes(town) || norm(d.ADDRESS).includes(town);
+    const inPrefix = !prefix || (d.POSTCODE || '').toUpperCase().replace(/\s+/g, '').startsWith(prefix);
+    return onStreet && inTown && inPrefix;
+  }).map((d) => mapDpa(d));
   const addresses = cleanAddresses(wanted);
   const postcodes = [...new Set(addresses.map((a) => a.postcode).filter(Boolean))];
   sendJson(res, 200, {
@@ -145,7 +137,7 @@ export default async function handler(req, res) {
   let osDiag = { osKeyPresent: !!OS, osStatus: null, osError: null };
   if (OS) {
     try {
-      const { status, results, total } = await osPostcodePaged(postcode, OS, cap);
+      const { status, results, total } = await osPaged('postcode', postcode, OS, cap);
       osDiag.osStatus = status;
       if (status === 200) {
         const addresses = cleanAddresses(results.map((d) => mapDpa(d, postcode)));

@@ -4529,7 +4529,11 @@ async function doPostcodeLookup(postcodes){
 function finishAddressLookup(rawResults, lastSource, liveCount){
   // Hide commercial premises completely — we only write to homes.
   let allResults = rawResults.filter(a=>a.type!=='Commercial');
-  allResults.forEach((a,i)=>{ a.idx=i; a.selected=true; });
+  // For large lists (e.g. a whole district), don't pre-tick — avoids an
+  // accidental mass print. Smaller lists stay fully pre-selected.
+  const PRESELECT_MAX = 500;
+  const preselect = allResults.length <= PRESELECT_MAX;
+  allResults.forEach((a,i)=>{ a.idx=i; a.selected=preselect; });
 
   setStage(3);
   showPCStatus('ok',`Found ${allResults.length} addresses`,100,
@@ -4537,7 +4541,7 @@ function finishAddressLookup(rawResults, lastSource, liveCount){
 
   slAddresses = allResults;
   slFiltered = [...slAddresses];
-  slSelected = new Set(slAddresses.map(a=>a.idx)); // pre-tick all (commercial already removed)
+  slSelected = preselect ? new Set(slAddresses.map(a=>a.idx)) : new Set();
   slAddrPage = 0;
 
   // ── Reveal the results UI (these cards start hidden) ──
@@ -4573,6 +4577,7 @@ function finishAddressLookup(rawResults, lastSource, liveCount){
   if(card && card.scrollIntoView) { try{ card.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){} }
 
   if(!allResults.length){ toast('No residential addresses found — try a different postcode or street', 'warn'); return; }
+  if(!preselect){ toast(`${allResults.length} addresses found — large list, so none pre-selected. Tap ☑ All, or filter then select.`, 'inf'); return; }
   toast(`${allResults.length} addresses found${liveCount?' ('+liveCount+' live)':''}`, 'ok');
 }
 
