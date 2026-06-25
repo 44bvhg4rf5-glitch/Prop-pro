@@ -4737,14 +4737,49 @@ async function blockFromGrid(idx){
   toast('Address blocked — it won\'t receive letters','ok');
 }
 
+// ── Address autocomplete for the block form ──
+let blkSelected=null, blkSuggestTimer=null;
+function blkSuggest(v){
+  v=(v||'').trim();
+  blkSelected=null; // typing invalidates a previous pick
+  const box=document.getElementById('blk-suggest'); if(!box) return;
+  if(v.length<3){ box.style.display='none'; box.innerHTML=''; return; }
+  clearTimeout(blkSuggestTimer);
+  blkSuggestTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/addresses?suggest='+encodeURIComponent(v));
+      if(!r.ok) return;
+      const d=await r.json();
+      const list=d.suggestions||[];
+      if(!list.length){ box.style.display='none'; box.innerHTML='<div class="suggest-empty">No matches — type more, or use postcode + house below</div>'; box.style.display='block'; return; }
+      box._items=list;
+      box.innerHTML=list.map((a,i)=>`<div class="suggest-item" onmousedown="blkPick(${i})">${a.fullAddress}</div>`).join('');
+      box.style.display='block';
+    }catch(e){ /* ignore */ }
+  },220);
+}
+function blkPick(i){
+  const box=document.getElementById('blk-suggest'); if(!box) return;
+  const a=(box._items||[])[i]; if(!a) return;
+  const inp=document.getElementById('blk-full'); if(inp) inp.value=a.fullAddress;
+  blkSelected=a; // carries uprn/postcode/line1 for exact matching
+  box.style.display='none'; box.innerHTML='';
+}
+function blkSuggestBlur(){ setTimeout(()=>{ const box=document.getElementById('blk-suggest'); if(box) box.style.display='none'; },150); }
+
 async function addBlockedManual(){
   const full = (document.getElementById('blk-full')||{}).value?.trim()||'';
   const house = (document.getElementById('blk-house')||{}).value?.trim()||'';
   const pc = (document.getElementById('blk-pc')||{}).value?.trim().toUpperCase()||'';
   const reason = (document.getElementById('blk-reason')||{}).value?.trim()||'';
   if(!full && !(house && pc)){ toast('Enter a full address, or a postcode and house number/name.','warn'); return; }
-  const ok = await blockAdd({ fullAddress:full, postcode:pc, house, reason });
+  // If they picked a suggestion, use its exact details (incl. UPRN) for precise matching.
+  const payload = (blkSelected && blkSelected.fullAddress===full)
+    ? { fullAddress:full, postcode:blkSelected.postcode, line1:blkSelected.line1, uprn:blkSelected.uprn, reason }
+    : { fullAddress:full, postcode:pc, house, reason };
+  const ok = await blockAdd(payload);
   if(!ok) return;
+  blkSelected=null;
   ['blk-full','blk-house','blk-pc','blk-reason'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   renderBlockedPanel();
   toast('Address added to the do-not-mail list','ok');

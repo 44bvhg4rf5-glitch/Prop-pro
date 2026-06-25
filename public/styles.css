@@ -357,6 +357,11 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 .addr-card.sel{border-color:var(--blue);background:var(--blue-gl)}
 .addr-block-btn{flex-shrink:0;border:none;background:transparent;cursor:pointer;font-size:14px;line-height:1;padding:3px;border-radius:6px;opacity:.45;transition:all .13s}
 .addr-block-btn:hover{opacity:1;background:rgba(220,38,38,.12)}
+.suggest-box{position:absolute;left:0;right:0;top:100%;z-index:50;background:var(--white);border:1.5px solid var(--border);border-radius:var(--r2);box-shadow:var(--sh);max-height:260px;overflow-y:auto;margin-top:3px}
+.suggest-item{padding:9px 12px;font-size:13px;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border)}
+.suggest-item:last-child{border-bottom:none}
+.suggest-item:hover{background:var(--blue-gl)}
+.suggest-empty{padding:9px 12px;font-size:12px;color:var(--muted)}
 .addr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:7px}
 .letter-choice{border:2px solid var(--border);border-radius:var(--r2);padding:14px;cursor:pointer;transition:all .15s;background:var(--white);display:flex;align-items:flex-start;gap:11px}
 .letter-choice:hover{border-color:var(--blue);transform:translateY(-1px);box-shadow:var(--sh)}
