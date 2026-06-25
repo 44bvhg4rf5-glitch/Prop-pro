@@ -4524,13 +4524,21 @@ async function doPostcodeLookup(postcodes){
   slFiltered = [...slAddresses];
   slSelected = new Set(slAddresses.filter(a=>a.type==='Residential').map(a=>a.idx));
 
-  // Update UI
-  const countEl = document.getElementById('pc-count');
-  if(countEl) countEl.textContent = `${allResults.length} addresses found`;
-  const resEl = document.getElementById('pc-res-count');
-  if(resEl) resEl.textContent = residential;
-  const comEl = document.getElementById('pc-com-count');
-  if(comEl) comEl.textContent = commercial;
+  // ── Reveal the results UI (these cards start hidden) ──
+  const show = (id)=>{ const el=document.getElementById(id); if(el) el.style.display=''; };
+  show('pc-stats'); show('letter-chooser'); show('addr-results-card');
+
+  // Stat counters
+  const setTxt = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  setTxt('ss-total', allResults.length);
+  setTxt('ss-res', residential);
+  setTxt('ss-com', commercial);
+  setTxt('ss-sel', slSelected.size);
+
+  // Results card heading
+  const pcList = [...new Set(allResults.map(a=>a.postcode))].join(', ');
+  setTxt('addr-results-title', `${allResults.length} Addresses Found`);
+  setTxt('addr-results-sub', `${pcList}${lastSource?' · '+lastSource:''} · tick the ones to write to`);
 
   setStage(4);
 
@@ -4539,6 +4547,10 @@ async function doPostcodeLookup(postcodes){
   renderLetterChoices();
   renderAddrGrid();
   updAddrSel();
+
+  // Bring the results into view so they're not missed below the fold
+  const card = document.getElementById('addr-results-card');
+  if(card && card.scrollIntoView) { try{ card.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){} }
 
   toast(`${allResults.length} addresses found${liveCount?' ('+liveCount+' live)':''}`, 'ok');
 }
