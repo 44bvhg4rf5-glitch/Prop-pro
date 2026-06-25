@@ -61,6 +61,21 @@ These are *candidates to verify*, not a guaranteed single match — the EPC pin
 is the registered certificate address, so always confirm against the Rightmove
 listing before posting.
 
+### Success Letters — full postcode address finder
+
+The **Success Letters** panel lists *every* address at a postcode (like the
+Royal Mail address finder) so you can tick which ones to write to. It calls
+`/api/addresses?postcode=HA1+1BB`, which uses two sources in order:
+
+1. **Ordnance Survey Places API** (Royal Mail PAF) — the complete address
+   list, residential and commercial. Set a free `OS_PLACES_KEY` (register at
+   <https://osdatahub.os.uk>, free OS Places plan).
+2. **EPC register** fallback (uses the existing `EPC_API_KEY`) — homes with an
+   Energy Certificate. Works immediately if you already set `EPC_API_KEY`.
+
+If neither key is set the panel falls back to representative sample addresses
+for the postcode sector so the workflow is still usable offline.
+
 ## Deploying to a free host
 
 `render.yaml` is included for one-click deploys on [Render](https://render.com):
@@ -76,7 +91,8 @@ dashboard only if you want the AI features too.
 1. Sign in to Vercel with **GitHub** and **Add New → Project**, import this repo.
 2. Deploy (no build settings needed — `vercel.json` handles it).
 3. In **Settings → Environment Variables**, optionally add `ANTHROPIC_API_KEY`
-   (AI features) and `EPC_API_KEY` (full-address lookup), then redeploy.
+   (AI features), `EPC_API_KEY` (full-address lookup) and `OS_PLACES_KEY`
+   (complete postcode address finder), then redeploy.
 
 The static UI is served from `public/`; `/api/rightmove`, `/api/epc`,
 `/api/anthropic`, and `/api/config` run as serverless functions.

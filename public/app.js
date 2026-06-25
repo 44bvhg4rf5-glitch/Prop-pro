@@ -4448,139 +4448,81 @@ async function doPostcodeLookup(postcodes){
   const btn=document.getElementById('pc-btn'); if(btn) btn.disabled=true;
   document.getElementById('pc-stages').style.display='flex';
   setStage(1);
-  showPCStatus('scanning',`Looking up ${postcodes.length} postcode${postcodes.length>1?'s':''}…`,5,'Connecting to address database…');
+  showPCStatus('scanning',`Looking up ${postcodes.length} postcode${postcodes.length>1?'s':''}…`,5,'Connecting to Royal Mail address finder…');
 
   const allResults = [];
   let residential=0, commercial=0;
+  let liveCount=0, lastSource='';
 
   for(let pi=0; pi<postcodes.length; pi++){
     const pc = postcodes[pi].trim().toUpperCase();
-    const pct = Math.round(5 + (pi/postcodes.length)*60);
+    const pct = Math.round(5 + (pi/postcodes.length)*80);
     showPCStatus('scanning',`Fetching addresses for ${pc}…`,pct,`${pi+1} of ${postcodes.length} postcodes`);
 
     let foundAddresses = [];
 
-    // ── STRATEGY 1: postcodes.io → get geo data, then fetch real addresses via Claude web_search ──
+    // ── Live address lookup via /api/addresses (Royal Mail / OS Places, EPC fallback) ──
     try{
-      const geoResp = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
-      if(geoResp.ok){
-        const geoData = await geoResp.json();
-        const geo = geoData.result;
-
-        if(geo){
-          setStage(2);
-          showPCStatus('scanning',`${pc} found — ${geo.admin_ward}, ${geo.admin_district}`,pct+5,'Searching for all addresses…');
-
-          // ── STRATEGY 2: Claude web_search to find real addresses at this postcode ──
-          try{
-            const searchPrompt = `Search for ALL residential property addresses at UK postcode ${pc} (${geo.admin_ward}, ${geo.admin_district}).
-
-Find the complete list of addresses at this specific postcode. Search for:
-- "${pc} addresses"  
-- Royal Mail address finder for ${pc}
-- Properties listed at ${pc} on Rightmove, Zoopla, or OnTheMarket
-
-Return ONLY this JSON (no markdown):
-{"postcode":"${pc}","ward":"${geo.admin_ward}","district":"${geo.admin_district}","addresses":[{"line1":"NUMBER STREET","line2":"","fullAddress":"FULL ADDRESS WITH POSTCODE","type":"Residential OR Commercial"}]}
-
-Find as many real addresses as possible. A typical UK postcode has 15-100 addresses.`;
-
-            const claudeResp = await fetch('/api/anthropic',{
-              method:'POST',
-              headers:{'Content-Type':'application/json'},
-              body:JSON.stringify({
-                model:'claude-sonnet-4-6',
-                max_tokens:3000,
-                tools:[{type:'web_search_20250305',name:'web_search'}],
-                messages:[{role:'user',content:searchPrompt}]
-              })
-            });
-
-            if(claudeResp.ok){
-              const cData = await claudeResp.json();
-              const blocks = cData.content || [];
-              let cText = blocks.filter(b=>b.type==='text').map(b=>b.text).join('');
-              let turn = 0;
-              const cMessages = [{role:'user',content:searchPrompt}];
-
-              // Handle tool_use multi-turn
-              if(cData.stop_reason==='tool_use'){
-                const toolUses = blocks.filter(b=>b.type==='tool_use');
-                cMessages.push({role:'assistant',content:blocks});
-                cMessages.push({role:'user',content:toolUses.map(tu=>({
-                  type:'tool_result',tool_use_id:tu.id,
-                  content:'Search done. Return the address list as JSON.'
-                }))});
-
-                showPCStatus('scanning',`Processing address data for ${pc}…`,pct+15,'Extracting addresses…');
-
-                const resp2 = await fetch('/api/anthropic',{
-                  method:'POST',
-                  headers:{'Content-Type':'application/json'},
-                  body:JSON.stringify({
-                    model:'claude-sonnet-4-6',max_tokens:3000,
-                    tools:[{type:'web_search_20250305',name:'web_search'}],
-                    messages:cMessages
-                  })
-                });
-                if(resp2.ok){
-                  const d2 = await resp2.json();
-                  cText = (d2.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-                }
-              }
-
-              // Parse JSON from response
-              const jsonMatch = cText.match(/\{"postcode"[\s\S]*?"addresses"\s*:\s*\[[\s\S]*?\]\s*\}/);
-              if(jsonMatch){
-                try{
-                  const parsed = JSON.parse(jsonMatch[0]);
-                  if(parsed.addresses?.length){
-                    foundAddresses = parsed.addresses.map((a,i)=>({
-                      line1: a.line1||a.fullAddress?.split(',')[0]||'',
-                      line2: a.line2||'',
-                      area: geo.admin_ward||geo.admin_district||pc.split(' ')[0],
-                      postcode: pc,
-                      type: a.type||'Residential',
-                      fullAddress: a.fullAddress||`${a.line1}${a.line2?', '+a.line2:''}, ${geo.admin_ward}, ${pc}`,
-                      selected: true,
-                      isLive: true,
-                      sortKey: i,
-                      idx: allResults.length + i
-                    }));
-                    blog(`✅ ${pc}: ${foundAddresses.length} real addresses found via web search`,'ok');
-                  }
-                }catch(e){ console.error('Parse error:',e); }
-              }
-            }
-          }catch(e){
-            blog(`Web search for ${pc} failed: ${e.message} — using generated addresses`,'warn');
-          }
-
-          // ── STRATEGY 3: Fallback — generate addresses using real geo data ──
-          if(!foundAddresses.length){
-            foundAddresses = generatePAFAddresses(pc, geo, 50);
-            foundAddresses = foundAddresses.map((a,i)=>({...a, idx:allResults.length+i}));
-            blog(`${pc}: Generated ${foundAddresses.length} addresses (live lookup unavailable)`,'inf');
-          }
-
-          // Count types
-          foundAddresses.forEach(a=>{ if(a.type==='Residential') residential++; else commercial++; });
-          allResults.push(...foundAddresses);
+      setStage(2);
+      const resp = await fetch(`/api/addresses?postcode=${encodeURIComponent(pc)}`);
+      if(resp.ok){
+        const data = await resp.json();
+        const list = Array.isArray(data.addresses) ? data.addresses : [];
+        if(list.length){
+          lastSource = data.source || lastSource;
+          foundAddresses = list.map((a,i)=>{
+            const type = a.type === 'Commercial' ? 'Commercial' : 'Residential';
+            const line1 = a.line1 || (a.fullAddress||'').split(',')[0] || '';
+            return {
+              line1,
+              line2: '',
+              area: (a.fullAddress||'').split(',').slice(-2,-1)[0]?.trim() || pc.split(' ')[0],
+              postcode: a.postcode || pc,
+              type,
+              fullAddress: a.fullAddress || `${line1}, ${pc}`,
+              selected: true,
+              isLive: true,
+              sortKey: i,
+              idx: allResults.length + i
+            };
+          });
+          liveCount += foundAddresses.length;
+          blog(`✅ ${pc}: ${foundAddresses.length} addresses found (${data.source||'live'})`,'ok');
+        } else if(data.error){
+          blog(`${pc}: ${data.error}`,'warn');
         }
       }
     }catch(e){
-      blog(`${pc}: Lookup error — ${e.message}`,'warn');
-      const fallback = generatePAFAddresses(pc, {admin_ward:pc.split(' ')[0]}, 30);
-      allResults.push(...fallback.map((a,i)=>({...a, idx:allResults.length+i})));
+      blog(`${pc}: Address lookup failed — ${e.message}`,'warn');
     }
+
+    // ── Fallback — representative addresses when no live source is available ──
+    if(!foundAddresses.length){
+      let geo=null;
+      try{
+        const ctrl=new AbortController();
+        const to=setTimeout(()=>ctrl.abort(),4000);
+        const geoResp = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`,{signal:ctrl.signal});
+        clearTimeout(to);
+        if(geoResp.ok){ geo=(await geoResp.json()).result; }
+      }catch(e){ /* offline or slow — fall back to outcode area name */ }
+      foundAddresses = generatePAFAddresses(pc, geo||{admin_ward:pc.split(' ')[0]}, 40);
+      foundAddresses = foundAddresses.map((a,i)=>({...a, idx:allResults.length+i, isLive:false}));
+      blog(`${pc}: Showing ${foundAddresses.length} sample addresses (no live address key set)`,'inf');
+    }
+
+    // Count types
+    foundAddresses.forEach(a=>{ if(a.type==='Residential') residential++; else commercial++; });
+    allResults.push(...foundAddresses);
   }
 
   setStage(3);
-  showPCStatus('ok',`Found ${allResults.length} addresses`,100,`${residential} residential · ${commercial} commercial`);
+  const srcLabel = lastSource ? ` · via ${lastSource}` : '';
+  showPCStatus('ok',`Found ${allResults.length} addresses`,100,`${residential} residential · ${commercial} commercial${srcLabel}`);
 
   slAddresses = allResults;
   slFiltered = [...slAddresses];
-  slSelected = new Set(slAddresses.filter(a=>a.type==='Residential').map((_,i)=>i));
+  slSelected = new Set(slAddresses.filter(a=>a.type==='Residential').map(a=>a.idx));
 
   // Update UI
   const countEl = document.getElementById('pc-count');
@@ -4598,7 +4540,6 @@ Find as many real addresses as possible. A typical UK postcode has 15-100 addres
   renderAddrGrid();
   updAddrSel();
 
-  const liveCount = allResults.filter(a=>a.isLive).length;
   toast(`${allResults.length} addresses found${liveCount?' ('+liveCount+' live)':''}`, 'ok');
 }
 

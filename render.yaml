@@ -16,3 +16,10 @@ services:
       # https://get-energy-performance-data.communities.gov.uk
       - key: EPC_API_KEY
         sync: false
+      # Optional — free Ordnance Survey Places API key. Powers the Success
+      # Letters address finder with the COMPLETE Royal Mail PAF address list
+      # for a postcode. Without it, the finder falls back to the EPC register
+      # (homes with an Energy Certificate only). Register at
+      # https://osdatahub.os.uk (free OS Places API plan).
+      - key: OS_PLACES_KEY
+        sync: false
