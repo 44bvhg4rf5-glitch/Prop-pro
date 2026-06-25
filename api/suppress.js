@@ -9,6 +9,14 @@ export default async function handler(req, res) {
   const method = req.method || 'GET';
 
   if (method === 'GET') {
+    const u = new URL(req.url, 'http://localhost');
+    if (u.searchParams.get('debug') === '1') {
+      // Report which storage-related env var NAMES exist (no values/secrets),
+      // so we can see what the Vercel/Upstash integration actually set.
+      const names = Object.keys(process.env).filter((k) => /REDIS|KV_|UPSTASH|STORAGE|^KV$/i.test(k)).sort();
+      sendJson(res, 200, { debug: true, storageEnvNames: names });
+      return;
+    }
     const { configured, entries } = await getBlocklist();
     sendJson(res, 200, { configured, count: entries.length, entries });
     return;
