@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-icons">
+  <link rel="stylesheet" href="styles.css?v=20260626-noemoji">
 </head>
 <body>
 <!-- HEADER -->
 <header class="hdr">
   <div class="hdr-brand">
-    <div class="brand-mark">✉</div>
+    <div class="brand-mark"><i class=ic-mail></i></div>
     <div class="brand-text">
       <div class="brand-name">Prop<span>Mail</span> Pro</div>
       <div class="brand-tagline">Estate Agent Platform</div>
@@ -86,7 +86,7 @@
   <!-- ── HEADER ── -->
   <div class="page-hdr">
     <div>
-      <div class="page-title">🏠 Live Property Address Finder</div>
+      <div class="page-title"><i class=ic-home></i> Live Property Address Finder</div>
       <div class="page-sub">Finds real on-market properties with verified addresses and direct Rightmove links — ready to print and post</div>
     </div>
     <div class="page-kpis">
@@ -105,7 +105,7 @@
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;align-items:center;flex-shrink:0">
         <button id="main-search-btn" onclick="runLiveSearch()" style="padding:14px 34px;background:linear-gradient(135deg,#3470FF,#2150E3);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 6px 22px rgba(37,99,235,.34);transition:all .15s;white-space:nowrap">
-          🔍 Find Live Properties
+          <i class=ic-search></i> Find Live Properties
         </button>
         <div style="font-size:11px;color:var(--muted);text-align:center">One click · Rightmove + OnTheMarket</div>
       </div>
@@ -115,7 +115,7 @@
   <!-- ── AGENT TARGETING ── -->
   <div class="card" id="targeting-card" style="margin-bottom:16px">
     <div style="margin-bottom:12px">
-      <div style="font-size:15px;font-weight:700;color:var(--text)">🎯 Agent Targeting</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text)"><i class=ic-target></i> Agent Targeting</div>
       <div style="font-size:12px;color:var(--muted)">Pick which agencies' listings to target. Unticked agents are removed from results — and no letters go to them.</div>
     </div>
     <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
@@ -137,7 +137,7 @@
   <!-- ── FILTERS (collapsed by default) ── -->
   <details style="margin-bottom:16px">
     <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);padding:8px 0;list-style:none;display:flex;align-items:center;gap:7px">
-      <span style="font-size:16px">⚙️</span> Advanced Filters (optional)
+      <span style="font-size:16px"><i class=ic-gear></i>️</span> Advanced Filters (optional)
       <span style="font-size:11px;font-weight:400;opacity:.6">— filter by area, type, beds, price</span>
     </summary>
     <div class="card" style="margin-top:10px">
@@ -187,11 +187,11 @@
           <div style="font-size:12px;color:var(--muted);margin-top:2px" id="results-sub"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn bs sm-btn" onclick="selectAllResults()">☑ Select All</button>
+          <button class="btn bs sm-btn" onclick="selectAllResults()"><i class=ic-check></i> Select All</button>
           <button class="btn bs sm-btn" onclick="selectNoneResults()">☐ None</button>
-          <button class="btn bg sm-btn" id="queue-selected-btn" onclick="queueAllSelected()" disabled>🖨 Queue Letters for Selected</button>
-          <button class="btn bp sm-btn" onclick="queueAllResults()">📬 Queue All & Print</button>
-          <button class="btn bs sm-btn" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn bg sm-btn" id="queue-selected-btn" onclick="queueAllSelected()" disabled><i class=ic-printer></i> Queue Letters for Selected</button>
+          <button class="btn bp sm-btn" onclick="queueAllResults()"><i class=ic-mailbox></i> Queue All & Print</button>
+          <button class="btn bs sm-btn" onclick="exportCSV()"><i class=ic-download></i> CSV</button>
         </div>
       </div>
       <div id="results-table"></div>
@@ -212,7 +212,7 @@
     <div><div class="page-title">Print Queue</div><div class="page-sub">All letters queued for printing — manual and automated jobs</div></div>
     <div class="fr">
       <button class="btn bs sm-btn" onclick="clrDone()">Clear Done</button>
-      <button class="btn bp" onclick="printAll()">🖨 Print All Pending</button>
+      <button class="btn bp" onclick="printAll()"><i class=ic-printer></i> Print All Pending</button>
     </div>
   </div>
   <div class="qstats">
@@ -222,7 +222,7 @@
     <div class="qsb"><div class="qsn" id="qs-pend">0</div><div class="qsl">Pending</div></div>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">📋</div>Queue</div>
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-clipboard></i></div>Queue</div>
     <div id="qlist"></div>
   </div>
 </div>
@@ -233,7 +233,7 @@
     <div><div class="page-title">Auto Flow</div><div class="page-sub">One-click pipeline — scan districts → resolve addresses → generate letters → print</div></div>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#FFFBEB">⚡</div>Automated Pipeline</div>
+    <div class="ct"><div class="ct-icon" style="background:#FFFBEB"><i class=ic-zap></i></div>Automated Pipeline</div>
     <div id="flow-steps">
       <div class="flow-step" id="fs1"><div class="flow-num" id="fn1">1</div><div><div class="flow-title">Scan HA Districts</div><div class="flow-sub">Pull all listings from selected postcodes via Rightmove, Zoopla &amp; OnTheMarket</div></div><span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--blue)" id="fs1-count"></span></div>
       <div class="flow-step" id="fs2"><div class="flow-num" id="fn2">2</div><div><div class="flow-title">360° Address Engine</div><div class="flow-sub">Resolve every property to a full street address across all compass bearings</div></div><span style="margin-left:auto;font-size:12px;font-weight:700;color:var(--blue)" id="fs2-count"></span></div>
@@ -245,10 +245,10 @@
       <div class="fg"><label>On Completion</label><select id="af-action"><option value="print">Print immediately</option><option value="queue">Add to queue only</option></select></div>
     </div>
     <div class="fr" style="margin-top:14px">
-      <button class="btn bgrn" id="af-btn" onclick="runAutoFlow()">⚡ Run Full Auto Flow</button>
+      <button class="btn bgrn" id="af-btn" onclick="runAutoFlow()"><i class=ic-zap></i> Run Full Auto Flow</button>
       <button class="btn bghost sm-btn" onclick="resetFlow()">↺ Reset</button>
     </div>
-    <div class="status-bar idle" id="af-status" style="margin-top:12px">⏸ Ready — select HA districts on the main panel then run</div>
+    <div class="status-bar idle" id="af-status" style="margin-top:12px"><i class=ic-pause></i> Ready — select HA districts on the main panel then run</div>
   </div>
 </div>
 
@@ -257,21 +257,21 @@
   <div class="page-hdr">
     <div><div class="page-title">Live Bot</div><div class="page-sub">Continuous monitoring — auto-detects new listings and prints letters hands-free</div></div>
     <div class="fr">
-      <button class="btn bg" id="bot-toggle" onclick="botToggle()">▶ Start Bot</button>
-      <button class="btn bs sm-btn" onclick="botRunNow()">⚡ Scan Now</button>
+      <button class="btn bg" id="bot-toggle" onclick="botToggle()"><i class=ic-play></i> Start Bot</button>
+      <button class="btn bs sm-btn" onclick="botRunNow()"><i class=ic-zap></i> Scan Now</button>
     </div>
   </div>
   <div class="bh">
-    <div style="font-size:42px;position:relative;z-index:1;flex-shrink:0">🤖</div>
+    <div style="font-size:42px;position:relative;z-index:1;flex-shrink:0"><i class=ic-bot></i></div>
     <div style="flex:1;position:relative;z-index:1">
       <div style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:5px">HA District Live Monitor</div>
       <div style="font-size:12px;opacity:.7;line-height:1.68">Watches all selected HA postcodes around the clock. When a new property is listed, the 360° engine resolves the address and your chosen letter is printed automatically.</div>
-      <div class="bchip stop" id="bchip">⏸ Bot Stopped</div>
+      <div class="bchip stop" id="bchip"><i class=ic-pause></i> Bot Stopped</div>
     </div>
   </div>
   <div class="g2">
     <div class="card">
-      <div class="ct"><div class="ct-icon" style="background:#F0FDF4">⚙️</div>Bot Settings</div>
+      <div class="ct"><div class="ct-icon" style="background:#F0FDF4"><i class=ic-gear></i>️</div>Bot Settings</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <div class="fg"><label>Scan Interval</label><select id="b-int"><option value="1">Every 1 minute</option><option value="5" selected>Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option><option value="60">Hourly</option></select></div>
         <div class="fg"><label>Letter Template</label><select id="b-tpl"></select></div>
@@ -280,7 +280,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="ct"><div class="ct-icon" style="background:#FFFBEB">📊</div>Dashboard</div>
+      <div class="ct"><div class="ct-icon" style="background:#FFFBEB"><i class=ic-chart></i></div>Dashboard</div>
       <div class="bstats" style="margin-bottom:14px">
         <div style="background:rgba(0,0,0,.04);border-radius:var(--r2);padding:14px;text-align:center;border:1px solid var(--border)"><div class="qsn" id="bd-scans">0</div><div class="qsl">Scans</div></div>
         <div style="background:rgba(0,0,0,.04);border-radius:var(--r2);padding:14px;text-align:center;border:1px solid var(--border)"><div class="qsn" id="bd-found">0</div><div class="qsl">Found</div></div>
@@ -291,7 +291,7 @@
   </div>
   <div class="card">
     <div class="ct" style="justify-content:space-between">
-      <span><div class="ct-icon" style="background:#0D1117;display:inline-flex">📟</div>Activity Log</span>
+      <span><div class="ct-icon" style="background:#0D1117;display:inline-flex"><i class=ic-printer></i></div>Activity Log</span>
       <button class="btn bghost sm-btn" onclick="clrLog()">Clear</button>
     </div>
     <div class="blog" id="blog"></div>
@@ -311,7 +311,7 @@
         <div style="font-size:12px;opacity:.7;line-height:1.65;margin-bottom:14px">Enter a Rightmove URL, full address, or postcode. The AI identifies the exact property then cross-references Land Registry, Companies House, VOA and public records to surface owner information.</div>
         <div style="display:flex;gap:8px;align-items:center">
           <input id="intel-url" placeholder="https://www.rightmove.co.uk/properties/... or 14 Station Road, Harrow, HA1 2SB" style="flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:9px 13px;font-size:13px;font-family:inherit;outline:none">
-          <button class="btn bg sm-btn" id="intel-search-btn" onclick="runIntelSearch()" style="flex-shrink:0">🧠 Analyse</button>
+          <button class="btn bg sm-btn" id="intel-search-btn" onclick="runIntelSearch()" style="flex-shrink:0"><i class=ic-brain></i> Analyse</button>
         </div>
       </div>
       <div class="source-pills" style="min-width:210px">
@@ -325,10 +325,10 @@
     </div>
   </div>
   <div class="fr">
-    <button class="intel-tab act" id="itab-single" onclick="switchIntelTab('single')">🔍 Single Property</button>
-    <button class="intel-tab" id="itab-batch" onclick="switchIntelTab('batch')">📋 Batch</button>
-    <button class="intel-tab" id="itab-chat" onclick="switchIntelTab('chat')">💬 AI Assistant</button>
-    <button class="intel-tab" id="itab-results" onclick="switchIntelTab('results')">📊 Results</button>
+    <button class="intel-tab act" id="itab-single" onclick="switchIntelTab('single')"><i class=ic-search></i> Single Property</button>
+    <button class="intel-tab" id="itab-batch" onclick="switchIntelTab('batch')"><i class=ic-clipboard></i> Batch</button>
+    <button class="intel-tab" id="itab-chat" onclick="switchIntelTab('chat')"><i class=ic-message></i> AI Assistant</button>
+    <button class="intel-tab" id="itab-results" onclick="switchIntelTab('results')"><i class=ic-chart></i> Results</button>
   </div>
   <div id="itab-single-content">
     <div id="intel-thinking" style="display:none" class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div><span id="intel-think-txt">AI is analysing…</span></div>
@@ -336,16 +336,16 @@
   </div>
   <div id="itab-batch-content" style="display:none">
     <div class="card">
-      <div class="ct"><div class="ct-icon" style="background:#EFF6FF">📋</div>Batch Analysis</div>
+      <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-clipboard></i></div>Batch Analysis</div>
       <div class="fg" style="margin-bottom:12px"><label>Paste URLs or addresses (one per line)</label><textarea id="batch-input" rows="7" placeholder="https://www.rightmove.co.uk/properties/12345678&#10;14 Station Road, Harrow, HA1 2SB&#10;Flat 3, 22 Pinner Road, HA1 4HJ"></textarea></div>
-      <div class="fr"><button class="btn bp" onclick="runBatchIntel()">🧠 Analyse All</button><button class="btn bghost sm-btn" onclick="document.getElementById('batch-input').value=''">Clear</button><span style="font-size:11px;color:var(--muted)" id="batch-progress-txt"></span></div>
+      <div class="fr"><button class="btn bp" onclick="runBatchIntel()"><i class=ic-brain></i> Analyse All</button><button class="btn bghost sm-btn" onclick="document.getElementById('batch-input').value=''">Clear</button><span style="font-size:11px;color:var(--muted)" id="batch-progress-txt"></span></div>
       <div class="pbw" style="margin-top:10px"><div class="pb" id="batch-pb" style="width:0%"></div></div>
     </div>
     <div id="batch-results"></div>
   </div>
   <div id="itab-chat-content" style="display:none">
     <div class="card">
-      <div class="ct"><div class="ct-icon" style="background:#EFF6FF">💬</div>AI Property Research Assistant</div>
+      <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-message></i></div>AI Property Research Assistant</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Ask anything about owner research, Land Registry, planning applications, or finding contact details.</div>
       <div class="chat-wrap" id="chat-wrap"></div>
       <div class="fr" style="margin-top:12px">
@@ -364,10 +364,10 @@
   <div id="itab-results-content" style="display:none">
     <div class="card">
       <div class="sec-hdr">
-        <div class="sec-title">📊 All Intelligence Results</div>
-        <div class="fr"><button class="btn bs sm-btn" onclick="exportIntelCSV()">⬇ CSV</button><button class="btn bg sm-btn" onclick="queueAllIntel()">🖨 Queue All Letters</button></div>
+        <div class="sec-title"><i class=ic-chart></i> All Intelligence Results</div>
+        <div class="fr"><button class="btn bs sm-btn" onclick="exportIntelCSV()"><i class=ic-download></i> CSV</button><button class="btn bg sm-btn" onclick="queueAllIntel()"><i class=ic-printer></i> Queue All Letters</button></div>
       </div>
-      <div id="intel-table-wrap"><div class="es"><div class="ei">🧠</div><div class="et">No results yet</div>Analyse properties using the Single or Batch tab</div></div>
+      <div id="intel-table-wrap"><div class="es"><div class="ei"><i class=ic-brain></i></div><div class="et">No results yet</div>Analyse properties using the Single or Batch tab</div></div>
     </div>
   </div>
 </div>
@@ -378,43 +378,43 @@
     <div><div class="page-title">Success Letters</div><div class="page-sub">Enter any UK postcode — Royal Mail PAF returns every address — print a personalised letter to all</div></div>
   </div>
   <div class="rm-logo-bar">
-    <div class="rm-crown">👑</div>
+    <div class="rm-crown"><i class=ic-crown></i></div>
     <div style="flex:1">
       <div style="font-family:'Playfair Display',serif;font-size:17px;margin-bottom:4px">Royal Mail Postcode Address Finder</div>
       <div style="font-size:12px;opacity:.78;line-height:1.6">Powered by postcodes.io · Royal Mail PAF data · Every deliverable address for your postcode</div>
       <div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">
-        <span class="pc-tag">✅ PAF Verified</span>
-        <span class="pc-tag">📬 All Delivery Points</span>
-        <span class="pc-tag">🏠 Residential &amp; Commercial</span>
-        <span class="pc-tag">🆓 Free · No API Key</span>
+        <span class="pc-tag"><i class=ic-check></i> PAF Verified</span>
+        <span class="pc-tag"><i class=ic-mailbox></i> All Delivery Points</span>
+        <span class="pc-tag"><i class=ic-home></i> Residential &amp; Commercial</span>
+        <span class="pc-tag"><i class=ic-gift></i> Free · No API Key</span>
       </div>
     </div>
-    <a href="https://www.royalmail.com/find-a-postcode" target="_blank" rel="noopener" style="color:#fff;font-size:11px;font-weight:600;text-decoration:none;opacity:.65;flex-shrink:0;text-align:center;border:1px solid rgba(255,255,255,.2);padding:8px 12px;border-radius:8px">Royal Mail ↗</a>
+    <a href="https://www.royalmail.com/find-a-postcode" target="_blank" rel="noopener" style="color:#fff;font-size:11px;font-weight:600;text-decoration:none;opacity:.65;flex-shrink:0;text-align:center;border:1px solid rgba(255,255,255,.2);padding:8px 12px;border-radius:8px">Royal Mail <i class=ic-arrowupright></i></a>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">🔍</div>Postcode Lookup</div>
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-search></i></div>Postcode Lookup</div>
     <div class="pc-input-wrap" style="margin-bottom:4px">
       <input id="pc-input" placeholder="Postcode or whole district — e.g. HA1 2SB or HA3" maxlength="9" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')lookupPostcode()">
-      <button class="pc-lookup-btn" id="pc-btn" onclick="lookupPostcode()">📮 Find All Addresses</button>
+      <button class="pc-lookup-btn" id="pc-btn" onclick="lookupPostcode()"><i class=ic-send></i> Find All Addresses</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Enter a full postcode for one street, or just a district like <strong>HA3</strong> to pull every address in it.</div>
     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:7px">📋 Batch — Multiple Postcodes</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:7px"><i class=ic-clipboard></i> Batch — Multiple Postcodes</div>
       <div style="display:flex;gap:8px;align-items:flex-start">
         <textarea id="pc-batch" rows="3" placeholder="One postcode per line:&#10;HA1 2SB&#10;HA2 7HJ&#10;HA3 0NP" style="flex:1;font-family:'Courier New',monospace;font-size:12px;text-transform:uppercase;letter-spacing:1px"></textarea>
-        <button class="pc-lookup-btn" onclick="lookupBatchPostcodes()" style="align-self:flex-end">📋 Lookup All</button>
+        <button class="pc-lookup-btn" onclick="lookupBatchPostcodes()" style="align-self:flex-end"><i class=ic-clipboard></i> Lookup All</button>
       </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">🛣️ Whole Street</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px"><i class=ic-route></i>️ Whole Street</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:7px">Every address on a street. Add a town or district to narrow it — e.g. <strong>Kenton Road HA3</strong>.</div>
       <div class="pc-input-wrap">
         <input id="st-input" placeholder="e.g. Kenton Road, Harrow  or  Kenton Road HA3" onkeydown="if(event.key==='Enter')lookupStreet()">
-        <button class="pc-lookup-btn" id="st-btn" onclick="lookupStreet()">🛣️ Find Street</button>
+        <button class="pc-lookup-btn" id="st-btn" onclick="lookupStreet()"><i class=ic-route></i>️ Find Street</button>
       </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;position:relative">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">🔎 Find One Address</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px"><i class=ic-search></i> Find One Address</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:7px">Type any address and pick it from the list to letter it directly.</div>
       <input id="sl-addr-input" autocomplete="off" placeholder="Start typing… e.g. 12 Hindes Road, Harrow" style="width:100%" oninput="slAddrSuggest(this.value)" onblur="slAddrSuggestBlur()">
       <div id="sl-addr-suggest" class="suggest-box" style="display:none"></div>
@@ -438,12 +438,12 @@
     <div class="pc-stat"><div class="pc-sn" id="ss-sel">0</div><div class="pc-sl">Selected</div></div>
   </div>
   <div class="card" id="letter-chooser" style="display:none">
-    <div class="ct"><div class="ct-icon" style="background:#FEF9E7">✉️</div>Choose Letter Template</div>
+    <div class="ct"><div class="ct-icon" style="background:#FEF9E7"><i class=ic-mail></i>️</div>Choose Letter Template</div>
     <div class="g2" id="letter-choices"></div>
     <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
       <div style="font-size:12px;font-weight:600;margin-bottom:7px">Upload your own letter</div>
       <div class="dz" onclick="document.getElementById('sl-upload').click()">
-        <div style="font-size:28px;margin-bottom:6px">📄</div>
+        <div style="font-size:28px;margin-bottom:6px"><i class=ic-file></i></div>
         <div style="font-size:12px;font-weight:600">Drop file or click to browse</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">.docx · .pdf · .txt</div>
       </div>
@@ -454,22 +454,22 @@
     <div class="sec-hdr">
       <div><div class="sec-title" id="addr-results-title">Addresses Found</div><div class="sec-sub" id="addr-results-sub"></div></div>
       <div class="fr">
-        <button class="btn bs sm-btn" onclick="selAllAddrs()">☑ All</button>
+        <button class="btn bs sm-btn" onclick="selAllAddrs()"><i class=ic-check></i> All</button>
         <button class="btn bghost sm-btn" onclick="clrSelAddrs()">☐ None</button>
-        <button class="btn bs sm-btn" onclick="exportAddrCSV()">⬇ CSV</button>
-        <button class="pc-lookup-btn" id="print-letters-btn" onclick="printSuccessLetters()" disabled>🖨 Print Letters</button>
+        <button class="btn bs sm-btn" onclick="exportAddrCSV()"><i class=ic-download></i> CSV</button>
+        <button class="pc-lookup-btn" id="print-letters-btn" onclick="printSuccessLetters()" disabled><i class=ic-printer></i> Print Letters</button>
       </div>
     </div>
     <div class="fr" style="margin-bottom:12px">
       <button class="intel-tab act" id="aview-grid" onclick="switchAddrView('grid')">⊞ Grid</button>
       <button class="intel-tab" id="aview-list" onclick="switchAddrView('list')">☰ List</button>
-      <button class="intel-tab" id="aview-preview" onclick="switchAddrView('preview')">📄 Preview</button>
+      <button class="intel-tab" id="aview-preview" onclick="switchAddrView('preview')"><i class=ic-file></i> Preview</button>
       <div style="flex:1"></div>
       <input id="addr-search" placeholder="Filter addresses…" style="width:180px;font-size:12px" oninput="filterAddrs(this.value)">
     </div>
     <div class="sbar" id="addr-sel-bar" style="display:none">
       <span id="addr-sel-txt">0 selected</span>
-      <button class="pc-lookup-btn" style="padding:5px 12px;font-size:11px" onclick="printSuccessLetters()">🖨 Print</button>
+      <button class="pc-lookup-btn" style="padding:5px 12px;font-size:11px" onclick="printSuccessLetters()"><i class=ic-printer></i> Print</button>
       <button class="btn bs sm-btn" onclick="queueSuccessLetters()">Queue</button>
     </div>
     <div id="addr-grid-view"><div class="addr-grid" id="addr-grid"></div><div class="pag" id="addr-pag"></div></div>
@@ -487,16 +487,16 @@
 <!-- ═══ BLOCKED / DO-NOT-MAIL ═══ -->
 <div class="panel" id="panel-blocked">
   <div class="page-hdr">
-    <div><div class="page-title">🚫 Do-Not-Mail List</div><div class="page-sub">Addresses that have asked not to receive letters — permanently suppressed from every search and print run</div></div>
-    <button class="btn bs" onclick="exportBlocked()">⬇ Export CSV</button>
+    <div><div class="page-title"><i class=ic-ban></i> Do-Not-Mail List</div><div class="page-sub">Addresses that have asked not to receive letters — permanently suppressed from every search and print run</div></div>
+    <button class="btn bs" onclick="exportBlocked()"><i class=ic-download></i> Export CSV</button>
   </div>
   <div class="card" id="blocked-status-card" style="display:none">
     <div style="font-size:12px;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 12px">
-      ⚠️ <strong>This list is stored on this device only.</strong> Switch on Vercel KV (Storage → Create Database → KV) so the do-not-mail list is durable and shared across devices. Until then it could be lost if browser data is cleared.
+      <i class=ic-alert></i>️ <strong>This list is stored on this device only.</strong> Switch on Vercel KV (Storage → Create Database → KV) so the do-not-mail list is durable and shared across devices. Until then it could be lost if browser data is cleared.
     </div>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">✋</div>Add an address to block</div>
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-hand></i></div>Add an address to block</div>
     <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">When someone complains, add their address here. It will never appear in a search or get a letter again.</div>
     <div style="display:grid;gap:10px;max-width:560px">
       <div style="position:relative">
@@ -513,14 +513,14 @@
         <label style="font-size:11px;font-weight:600;color:var(--muted)">Reason (optional)</label>
         <input id="blk-reason" placeholder="e.g. phoned to complain 25/06/26" style="width:100%">
       </div>
-      <button class="btn bp" onclick="addBlockedManual()" style="align-self:flex-start">🚫 Block this address</button>
+      <button class="btn bp" onclick="addBlockedManual()" style="align-self:flex-start"><i class=ic-ban></i> Block this address</button>
     </div>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">📋</div>Bulk block — paste a list</div>
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-clipboard></i></div>Bulk block — paste a list</div>
     <div style="font-size:12px;color:var(--muted);margin:2px 0 12px">Got several complaints at once? Paste one address per line and block them all together.</div>
     <textarea id="blk-bulk" rows="5" placeholder="One address per line:&#10;12 Hindes Road, Harrow, HA1 1SH&#10;5 Station Road, Harrow, HA1 2TX&#10;Flat 2, 9 Greenhill Way, HA1 1LE" style="width:100%;font-size:12px"></textarea>
-    <button class="btn bp" onclick="bulkBlock()" style="margin-top:10px">🚫 Block all pasted</button>
+    <button class="btn bp" onclick="bulkBlock()" style="margin-top:10px"><i class=ic-ban></i> Block all pasted</button>
   </div>
   <div class="card">
     <div class="sec-hdr">
@@ -538,19 +538,19 @@
     <button class="btn bp" onclick="newTpl()">+ New Template</button>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#EEF4FF">🗂️</div>Letter Cycles (folders)</div>
+    <div class="ct"><div class="ct-icon" style="background:#EEF4FF"><i class=ic-folder></i>️</div>Letter Cycles (folders)</div>
     <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">Group your templates into named cycles — e.g. a <strong>Rentals</strong> cycle of up to 6 letters over up to 60 days. When a property is put on a cycle (after printing), each letter is queued automatically on its day.</div>
     <div id="groups-mgr"></div>
     <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">⚙️ Auto-assign cycles by type</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class=ic-gear></i>️ Auto-assign cycles by type</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Put new properties straight onto a cycle without being asked — e.g. every rental joins your Rentals cycle automatically.</div>
       <div id="auto-assign"></div>
     </div>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">📤</div>Upload Letter File</div>
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-upload></i></div>Upload Letter File</div>
     <div class="dz" id="dz" ondragover="event.preventDefault();this.classList.add('dzo')" ondragleave="this.classList.remove('dzo')" ondrop="doDrop(event)" onclick="document.getElementById('fup').click()">
-      <div style="font-size:30px;margin-bottom:8px">📄</div>
+      <div style="font-size:30px;margin-bottom:8px"><i class=ic-file></i></div>
       <div style="font-size:13px;font-weight:600">Drop your letter file here or click to browse</div>
       <div style="font-size:11px;color:var(--muted);margin-top:3px">.docx · .pdf · .txt supported</div>
     </div>
@@ -581,13 +581,13 @@
       </div>
       <textarea id="tedit" rows="14" style="font-family:'Georgia',serif;font-size:13px;line-height:1.75" placeholder="Write your letter here…"></textarea>
       <div class="fr" style="margin-top:10px">
-        <button class="btn bp sm-btn" onclick="saveTpl()">💾 Save Template</button>
-        <button class="btn bs sm-btn" onclick="prevTpl()">👁 Preview</button>
+        <button class="btn bp sm-btn" onclick="saveTpl()"><i class=ic-save></i> Save Template</button>
+        <button class="btn bs sm-btn" onclick="prevTpl()"><i class=ic-eye></i> Preview</button>
       </div>
     </div>
   </div>
   <div class="card" id="prev-area" style="display:none">
-    <div class="sec-hdr"><div class="sec-title">📄 Letter Preview</div><button class="btn bghost sm-btn" onclick="document.getElementById('prev-area').style.display='none'">Close</button></div>
+    <div class="sec-hdr"><div class="sec-title"><i class=ic-file></i> Letter Preview</div><button class="btn bghost sm-btn" onclick="document.getElementById('prev-area').style.display='none'">Close</button></div>
     <div class="lp" id="prev-content"></div>
   </div>
 </div>
@@ -598,22 +598,22 @@
     <div><div class="page-title">Printer Setup</div><div class="page-sub">Connect your real printer via PrintNode for silent, automatic printing</div></div>
   </div>
   <div class="card" id="pn-card">
-    <div class="ct"><div class="ct-icon" style="background:#ECFDF5">☁️</div>Cloud Printing (PrintNode)</div>
+    <div class="ct"><div class="ct-icon" style="background:#ECFDF5"><i class=ic-cloud></i>️</div>Cloud Printing (PrintNode)</div>
     <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">Connect a printer through <strong>PrintNode</strong> to print letters straight to it — no print dialog. With this on, the 9am auto‑print runs silently as long as the app is open on the office PC. <a href="https://www.printnode.com" target="_blank" style="color:var(--blue)">Set up PrintNode →</a></div>
     <div id="pn-body"></div>
   </div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">🔍</div>Discover Printers</div>
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-search></i></div>Discover Printers</div>
     <div class="fr">
-      <button class="btn bp sm-btn" onclick="scanPrinters()">🔍 Scan Network</button>
+      <button class="btn bp sm-btn" onclick="scanPrinters()"><i class=ic-search></i> Scan Network</button>
       <input id="pip" placeholder="Manual IP: 192.168.1.xx" style="width:200px">
       <select id="pprot" style="width:90px"><option>IPP</option><option>LPD</option><option>RAW</option><option>SMB</option></select>
       <button class="btn bs sm-btn" onclick="addPrinter()">Add Printer</button>
     </div>
   </div>
-  <div class="card"><div class="ct"><div class="ct-icon" style="background:#F0FDF4">🖨</div>Available Printers</div><div id="plist"></div></div>
+  <div class="card"><div class="ct"><div class="ct-icon" style="background:#F0FDF4"><i class=ic-printer></i></div>Available Printers</div><div id="plist"></div></div>
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#FFFBEB">⚙️</div>Print Settings</div>
+    <div class="ct"><div class="ct-icon" style="background:#FFFBEB"><i class=ic-gear></i>️</div>Print Settings</div>
     <div class="g2">
       <div class="fg"><label>Paper Size</label><select id="psize"><option>A4</option><option>Letter</option><option>A5</option></select></div>
       <div class="fg"><label>Copies per Letter</label><input type="number" id="copies" value="1" min="1" max="20"></div>
@@ -628,12 +628,12 @@
 <div class="panel" id="panel-investor">
   <div class="page-hdr">
     <div>
-      <div class="page-title">📈 Investor Intelligence Board</div>
+      <div class="page-title"><i class=ic-trend></i> Investor Intelligence Board</div>
       <div class="page-sub">Revenue optimisation analysis · ROI projections · Strategic improvement roadmap for PropMail Pro</div>
     </div>
     <div class="fr">
-      <button class="btn bs sm-btn" onclick="exportInvestorReport()">⬇ Export Report</button>
-      <button class="btn bg" onclick="document.getElementById('inv-scenario-section').scrollIntoView({behavior:'smooth'})">💰 View Revenue Scenarios</button>
+      <button class="btn bs sm-btn" onclick="exportInvestorReport()"><i class=ic-download></i> Export Report</button>
+      <button class="btn bg" onclick="document.getElementById('inv-scenario-section').scrollIntoView({behavior:'smooth'})"><i class=ic-pound></i> View Revenue Scenarios</button>
     </div>
   </div>
 
@@ -675,7 +675,7 @@
   <div class="inv-kpi-grid">
     <div class="inv-kpi blue">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="width:36px;height:36px;background:rgba(37,99,235,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">📬</div>
+        <div style="width:36px;height:36px;background:rgba(37,99,235,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px"><i class=ic-mailbox></i></div>
         <span class="tag tag-blue">Letters</span>
       </div>
       <div class="inv-kpi-val" id="inv-letters-sent">0</div>
@@ -684,7 +684,7 @@
     </div>
     <div class="inv-kpi gold">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="width:36px;height:36px;background:rgba(201,146,26,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">📞</div>
+        <div style="width:36px;height:36px;background:rgba(201,146,26,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px"><i class=ic-phone></i></div>
         <span class="tag tag-gold">Pipeline</span>
       </div>
       <div class="inv-kpi-val" id="inv-responses">0</div>
@@ -693,7 +693,7 @@
     </div>
     <div class="inv-kpi green">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="width:36px;height:36px;background:rgba(5,150,105,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">🏠</div>
+        <div style="width:36px;height:36px;background:rgba(5,150,105,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px"><i class=ic-home></i></div>
         <span class="tag tag-green">Revenue</span>
       </div>
       <div class="inv-kpi-val" id="inv-instructions">0</div>
@@ -702,7 +702,7 @@
     </div>
     <div class="inv-kpi purple">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="width:36px;height:36px;background:rgba(124,58,237,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px">💷</div>
+        <div style="width:36px;height:36px;background:rgba(124,58,237,.1);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px"><i class=ic-pound></i></div>
         <span class="tag tag-purple">Revenue</span>
       </div>
       <div class="inv-kpi-val" id="inv-revenue">£0</div>
@@ -713,7 +713,7 @@
 
   <!-- CONVERSION FUNNEL -->
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">🎯</div>Revenue Conversion Funnel</div>
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-target></i></div>Revenue Conversion Funnel</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">How letters convert to revenue — current baseline vs target performance with all 12 improvements implemented</div>
     <div class="funnel-wrap" id="funnel-wrap">
       <div class="funnel-row">
@@ -747,13 +747,13 @@
         <div class="funnel-val">5.8%</div>
       </div>
       <div class="funnel-row">
-        <div class="funnel-label" style="font-weight:700;color:var(--green)">Instruction Won 💰</div>
+        <div class="funnel-label" style="font-weight:700;color:var(--green)">Instruction Won <i class=ic-pound></i></div>
         <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:2.0%;background:linear-gradient(90deg,#C9921A,#F4B942);min-width:55px">20</div></div>
         <div class="funnel-val" style="color:var(--gold);font-weight:700">£168,000</div>
       </div>
     </div>
     <div style="margin-top:14px;padding:12px 14px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);font-size:12px;color:var(--green)">
-      💡 <strong>Investor insight:</strong> Every 1% improvement in response rate from a 1,000-letter campaign generates approximately <strong>£29,400 in additional revenue</strong>. The 12 improvements below collectively target a 5.6 percentage point uplift — worth <strong>£165,000 per campaign</strong>.
+      <i class=ic-bulb></i> <strong>Investor insight:</strong> Every 1% improvement in response rate from a 1,000-letter campaign generates approximately <strong>£29,400 in additional revenue</strong>. The 12 improvements below collectively target a 5.6 percentage point uplift — worth <strong>£165,000 per campaign</strong>.
     </div>
   </div>
 
@@ -761,12 +761,12 @@
   <div>
     <div class="filter-tabs" id="inv-filters">
       <button class="filter-tab active-tab" onclick="filterImprovements('all', this)">All 12 Improvements</button>
-      <button class="filter-tab" onclick="filterImprovements('critical', this)">🔴 Critical</button>
-      <button class="filter-tab" onclick="filterImprovements('high', this)">🟠 High Impact</button>
-      <button class="filter-tab" onclick="filterImprovements('quick', this)">⚡ Quick Wins</button>
-      <button class="filter-tab" onclick="filterImprovements('technology', this)">💻 Technology</button>
-      <button class="filter-tab" onclick="filterImprovements('content', this)">✍️ Content</button>
-      <button class="filter-tab" onclick="filterImprovements('data', this)">📊 Data & Targeting</button>
+      <button class="filter-tab" onclick="filterImprovements('critical', this)"><i class=dot-ef4444></i> Critical</button>
+      <button class="filter-tab" onclick="filterImprovements('high', this)"><i class=dot-f59e0b></i> High Impact</button>
+      <button class="filter-tab" onclick="filterImprovements('quick', this)"><i class=ic-zap></i> Quick Wins</button>
+      <button class="filter-tab" onclick="filterImprovements('technology', this)"><i class=ic-monitor></i> Technology</button>
+      <button class="filter-tab" onclick="filterImprovements('content', this)"><i class=ic-pencil></i>️ Content</button>
+      <button class="filter-tab" onclick="filterImprovements('data', this)"><i class=ic-chart></i> Data & Targeting</button>
     </div>
     <div class="imp-grid" id="improvements-grid"></div>
   </div>
@@ -774,11 +774,11 @@
   <!-- REVENUE SCENARIOS -->
   <div id="inv-scenario-section">
     <div class="inv-section">
-      <div class="inv-section-title">💰 Revenue Scenario Modelling</div>
+      <div class="inv-section-title"><i class=ic-pound></i> Revenue Scenario Modelling</div>
       <div class="inv-section-sub">Adjust the sliders to model your specific letter volume and conversion assumptions</div>
     </div>
     <div class="card">
-      <div class="ct"><div class="ct-icon" style="background:#FFFBEB">📊</div>Interactive Revenue Calculator</div>
+      <div class="ct"><div class="ct-icon" style="background:#FFFBEB"><i class=ic-chart></i></div>Interactive Revenue Calculator</div>
       <div class="g2" style="gap:20px;margin-bottom:18px">
         <div>
           <div class="fg" style="margin-bottom:14px">
@@ -826,17 +826,17 @@
         <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">Quick Scenario Presets</div>
         <div class="g3">
           <div class="scenario-card" onclick="setScenario(500,2.8,35,8400)">
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">🌱 Starting Out</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class=ic-leaf></i> Starting Out</div>
             <div style="font-size:11px;color:var(--muted)">500 letters/mo · 2.8% response · £8,400 commission</div>
             <div style="font-size:16px;font-weight:800;color:var(--green);margin-top:8px" id="preset-1-val">£0/mo</div>
           </div>
           <div class="scenario-card" onclick="setScenario(2000,5.5,40,8400)">
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">🚀 Optimised</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class=ic-rocket></i> Optimised</div>
             <div style="font-size:11px;color:var(--muted)">2,000 letters/mo · 5.5% response · £8,400 commission</div>
             <div style="font-size:16px;font-weight:800;color:var(--green);margin-top:8px" id="preset-2-val">£0/mo</div>
           </div>
           <div class="scenario-card" onclick="setScenario(5000,8.4,45,9500)">
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">🏆 Full Scale</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px"><i class=ic-trophy></i> Full Scale</div>
             <div style="font-size:11px;color:var(--muted)">5,000 letters/mo · 8.4% response · £9,500 commission</div>
             <div style="font-size:16px;font-weight:800;color:var(--green);margin-top:8px" id="preset-3-val">£0/mo</div>
           </div>
@@ -847,7 +847,7 @@
 
   <!-- REVENUE TABLE -->
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#F0FDF4">📋</div>Revenue Impact by Improvement — Ranked by ROI</div>
+    <div class="ct"><div class="ct-icon" style="background:#F0FDF4"><i class=ic-clipboard></i></div>Revenue Impact by Improvement — Ranked by ROI</div>
     <div style="overflow-x:auto">
       <table class="revenue-table">
         <thead><tr>
@@ -860,7 +860,7 @@
 
   <!-- IMPLEMENTATION ROADMAP -->
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">🗓</div>90-Day Implementation Roadmap</div>
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-calendar></i></div>90-Day Implementation Roadmap</div>
     <div class="timeline-row">
       <div class="timeline-item">
         <div class="timeline-dot done">✓</div>
@@ -898,7 +898,7 @@
   <!-- ACTION CHECKLIST -->
   <div class="card">
     <div class="ct" style="justify-content:space-between">
-      <span><div class="ct-icon" style="background:#F0FDF4;display:inline-flex">✅</div> Revenue Action Checklist</span>
+      <span><div class="ct-icon" style="background:#F0FDF4;display:inline-flex"><i class=ic-check></i></div> Revenue Action Checklist</span>
       <div style="font-size:12px;color:var(--muted)" id="checklist-progress">0 / 12 completed</div>
     </div>
     <div id="action-checklist"></div>
@@ -910,12 +910,12 @@
 <div class="panel" id="panel-advisor">
   <div class="page-hdr">
     <div>
-      <div class="page-title">🤖 AI Instruction Advisor</div>
+      <div class="page-title"><i class=ic-bot></i> AI Instruction Advisor</div>
       <div class="page-sub">Analyses your current campaigns, templates, and data — then generates specific, actionable improvements to win more instructions</div>
     </div>
     <div class="fr">
-      <button class="btn bs sm-btn" onclick="exportAdvice()">⬇ Export Advice</button>
-      <button class="btn bp" id="adv-run-btn" onclick="runAdvisor()">🤖 Analyse &amp; Advise Me</button>
+      <button class="btn bs sm-btn" onclick="exportAdvice()"><i class=ic-download></i> Export Advice</button>
+      <button class="btn bp" id="adv-run-btn" onclick="runAdvisor()"><i class=ic-bot></i> Analyse &amp; Advise Me</button>
     </div>
   </div>
 
@@ -927,20 +927,20 @@
         <div style="font-family:'Playfair Display',serif;font-size:21px;margin-bottom:8px;line-height:1.3">Your personal estate agency growth advisor</div>
         <div style="font-size:13px;opacity:.72;line-height:1.7;max-width:600px">Tell me about your current situation — your target area, the letters you're sending, and any specific challenges — and I'll analyse everything and give you a prioritised list of specific changes that will win more instructions.</div>
         <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
-          <button class="btn bg" onclick="runAdvisor()" id="adv-hero-btn" style="font-size:14px;padding:11px 22px">🤖 Get My Personalised Advice</button>
-          <button class="btn" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px" onclick="scrollToChat()">💬 Ask a Specific Question</button>
+          <button class="btn bg" onclick="runAdvisor()" id="adv-hero-btn" style="font-size:14px;padding:11px 22px"><i class=ic-bot></i> Get My Personalised Advice</button>
+          <button class="btn" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px" onclick="scrollToChat()"><i class=ic-message></i> Ask a Specific Question</button>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:9px;flex-shrink:0;min-width:200px">
         <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:var(--r2);padding:12px 14px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.35);margin-bottom:6px">What I analyse</div>
           <div style="display:flex;flex-direction:column;gap:5px;font-size:11px;color:rgba(255,255,255,.65)">
-            <div>📝 Your letter templates &amp; copy</div>
-            <div>🎯 Target areas &amp; property types</div>
-            <div>📬 Campaign volume &amp; frequency</div>
-            <div>⏱ Timing &amp; follow-up gaps</div>
-            <div>💰 Revenue pipeline health</div>
-            <div>🏘 HA district performance</div>
+            <div><i class=ic-file></i> Your letter templates &amp; copy</div>
+            <div><i class=ic-target></i> Target areas &amp; property types</div>
+            <div><i class=ic-mailbox></i> Campaign volume &amp; frequency</div>
+            <div><i class=ic-clock></i> Timing &amp; follow-up gaps</div>
+            <div><i class=ic-pound></i> Revenue pipeline health</div>
+            <div><i class=ic-home></i> HA district performance</div>
           </div>
         </div>
       </div>
@@ -949,7 +949,7 @@
 
   <!-- LIVE HEALTH SCORECARD -->
   <div class="card">
-    <div class="ct"><div class="ct-icon" style="background:#EFF6FF">📊</div>Campaign Health Scorecard</div>
+    <div class="ct"><div class="ct-icon" style="background:#EFF6FF"><i class=ic-chart></i></div>Campaign Health Scorecard</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Live metrics calculated from your current PropMail Pro data</div>
     <div class="adv-score-grid" id="adv-scorecard"></div>
   </div>
@@ -961,32 +961,32 @@
 
     <div class="adv-context-grid" id="adv-context-grid">
       <div class="adv-ctx-box selected" onclick="toggleContext(this, 'new-instructions')">
-        <div class="adv-ctx-icon">🏠</div>
+        <div class="adv-ctx-icon"><i class=ic-home></i></div>
         <div class="adv-ctx-title">Win New Instructions</div>
         <div class="adv-ctx-sub">Get more vendors and landlords to choose us over competitors</div>
       </div>
       <div class="adv-ctx-box" onclick="toggleContext(this, 'response-rate')">
-        <div class="adv-ctx-icon">📞</div>
+        <div class="adv-ctx-icon"><i class=ic-phone></i></div>
         <div class="adv-ctx-title">Increase Response Rate</div>
         <div class="adv-ctx-sub">More homeowners calling back from our letters</div>
       </div>
       <div class="adv-ctx-box" onclick="toggleContext(this, 'landlords')">
-        <div class="adv-ctx-icon">🔑</div>
+        <div class="adv-ctx-icon"><i class=ic-key></i></div>
         <div class="adv-ctx-title">Target Landlords</div>
         <div class="adv-ctx-sub">Win property management mandates and rental instructions</div>
       </div>
       <div class="adv-ctx-box" onclick="toggleContext(this, 'premium')">
-        <div class="adv-ctx-icon">💎</div>
+        <div class="adv-ctx-icon"><i class=ic-gem></i></div>
         <div class="adv-ctx-title">Premium Properties</div>
         <div class="adv-ctx-sub">Focus on higher-value homes for larger commissions</div>
       </div>
       <div class="adv-ctx-box" onclick="toggleContext(this, 'stale')">
-        <div class="adv-ctx-icon">🔄</div>
+        <div class="adv-ctx-icon"><i class=ic-refresh></i></div>
         <div class="adv-ctx-title">Switch Agents</div>
         <div class="adv-ctx-sub">Convert homeowners currently with rival agents</div>
       </div>
       <div class="adv-ctx-box" onclick="toggleContext(this, 'volume')">
-        <div class="adv-ctx-icon">📈</div>
+        <div class="adv-ctx-icon"><i class=ic-trend></i></div>
         <div class="adv-ctx-title">Scale Volume</div>
         <div class="adv-ctx-sub">Send more letters efficiently without losing quality</div>
       </div>
@@ -1041,7 +1041,7 @@
     </div>
 
     <div class="fr">
-      <button class="btn bp" id="adv-run-btn2" onclick="runAdvisor()">🤖 Generate My Improvement Plan</button>
+      <button class="btn bp" id="adv-run-btn2" onclick="runAdvisor()"><i class=ic-bot></i> Generate My Improvement Plan</button>
       <button class="btn bs sm-btn" onclick="resetAdvisor()">↺ Reset</button>
     </div>
   </div>
@@ -1052,11 +1052,11 @@
     <div style="font-family:'Playfair Display',serif;font-size:18px;color:#fff;margin-bottom:6px" id="adv-think-title">Analysing your campaigns…</div>
     <div class="adv-thinking-stage" id="adv-think-stage">Reading your letter templates and campaign data</div>
     <div class="adv-stage-bar" id="adv-stage-bar">
-      <div class="adv-stage-pill" id="asp-1">📊 Analysing Data</div>
-      <div class="adv-stage-pill" id="asp-2">🔍 Identifying Gaps</div>
-      <div class="adv-stage-pill" id="asp-3">✍️ Reviewing Copy</div>
-      <div class="adv-stage-pill" id="asp-4">🎯 Building Plan</div>
-      <div class="adv-stage-pill" id="asp-5">💡 Writing Advice</div>
+      <div class="adv-stage-pill" id="asp-1"><i class=ic-chart></i> Analysing Data</div>
+      <div class="adv-stage-pill" id="asp-2"><i class=ic-search></i> Identifying Gaps</div>
+      <div class="adv-stage-pill" id="asp-3"><i class=ic-pencil></i>️ Reviewing Copy</div>
+      <div class="adv-stage-pill" id="asp-4"><i class=ic-target></i> Building Plan</div>
+      <div class="adv-stage-pill" id="asp-5"><i class=ic-bulb></i> Writing Advice</div>
     </div>
   </div>
 
@@ -1093,7 +1093,7 @@
 
     <!-- PRIORITY ACTIONS BANNER -->
     <div style="background:linear-gradient(90deg,rgba(220,38,38,.06),rgba(220,38,38,.02));border:1px solid rgba(220,38,38,.14);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <div style="font-size:20px;flex-shrink:0">🚨</div>
+      <div style="font-size:20px;flex-shrink:0"><i class=ic-alert></i></div>
       <div style="flex:1">
         <div style="font-size:13px;font-weight:700;color:var(--red)">Top 3 Quick Wins — Act on these first</div>
         <div style="font-size:12px;color:var(--muted);margin-top:3px" id="adv-quick-wins">Loading…</div>
@@ -1105,20 +1105,20 @@
 
     <!-- LETTER REWRITE -->
     <div class="card" id="adv-rewrite-card" style="display:none">
-      <div class="ct"><div class="ct-icon" style="background:#F0FDF4">✍️</div>AI Letter Rewrite</div>
+      <div class="ct"><div class="ct-icon" style="background:#F0FDF4"><i class=ic-pencil></i>️</div>AI Letter Rewrite</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Your current best-performing template, rewritten by the AI with all suggested improvements applied</div>
       <div class="g2" style="gap:14px">
         <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--red);margin-bottom:8px">❌ Current Version</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--red);margin-bottom:8px"><i class=ic-x></i> Current Version</div>
           <div style="background:rgba(220,38,38,.03);border:1px solid rgba(220,38,38,.1);border-radius:var(--r2);padding:16px 18px;font-family:'Georgia',serif;font-size:12px;line-height:1.75;color:var(--text2);white-space:pre-wrap;min-height:200px" id="adv-letter-before"></div>
         </div>
         <div>
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:8px">✅ AI-Improved Version</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--green);margin-bottom:8px"><i class=ic-check></i> AI-Improved Version</div>
           <div style="background:rgba(5,150,105,.03);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);padding:16px 18px;font-family:'Georgia',serif;font-size:12px;line-height:1.75;color:var(--text);white-space:pre-wrap;min-height:200px" id="adv-letter-after"></div>
         </div>
       </div>
       <div class="fr" style="margin-top:12px">
-        <button class="btn bgrn sm-btn" onclick="useRewrittenLetter()">✅ Use This Version</button>
+        <button class="btn bgrn sm-btn" onclick="useRewrittenLetter()"><i class=ic-check></i> Use This Version</button>
         <button class="btn bs sm-btn" onclick="rewriteLetter()">↺ Rewrite Again</button>
         <button class="btn bs sm-btn" onclick="document.getElementById('adv-rewrite-card').style.display='none'">Close</button>
       </div>
@@ -1128,7 +1128,7 @@
 
   <!-- PERSISTENT AI CHAT -->
   <div class="card" id="adv-chat-section">
-    <div class="ct"><div class="ct-icon" style="background:var(--ink);display:inline-flex">💬</div>Ask the Advisor Anything</div>
+    <div class="ct"><div class="ct-icon" style="background:var(--ink);display:inline-flex"><i class=ic-message></i></div>Ask the Advisor Anything</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Get specific advice on any aspect of your letter campaigns, scripts, or strategy</div>
     <div class="adv-chat-wrap" id="adv-chat-wrap"></div>
     <div class="fr" style="margin-top:12px">
@@ -1137,42 +1137,42 @@
     </div>
     <div class="adv-quick-grid" id="adv-quick-grid">
       <button class="adv-quick-btn" onclick="quickAdvice('How do I write a letter headline that guarantees it gets opened?')">
-        <span class="adv-qb-icon">📬</span>
+        <span class="adv-qb-icon"><i class=ic-mailbox></i></span>
         <span class="adv-qb-title">Irresistible Headlines</span>
         <span class="adv-qb-sub">Write opening lines that demand to be read</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('What should I say when a homeowner calls from my letter? Give me a word-for-word script.')">
-        <span class="adv-qb-icon">📞</span>
+        <span class="adv-qb-icon"><i class=ic-phone></i></span>
         <span class="adv-qb-title">Phone Scripts</span>
         <span class="adv-qb-sub">Word-for-word script for inbound calls</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('How do I beat Foxtons and Purplebricks in a valuation pitch? Give me specific scripts and USPs.')">
-        <span class="adv-qb-icon">🥊</span>
+        <span class="adv-qb-icon"><i class=ic-swords></i></span>
         <span class="adv-qb-title">Beat Competitors</span>
         <span class="adv-qb-sub">Scripts to win against Foxtons, Purplebricks etc.</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('Write me a 3-letter follow-up sequence for a property that has been on the market for 60 days with another agent.')">
-        <span class="adv-qb-icon">🔄</span>
+        <span class="adv-qb-icon"><i class=ic-refresh></i></span>
         <span class="adv-qb-title">Follow-Up Sequences</span>
         <span class="adv-qb-sub">3-letter campaign for stale listings</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('What is the best letter to send to a landlord with multiple properties in HA? Include a specific offer.')">
-        <span class="adv-qb-icon">🔑</span>
+        <span class="adv-qb-icon"><i class=ic-key></i></span>
         <span class="adv-qb-title">Landlord Letters</span>
         <span class="adv-qb-sub">Target multi-property landlords in HA</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('How do I make my estate agent letters stand out physically? What paper, envelope, and print format converts best?')">
-        <span class="adv-qb-icon">✉️</span>
+        <span class="adv-qb-icon"><i class=ic-mail></i>️</span>
         <span class="adv-qb-title">Physical Impact</span>
         <span class="adv-qb-sub">Paper, envelopes, print format advice</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('Write me a success story letter about selling a property in HA1 Harrow quickly and above asking price.')">
-        <span class="adv-qb-icon">⭐</span>
+        <span class="adv-qb-icon"><i class=ic-star></i></span>
         <span class="adv-qb-title">Success Story Letter</span>
         <span class="adv-qb-sub">Template using recent local sales as social proof</span>
       </button>
       <button class="adv-quick-btn" onclick="quickAdvice('What specific things should I include in my letter to a homeowner whose property has been listed for 90 days without selling?')">
-        <span class="adv-qb-icon">⏰</span>
+        <span class="adv-qb-icon"><i class=ic-clock></i></span>
         <span class="adv-qb-title">Motivated Seller Letter</span>
         <span class="adv-qb-sub">Converting stale listings to switch-agent calls</span>
       </button>
@@ -1185,8 +1185,8 @@
 <!-- DIRECTOR VISION PANEL -->
 <div class="panel" id="panel-director">
   <div class="page-hdr">
-    <div><div class="page-title">🎬 Creative Director's Vision</div><div class="page-sub">15 strategic improvements — 10+ years UK estate agency experience, all HA-specific and revenue-proven</div></div>
-    <div class="fr"><button class="btn bs sm-btn" onclick="exportDirectorReport()">⬇ Export Vision</button></div>
+    <div><div class="page-title"><i class=ic-film></i> Creative Director's Vision</div><div class="page-sub">15 strategic improvements — 10+ years UK estate agency experience, all HA-specific and revenue-proven</div></div>
+    <div class="fr"><button class="btn bs sm-btn" onclick="exportDirectorReport()"><i class=ic-download></i> Export Vision</button></div>
   </div>
   <div class="dir-hero">
     <div style="position:relative;z-index:1;display:flex;align-items:flex-start;gap:24px;flex-wrap:wrap">
@@ -1200,15 +1200,15 @@
 
   <div class="dir-filter-bar">
     <button class="dir-filter df-active" onclick="filterIdeas('all', this)">All Ideas</button>
-    <button class="dir-filter" onclick="filterIdeas('immediate', this)">🔴 Do This Week</button>
-    <button class="dir-filter" onclick="filterIdeas('short', this)">🟠 This Month</button>
-    <button class="dir-filter" onclick="filterIdeas('medium', this)">🔵 Next 90 Days</button>
-    <button class="dir-filter" onclick="filterIdeas('strategic', this)">🟣 Strategic</button>
-    <button class="dir-filter" onclick="filterIdeas('tech', this)">💻 Tech</button>
-    <button class="dir-filter" onclick="filterIdeas('content', this)">✍️ Content</button>
-    <button class="dir-filter" onclick="filterIdeas('data', this)">📊 Data</button>
-    <button class="dir-filter" onclick="filterIdeas('brand', this)">🎨 Brand</button>
-    <button class="dir-filter" onclick="filterIdeas('ops', this)">⚙️ Ops</button>
+    <button class="dir-filter" onclick="filterIdeas('immediate', this)"><i class=dot-ef4444></i> Do This Week</button>
+    <button class="dir-filter" onclick="filterIdeas('short', this)"><i class=dot-f59e0b></i> This Month</button>
+    <button class="dir-filter" onclick="filterIdeas('medium', this)"><i class=dot-3b82f6></i> Next 90 Days</button>
+    <button class="dir-filter" onclick="filterIdeas('strategic', this)"><i class=dot-a855f7></i> Strategic</button>
+    <button class="dir-filter" onclick="filterIdeas('tech', this)"><i class=ic-monitor></i> Tech</button>
+    <button class="dir-filter" onclick="filterIdeas('content', this)"><i class=ic-pencil></i>️ Content</button>
+    <button class="dir-filter" onclick="filterIdeas('data', this)"><i class=ic-chart></i> Data</button>
+    <button class="dir-filter" onclick="filterIdeas('brand', this)"><i class=ic-palette></i> Brand</button>
+    <button class="dir-filter" onclick="filterIdeas('ops', this)"><i class=ic-gear></i>️ Ops</button>
   </div>
 
   <div class="ideas-grid" id="ideas-grid"></div>
@@ -1217,7 +1217,7 @@
 <!-- PRE-MARKET RADAR (NEW EPC MONITOR) -->
 <div class="panel" id="panel-premarket">
   <div class="page-hdr">
-    <div><div class="page-title">🔑 Pre-Market Radar</div><div class="page-sub">Homes that just lodged an Energy Performance Certificate across HA0–HA9 — often weeks before they hit Rightmove. Full addresses included.</div></div>
+    <div><div class="page-title"><i class=ic-key></i> Pre-Market Radar</div><div class="page-sub">Homes that just lodged an Energy Performance Certificate across HA0–HA9 — often weeks before they hit Rightmove. Full addresses included.</div></div>
     <div class="page-kpis"><div class="kpi-box"><div class="kpi-n" id="pm-count">—</div><div class="kpi-l">New EPCs</div></div></div>
   </div>
   <div class="card card-sm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
@@ -1233,7 +1233,7 @@
         <option>HA5</option><option>HA6</option><option>HA7</option><option>HA8</option><option>HA9</option>
       </select>
     </label>
-    <button class="btn bp sm-btn" onclick="initPremarket()">🔄 Refresh</button>
+    <button class="btn bp sm-btn" onclick="initPremarket()"><i class=ic-refresh></i> Refresh</button>
     <div style="flex:1"></div>
     <span style="font-size:11px;color:var(--muted);max-width:280px">A fresh EPC is a strong signal an owner is preparing to sell or let — reach them first.</span>
   </div>
@@ -1243,7 +1243,7 @@
 <!-- SOLD BOARD (LAND REGISTRY) -->
 <div class="panel" id="panel-sold">
   <div class="page-hdr">
-    <div><div class="page-title">🏆 Sold Board</div><div class="page-sub">Recently registered sales across HA0–HA9 from HM Land Registry. Write to the street while it's hot — "we just sold nearby, here's what we achieved".</div></div>
+    <div><div class="page-title"><i class=ic-trophy></i> Sold Board</div><div class="page-sub">Recently registered sales across HA0–HA9 from HM Land Registry. Write to the street while it's hot — "we just sold nearby, here's what we achieved".</div></div>
     <div class="page-kpis"><div class="kpi-box"><div class="kpi-n" id="sold-count">—</div><div class="kpi-l">Recent sales</div></div></div>
   </div>
   <div class="card card-sm" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
@@ -1259,7 +1259,7 @@
         <option>HA5</option><option>HA6</option><option>HA7</option><option>HA8</option><option>HA9</option>
       </select>
     </label>
-    <button class="btn bp sm-btn" onclick="initSold()">🔄 Refresh</button>
+    <button class="btn bp sm-btn" onclick="initSold()"><i class=ic-refresh></i> Refresh</button>
     <div style="flex:1"></div>
     <span style="font-size:11px;color:var(--muted);max-width:280px">Land Registry data lags completion by 1–3 months — ideal timing for a "sold in your street" letter.</span>
   </div>
@@ -1269,7 +1269,7 @@
 <!-- CAMPAIGNS (CRM-LITE) -->
 <div class="panel" id="panel-campaigns">
   <div class="page-hdr">
-    <div><div class="page-title">📇 Campaign Tracker</div><div class="page-sub">Every address you've lettered, in one place — avoid double-posting, track responses, and see who's due a follow-up.</div></div>
+    <div><div class="page-title"><i class=ic-clipboard></i> Campaign Tracker</div><div class="page-sub">Every address you've lettered, in one place — avoid double-posting, track responses, and see who's due a follow-up.</div></div>
     <div class="page-kpis">
       <div class="kpi-box"><div class="kpi-n" id="camp-total">0</div><div class="kpi-l">Contacted</div></div>
       <div class="kpi-box"><div class="kpi-n" id="camp-followups">0</div><div class="kpi-l">Follow-ups due</div></div>
@@ -1277,11 +1277,11 @@
   </div>
   <div class="card card-sm">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="font-weight:700;font-size:14px;color:var(--text)">⏱️ Automation</div>
+      <div style="font-weight:700;font-size:14px;color:var(--text)"><i class=ic-clock></i>️ Automation</div>
       <label style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text2)"><input type="checkbox" id="auto-enabled" onchange="toggleAutomation()"> Run letter cycles automatically</label>
       <div style="flex:1"></div>
-      <button class="btn bs sm-btn" onclick="showPanel('templates')">✏️ Manage cycles</button>
-      <button class="btn bs sm-btn" onclick="showPanel('schedule')">📅 Schedule</button>
+      <button class="btn bs sm-btn" onclick="showPanel('templates')"><i class=ic-pencil></i>️ Manage cycles</button>
+      <button class="btn bs sm-btn" onclick="showPanel('schedule')"><i class=ic-calendar></i> Schedule</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-top:8px"><span id="auto-note"></span> Build your letter cycles in <strong>Templates → Letter Cycles</strong>; a property joins one when you choose a cycle after printing.</div>
     <div id="auto-groups" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"></div>
@@ -1293,7 +1293,7 @@
       <option value="responded">Responded</option><option value="instructed">Instructed</option><option value="dead">Dead</option>
     </select>
     <div style="flex:1"></div>
-    <button class="btn bs sm-btn" onclick="exportCampaigns()">⬇ Export CSV</button>
+    <button class="btn bs sm-btn" onclick="exportCampaigns()"><i class=ic-download></i> Export CSV</button>
     <button class="btn bghost sm-btn" onclick="clearCampaigns()">Clear all</button>
   </div>
   <div class="card" id="camp-results"><div style="text-align:center;padding:32px;color:var(--muted)">No letters logged yet. Queue letters from any panel and they'll appear here.</div></div>
@@ -1302,7 +1302,7 @@
 <!-- SCHEDULE -->
 <div class="panel" id="panel-schedule">
   <div class="page-hdr">
-    <div><div class="page-title">📅 Schedule</div><div class="page-sub">Every upcoming cycle letter, by date — each with a reference so you can track it. Due letters are auto-queued when you open the app.</div></div>
+    <div><div class="page-title"><i class=ic-calendar></i> Schedule</div><div class="page-sub">Every upcoming cycle letter, by date — each with a reference so you can track it. Due letters are auto-queued when you open the app.</div></div>
     <div class="page-kpis">
       <div class="kpi-box"><div class="kpi-n" id="sched-count">0</div><div class="kpi-l">Scheduled</div></div>
       <div class="kpi-box"><div class="kpi-n" id="sched-overdue">0</div><div class="kpi-l">Due now</div></div>
@@ -1310,21 +1310,21 @@
   </div>
   <div class="card card-sm" id="ps-card">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div style="font-weight:700;font-size:14px;color:var(--text)">🖨️ Auto-print calendar</div>
+      <div style="font-weight:700;font-size:14px;color:var(--text)"><i class=ic-printer></i>️ Auto-print calendar</div>
       <label style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text2)"><input type="checkbox" id="ps-enabled" onchange="togglePrintEnabled()"> Enable</label>
       <div style="flex:1"></div>
       <label style="font-size:12px;color:var(--muted)">Run at <input type="time" id="ps-time" value="09:00" onchange="setPrintTime(this.value)" style="padding:6px 8px;border:1px solid var(--border2);border-radius:8px;font-family:inherit"></label>
     </div>
     <div style="font-size:12px;color:var(--muted);margin:8px 0 10px">On the ticked days, when the app is open at this time, all due letters are gathered into a <strong>one-tap print run</strong> (or printed silently if your PrintNode printer is connected). If you weren't open, you'll get a "letters due today" prompt next time you log in.</div>
     <div id="ps-days" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-    <div style="margin-top:12px"><button class="btn bs sm-btn" onclick="exportCalendar()">📅 Add a reminder to Google Calendar</button> <span style="font-size:11px;color:var(--muted)">— get a free phone reminder on these days to open the app and print.</span></div>
+    <div style="margin-top:12px"><button class="btn bs sm-btn" onclick="exportCalendar()"><i class=ic-calendar></i> Add a reminder to Google Calendar</button> <span style="font-size:11px;color:var(--muted)">— get a free phone reminder on these days to open the app and print.</span></div>
   </div>
   <div class="card card-sm" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
     <span style="font-size:12px;color:var(--muted)">Each letter carries a <strong>reference</strong> (e.g. REN‑1042) so you can track the campaign across the app or your diary.</span>
     <div style="flex:1"></div>
-    <button class="btn bp sm-btn" onclick="printAllDue()">🖨 Print all due now</button>
+    <button class="btn bp sm-btn" onclick="printAllDue()"><i class=ic-printer></i> Print all due now</button>
     <button class="btn bs sm-btn" onclick="runDueSequences(false);renderSchedule()">⟳ Queue due</button>
-    <button class="btn bs sm-btn" onclick="exportSchedule()">⬇ Export CSV</button>
+    <button class="btn bs sm-btn" onclick="exportSchedule()"><i class=ic-download></i> Export CSV</button>
   </div>
   <div class="card" id="sched-results"><div style="text-align:center;padding:32px;color:var(--muted)">Loading schedule…</div></div>
 </div>
@@ -1334,6 +1334,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-icons"></script>
+<script src="app.js?v=20260626-noemoji"></script>
 </body>
 </html>

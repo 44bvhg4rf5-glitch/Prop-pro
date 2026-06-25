@@ -188,7 +188,7 @@ function genHAProps(haCode, statusF, typeF, minBeds, maxPrice, radius, seed){
     const bedMin   = Math.max(0, beds);
     const bedMax   = Math.min(10, beds+1);
 
-    // ✅ REAL RIGHTMOVE SEARCH URL — uses verified OUTCODE^{id} locationIdentifier
+    // <i class=ic-check></i> REAL RIGHTMOVE SEARCH URL — uses verified OUTCODE^{id} locationIdentifier
     // Opens the exact page on Rightmove with filters for this property spec
     const rmBaseUrl = `https://www.rightmove.co.uk/${rmChannel}/find.html?locationIdentifier=OUTCODE%5E${rmId}`;
     const rmUrl = rmBaseUrl
@@ -197,16 +197,16 @@ function genHAProps(haCode, statusF, typeF, minBeds, maxPrice, radius, seed){
       + `&minPrice=${priceMin}&maxPrice=${priceMax}`
       + `&sortType=6&includeSSTC=false`;
 
-    // ✅ BROAD RIGHTMOVE — all properties in this outcode (no filters)
+    // <i class=ic-check></i> BROAD RIGHTMOVE — all properties in this outcode (no filters)
     const rmAreaUrl = `https://www.rightmove.co.uk/${rmChannel}/find.html?locationIdentifier=OUTCODE%5E${rmId}&sortType=6`;
 
-    // ✅ RIGHTMOVE SOLD PRICES for this outcode
+    // <i class=ic-check></i> RIGHTMOVE SOLD PRICES for this outcode
     const rmSoldUrl = `https://www.rightmove.co.uk/house-prices/${haCode.toLowerCase()}.html`;
 
-    // ✅ ZOOPLA
+    // <i class=ic-check></i> ZOOPLA
     const zoUrl = `https://www.zoopla.co.uk/${zoChannel}/property/${zoSlug}/?beds_min=${bedMin}&price_min=${priceMin}&price_max=${priceMax}`;
 
-    // ✅ ONTHEMARKET
+    // <i class=ic-check></i> ONTHEMARKET
     const otUrl = `https://www.onthemarket.com/${otChannel}/${otSlug}/?min-bedrooms=${bedMin}&max-bedrooms=${bedMax}`;
 
     const portal  = PORTALS[~~(rng()*PORTALS.length)];
@@ -290,7 +290,7 @@ function startRTFeed(){
       newProp.listedAt=new Date();
       rtProps.push(newProp);
       updateRTTicker();
-      blog(`🔴 Live: New listing — ${newProp.address} · ${newProp.portal}`,'ok');
+      blog(`<i class=dot-ef4444></i> Live: New listing — ${newProp.address} · ${newProp.portal}`,'ok');
     }
   },45000);
 }
@@ -370,7 +370,7 @@ async function runAutoFlow(){
 
   setFlowStep(1,'active','Scanning districts…','');
   document.getElementById('af-status').className='status-bar scanning';
-  document.getElementById('af-status').textContent='⚡ Running auto flow…';
+  document.getElementById('af-status').textContent='<i class=ic-zap></i> Running auto flow…';
 
   // Step 1: scan
   const codes=[...selectedHA];
@@ -416,7 +416,7 @@ async function runAutoFlow(){
   }
 
   document.getElementById('af-status').className='status-bar done';
-  document.getElementById('af-status').textContent=`✅ Auto flow complete — ${letters.length} letters processed`;
+  document.getElementById('af-status').textContent=`<i class=ic-check></i> Auto flow complete — ${letters.length} letters processed`;
   btn.disabled=false;
   renderResults();
   updateRTTicker();
@@ -435,7 +435,7 @@ function setFlowStep(num,state,title,sub){
 }
 function resetFlow(){
   [1,2,3,4].forEach(n=>{setFlowStep(n,'','',['Scan HA Districts','360° Address Engine','Generate Letters','Print / Queue'][n-1]);});
-  const _afs=document.getElementById('af-status');if(_afs){_afs.className='status-bar idle';_afs.textContent='⏸ Ready — select HA districts and run';}
+  const _afs=document.getElementById('af-status');if(_afs){_afs.className='status-bar idle';_afs.textContent='<i class=ic-pause></i> Ready — select HA districts and run';}
 }
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
@@ -497,7 +497,7 @@ async function botCycle(){
 
     if(newProps.length>0){
       bdFound+=newProps.length;
-      blog(`✨ ${newProps.length} new in ${code}`,'ok');
+      blog(`<i class=ic-sparkles></i> ${newProps.length} new in ${code}`,'ok');
       newProps.slice(0,5).forEach(p=>{
         blog(`  → ${(p.displayAddress||p.address||'').split(',').slice(0,2).join(',')} · ${p.portal}`,'prnt');
         queue.push({id:Date.now()+Math.random(),prop:p,tpl,status:'pend',at:new Date(),auto:true});
@@ -513,7 +513,7 @@ async function botCycle(){
           },1200+Math.random()*400);
         }
       });
-      toast(`🤖 Bot: ${newProps.length} new in ${code}`,'ok');
+      toast(`<i class=ic-bot></i> Bot: ${newProps.length} new in ${code}`,'ok');
     } else {
       blog(`${code} — no new listings`,'inf');
     }
@@ -611,7 +611,7 @@ function processFile(file){
   if(!['.docx','.pdf','.txt'].includes(ext)){toast('Use .docx .pdf .txt','err');return;}
   const d=document.createElement('div');
   d.style.cssText='display:flex;align-items:center;gap:7px;padding:7px 11px;border:1.5px solid var(--sm);border-radius:7px;background:#fff;margin-bottom:5px';
-  d.innerHTML=`<span>${ext==='.pdf'?'📕':ext==='.docx'?'📘':'📄'}</span><div style="flex:1"><div style="font-size:12px;font-weight:600">${file.name}</div><div style="font-size:10px;color:var(--mut)">${(file.size/1024).toFixed(1)} KB</div></div><button class="btn bg sm-btn" onclick="useUpl('${file.name.replace(/'/g,'\\x27')}')">Use</button>`;
+  d.innerHTML=`<span>${ext==='.pdf'?'<i class=ic-book></i>':ext==='.docx'?'<i class=ic-book></i>':'<i class=ic-file></i>'}</span><div style="flex:1"><div style="font-size:12px;font-weight:600">${file.name}</div><div style="font-size:10px;color:var(--mut)">${(file.size/1024).toFixed(1)} KB</div></div><button class="btn bg sm-btn" onclick="useUpl('${file.name.replace(/'/g,'\\x27')}')">Use</button>`;
   document.getElementById('upfiles')?.appendChild(d);
   if(ext==='.txt'){const r=new FileReader();r.onload=ev=>{const t={id:'u'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:'Uploaded',body:ev.target.result};uploadedTpls.push(t);refreshTplSels();toast(`"${file.name}" uploaded`,'ok');};r.readAsText(file);}
   else{const t={id:'u'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:`Uploaded ${ext}`,body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\n[Content from ${file.name}]\n\nYours sincerely,\n[Your Name]`};uploadedTpls.push(t);refreshTplSels();toast(`"${file.name}" ready`,'ok');}
@@ -639,7 +639,7 @@ function savePSettings(){toast('Settings saved','ok');}
 function toast(msg,type=''){
   const tc=document.getElementById('tc'); if(!tc) return;
   const t=document.createElement('div'); t.className='toast'+(type?' '+type:'');
-  t.innerHTML=`${type==='ok'?'✅':type==='err'?'❌':type==='warn'?'⚠️':'ℹ️'} ${msg}`;
+  t.innerHTML=`${type==='ok'?'<i class=ic-check></i>':type==='err'?'<i class=ic-x></i>':type==='warn'?'<i class=ic-alert></i>️':'<i class=ic-info></i>️'} ${msg}`;
   tc.appendChild(t); setTimeout(()=>t.remove(),3200);
 }
 
@@ -666,7 +666,7 @@ async function runIntelSearch(){
     updateIntelTable();
     const ib=document.getElementById('intel-badge');if(ib)ib.style.display='inline-flex';
   }catch(e){
-    document.getElementById('intel-result-area').innerHTML=`<div class="status-bar error" style="margin-top:8px">❌ ${e.message}</div>`;
+    document.getElementById('intel-result-area').innerHTML=`<div class="status-bar error" style="margin-top:8px"><i class=ic-x></i> ${e.message}</div>`;
   }
   btn.disabled=false;
   setThinking(false);
@@ -697,7 +697,7 @@ async function runBatchIntel(){
       renderIntelResult(result,div);container.appendChild(div);
     }catch(e){
       const div=document.createElement('div');
-      div.innerHTML=`<div class="status-bar error" style="margin-bottom:8px">❌ Failed: ${lines[i]}</div>`;
+      div.innerHTML=`<div class="status-bar error" style="margin-bottom:8px"><i class=ic-x></i> Failed: ${lines[i]}</div>`;
       container.appendChild(div);
     }
     await new Promise(r=>setTimeout(r,500));
@@ -732,7 +732,7 @@ async function sendChat(){
     chatHistory.push({role:'assistant',content:reply});
     th.remove();addChatMsg('ai',reply);
   }catch(e){
-    th.remove();addChatMsg('ai',`⚠️ Could not connect to AI: ${e.message}`);
+    th.remove();addChatMsg('ai',`<i class=ic-alert></i>️ Could not connect to AI: ${e.message}`);
   }
 }
 function quickChat(msg){
@@ -977,7 +977,7 @@ async function runLiveSearch(){
   if(!selectedHA.size){ toast('Select at least one HA district in Filters','warn'); return; }
 
   const btn = document.getElementById('main-search-btn');
-  if(btn){ btn.disabled=true; btn.textContent='🔍 Searching…'; }
+  if(btn){ btn.disabled=true; btn.textContent='<i class=ic-search></i> Searching…'; }
 
   const statusF = document.getElementById('f-status')?.value || 'sale';
   const typeF   = document.getElementById('f-type')?.value   || 'all';
@@ -1117,20 +1117,20 @@ async function runLiveSearch(){
     window._allResolved = props;   // master set for instant agent re-filtering
 
     document.getElementById('search-status').style.display = 'none';
-    if (btn) { btn.disabled = false; btn.textContent = '🔍 Find Live Properties'; }
+    if (btn) { btn.disabled = false; btn.textContent = '<i class=ic-search></i> Find Live Properties'; }
     if (!props.length) {
       document.getElementById('results-area').style.display = 'block';
       document.getElementById('results-title').textContent = 'No exact addresses found';
       document.getElementById('results-sub').textContent = `${found} live listings, but none could be matched to an EPC address. Try other districts.`;
       document.getElementById('results-table').innerHTML =
-        '<div style="text-align:center;padding:32px;color:var(--muted)"><div style="font-size:32px;margin-bottom:12px">🔍</div>'
+        '<div style="text-align:center;padding:32px;color:var(--muted)"><div style="font-size:32px;margin-bottom:12px"><i class=ic-search></i></div>'
         + '<div style="font-size:14px;font-weight:600">No EPC-matched addresses this time</div></div>';
       blog(`Found ${found} listings, 0 matched to an EPC address`, 'warn');
       return;
     }
     renderLiveResults();
-    blog(`✅ ${props.length} of ${found} listings matched to an EPC address (closest by floor size)`, 'ok');
-    toast(`✅ ${props.length} properties matched to a full address`, 'ok');
+    blog(`<i class=ic-check></i> ${props.length} of ${found} listings matched to an EPC address (closest by floor size)`, 'ok');
+    toast(`<i class=ic-check></i> ${props.length} properties matched to a full address`, 'ok');
     updateKPIs();
     return;
   }
@@ -1397,7 +1397,7 @@ ${rawText.slice(0,10000)}`
 
   // ── RENDER RESULTS ──
   document.getElementById('search-status').style.display = 'none';
-  if(btn){ btn.disabled=false; btn.textContent='🔍 Find Live Properties'; }
+  if(btn){ btn.disabled=false; btn.textContent='<i class=ic-search></i> Find Live Properties'; }
 
   if(props.length === 0){
     document.getElementById('results-area').style.display  = 'block';
@@ -1405,7 +1405,7 @@ ${rawText.slice(0,10000)}`
     document.getElementById('results-sub').textContent     = 'Try selecting more districts or broadening your filters';
     document.getElementById('results-table').innerHTML     =
       '<div style="text-align:center;padding:32px;color:var(--muted)">'
-      +'<div style="font-size:32px;margin-bottom:12px">🔍</div>'
+      +'<div style="font-size:32px;margin-bottom:12px"><i class=ic-search></i></div>'
       +'<div style="font-size:14px;font-weight:600;margin-bottom:6px">No properties extracted</div>'
       +'<div style="font-size:13px">The search ran but could not extract individual property addresses. '
       +'Try <a href="https://www.rightmove.co.uk/property-for-sale/find.html?locationIdentifier=OUTCODE%5E1054&sortType=6" target="_blank" style="color:var(--blue)">browsing Rightmove directly</a></div>'
@@ -1416,8 +1416,8 @@ ${rawText.slice(0,10000)}`
 
   renderLiveResults();
   const real = props.filter(p=>p.propertyId&&p.propertyId.length>=6).length;
-  blog(`✅ Found ${props.length} properties · ${real} with direct Rightmove links`, 'ok');
-  toast(`✅ ${props.length} live properties found — ${real} with direct links`, 'ok');
+  blog(`<i class=ic-check></i> Found ${props.length} properties · ${real} with direct Rightmove links`, 'ok');
+  toast(`<i class=ic-check></i> ${props.length} live properties found — ${real} with direct links`, 'ok');
   updateKPIs();
 }
 
@@ -1452,7 +1452,7 @@ async function epcLookup(p, retries=1){
 async function findFullAddress(i){
   const p = props[i]; if(!p) return;
   const box = document.getElementById('epc-'+i); if(!box) return;
-  box.innerHTML = '<span style="font-size:12px;color:var(--muted)">🔎 Searching the EPC register…</span>';
+  box.innerHTML = '<span style="font-size:12px;color:var(--muted)"><i class=ic-search></i> Searching the EPC register…</span>';
   try{
     const pc = (p.postcode||'').replace(/—.*/,'').trim();
     const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'' });
@@ -1462,7 +1462,7 @@ async function findFullAddress(i){
     const r = await fetch('/api/epc?'+qs.toString());
     const d = await r.json().catch(()=>({}));
     if(!r.ok){
-      box.innerHTML = '<span style="font-size:12px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</span>';
+      box.innerHTML = '<span style="font-size:12px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('HTTP '+r.status))+'</span>';
       return;
     }
     const cands = d.candidates||[];
@@ -1476,7 +1476,7 @@ async function findFullAddress(i){
     applyEpcAddress(i, 0);
     renderEpcBox(i);
   }catch(e){
-    box.innerHTML = '<span style="font-size:12px;color:var(--amber)">⚠ '+e.message+'</span>';
+    box.innerHTML = '<span style="font-size:12px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</span>';
   }
 }
 
@@ -1569,7 +1569,7 @@ function renderLiveResults(){
         +'</div>'
         // Postcode + meta
         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-          +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px">📮 '+p.postcode+'</span>':'')
+          +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px"><i class=ic-send></i> '+p.postcode+'</span>':'')
           +(p._epcTop?'<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px">✓ EPC matched'+(p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+(p._epcTop.band?' · band '+p._epcTop.band:'')+'</span>':'')
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
@@ -1579,7 +1579,7 @@ function renderLiveResults(){
         // Property tags
         +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'
           +(p.type?'<span class="ptag">'+p.type+'</span>':'')
-          +(p.beds>0?'<span class="ptag">🛏 '+(p.beds===0?'Studio':p.beds+' bed')+'</span>':'')
+          +(p.beds>0?'<span class="ptag"><i class=ic-bed></i> '+(p.beds===0?'Studio':p.beds+' bed')+'</span>':'')
           +(p.priceLabel?'<span class="ptag" style="background:'+accentBg+';color:'+accentCl+';font-weight:700">'+p.priceLabel+'</span>':'')
           +'<span class="ptag" style="background:'+accentBg+';color:'+accentCl+'">'+p.status+'</span>'
         +'</div>'
@@ -1587,11 +1587,11 @@ function renderLiveResults(){
         +'<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">'
           // Primary: Verify on Rightmove
           +(isReal
-            ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;transition:opacity .15s" onmouseover="this.style.opacity=\'.82\'" onmouseout="this.style.opacity=\'1\'">🏠 Verify on '+(p.portal||'Rightmove')+' →</a>'
-            :'<a href="'+p.rmAreaUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none">🔍 Browse '+p.haCode+' on Rightmove</a>'
+            ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;transition:opacity .15s" onmouseover="this.style.opacity=\'.82\'" onmouseout="this.style.opacity=\'1\'"><i class=ic-home></i> Verify on '+(p.portal||'Rightmove')+' →</a>'
+            :'<a href="'+p.rmAreaUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none"><i class=ic-search></i> Browse '+p.haCode+' on Rightmove</a>'
           )
           // Queue letter button
-          +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'">📬 Queue Letter</button>'
+          +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'"><i class=ic-mailbox></i> Queue Letter</button>'
           // Zoopla cross-check
           +'<a href="'+p.zoUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:11px;font-weight:600;color:#7C3AED;text-decoration:none;background:rgba(124,58,237,.06)">Zoopla</a>'
           // Sold prices
@@ -1633,7 +1633,7 @@ function quickQueueOne(i){
   queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
   logContact(p, tpl, p.source||'Live search');
   updQBadge(); updQStats(); updateKPIs();
-  toast(`📬 Letter queued for ${p.displayAddress||p.address}`, 'ok');
+  toast(`<i class=ic-mailbox></i> Letter queued for ${p.displayAddress||p.address}`, 'ok');
 }
 
 // ── Queue all selected with one click ──
@@ -1646,7 +1646,7 @@ function queueAllSelected(){
     queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
   });
   updQBadge(); updQStats(); updateKPIs();
-  toast(`📬 ${sel.length} letters queued — go to Print Queue to print`, 'ok');
+  toast(`<i class=ic-mailbox></i> ${sel.length} letters queued — go to Print Queue to print`, 'ok');
   showPanel('queue');
 }
 
@@ -1658,7 +1658,7 @@ function queueAllResults(){
     queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
   });
   updQBadge(); updQStats(); updateKPIs();
-  toast(`📬 ${props.length} letters queued`, 'ok');
+  toast(`<i class=ic-mailbox></i> ${props.length} letters queued`, 'ok');
   showPanel('queue');
 }
 
@@ -1696,17 +1696,17 @@ async function initPremarket(){
   const days = document.getElementById('pm-days')?.value || '14';
   const dist = document.getElementById('pm-district')?.value || '';
   const box = document.getElementById('pm-results');
-  if(box) box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">🔎 Scanning the EPC register across HA0–HA9…</div>';
+  if(box) box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)"><i class=ic-search></i> Scanning the EPC register across HA0–HA9…</div>';
   try{
     const qs = new URLSearchParams({ days });
     if(dist) qs.set('districts', dist);
     const r = await fetch('/api/epc-monitor?'+qs.toString());
     const d = await r.json().catch(()=>({}));
-    if(!r.ok){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</div>'; return; }
+    if(!r.ok){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('HTTP '+r.status))+'</div>'; return; }
     premarketItems = d.properties || [];
     const c = document.getElementById('pm-count'); if(c) c.textContent = premarketItems.length;
     renderPremarket();
-  }catch(e){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)">⚠ '+e.message+'</div>'; }
+  }catch(e){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
 }
 function renderPremarket(){
   const box = document.getElementById('pm-results'); if(!box) return;
@@ -1716,10 +1716,10 @@ function renderPremarket(){
     return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+p.fullAddress+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">📮 '+p.postcode+' · '+p.district+' · EPC '+(p.band||'?')+' · lodged '+p.lodged+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px"><i class=ic-send></i> '+p.postcode+' · '+p.district+' · EPC '+(p.band||'?')+' · lodged '+p.lodged+'</div>'
       +'</div>'
       +'<a href="https://www.google.com/search?q='+q+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Check listings</a>'
-      +'<button onclick="queuePremarket('+i+')" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📬 Queue</button>'
+      +'<button onclick="queuePremarket('+i+')" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue</button>'
     +'</div>';
   }).join('');
 }
@@ -1735,7 +1735,7 @@ function queuePremarket(i){
   if(typeof updQBadge==='function') updQBadge();
   if(typeof updQStats==='function') updQStats();
   if(typeof updateKPIs==='function') updateKPIs();
-  toast('📬 Letter queued for '+it.fullAddress, 'ok');
+  toast('<i class=ic-mailbox></i> Letter queued for '+it.fullAddress, 'ok');
 }
 
 // ── Sold Board (Land Registry "sold in your street") ──
@@ -1744,16 +1744,16 @@ async function initSold(){
   const days=document.getElementById('sold-days')?.value||'180';
   const dist=document.getElementById('sold-district')?.value||'';
   const box=document.getElementById('sold-results');
-  if(box) box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">🔎 Loading recent sales from HM Land Registry…</div>';
+  if(box) box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)"><i class=ic-search></i> Loading recent sales from HM Land Registry…</div>';
   try{
     const qs=new URLSearchParams({days}); if(dist) qs.set('districts',dist);
     const r=await fetch('/api/landregistry?'+qs.toString());
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</div>'; return; }
+    if(!r.ok){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('HTTP '+r.status))+'</div>'; return; }
     soldItems=d.properties||[];
     const c=document.getElementById('sold-count'); if(c) c.textContent=soldItems.length;
     renderSold();
-  }catch(e){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)">⚠ '+e.message+'</div>'; }
+  }catch(e){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
 }
 function renderSold(){
   const box=document.getElementById('sold-results'); if(!box) return;
@@ -1763,10 +1763,10 @@ function renderSold(){
     return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+s.fullAddress+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">💷 <strong style="color:var(--green)">£'+Number(s.price).toLocaleString()+'</strong> · '+s.type+' · sold '+s.date+' · '+s.district+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px"><i class=ic-pound></i> <strong style="color:var(--green)">£'+Number(s.price).toLocaleString()+'</strong> · '+s.type+' · sold '+s.date+' · '+s.district+'</div>'
       +'</div>'
       +'<a href="https://www.rightmove.co.uk/house-prices/'+encodeURIComponent(s.postcode)+'.html" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Sold prices</a>'
-      +'<button onclick="queueStreetLetters('+i+',this)" style="flex-shrink:0;padding:6px 13px;background:'+(done?'var(--slate2)':'var(--blue)')+';color:'+(done?'var(--muted)':'#fff')+';border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📬 Letter the street</button>'
+      +'<button onclick="queueStreetLetters('+i+',this)" style="flex-shrink:0;padding:6px 13px;background:'+(done?'var(--slate2)':'var(--blue)')+';color:'+(done?'var(--muted)':'#fff')+';border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter the street</button>'
     +'</div>';
   }).join('');
 }
@@ -1795,9 +1795,9 @@ async function queueStreetLetters(i, btn){
     if(typeof updQStats==='function') updQStats();
     if(typeof updateKPIs==='function') updateKPIs();
     renderSold();
-    toast(n ? ('📬 Queued '+n+' "sold in your street" letters near '+s.street) : 'No neighbour addresses found for that street', n?'ok':'warn');
+    toast(n ? ('<i class=ic-mailbox></i> Queued '+n+' "sold in your street" letters near '+s.street) : 'No neighbour addresses found for that street', n?'ok':'warn');
   }catch(e){ toast('Could not fetch neighbours: '+e.message,'warn'); }
-  if(btn){ btn.disabled=false; btn.textContent='📬 Letter the street'; }
+  if(btn){ btn.disabled=false; btn.textContent='<i class=ic-mailbox></i> Letter the street'; }
 }
 
 // ── Campaign Tracker (CRM-lite, stored in this browser) ──
@@ -1832,7 +1832,7 @@ function categoryOf(prop){
   if(st.includes('let')||st.includes('rent')) return 'rent';
   return 'sale';
 }
-const AUTO_CATS=[['sale','🏠 Sales (For Sale)'],['rent','🔑 Rentals (To Let)'],['sold','🏆 Sold-in-street'],['premarket','📡 Pre-market']];
+const AUTO_CATS=[['sale','<i class=ic-home></i> Sales (For Sale)'],['rent','<i class=ic-key></i> Rentals (To Let)'],['sold','<i class=ic-trophy></i> Sold-in-street'],['premarket','<i class=ic-radio></i> Pre-market']];
 function renderAutoAssign(){
   const box=document.getElementById('auto-assign'); if(!box) return;
   box.innerHTML=AUTO_CATS.map(([cat,label])=>{
@@ -1884,7 +1884,7 @@ function renderGroups(){
         +'<span style="font-size:10px;color:var(--muted)">'+g.steps.length+' letters · up to day '+Math.max.apply(null,g.steps.map(s=>s.day))+'</span>'
         +(isDef?'<span class="tag tag-blue">default</span>':'<button class="btn bs sm-btn" style="font-size:10px;padding:3px 8px" onclick="setDefaultGroup(\''+g.id+'\')">Make default</button>')
         +'<div style="flex:1"></div>'
-        +'<button class="bic" title="Delete cycle" onclick="deleteGroup(\''+g.id+'\')">🗑</button>'
+        +'<button class="bic" title="Delete cycle" onclick="deleteGroup(\''+g.id+'\')"><i class=ic-trash></i></button>'
       +'</div>'+steps
       +'<button class="btn bs sm-btn" style="margin-top:4px" onclick="groupAddStep(\''+g.id+'\')">+ Add letter</button>'
     +'</div>';
@@ -1925,7 +1925,7 @@ function runDueSequences(silent){
     if(typeof updQStats==='function') updQStats();
     if(typeof updateKPIs==='function') updateKPIs();
     updateCampBadges();
-    if(!silent) toast('📬 Queued '+queued+' scheduled cycle letter'+(queued>1?'s':''),'ok');
+    if(!silent) toast('<i class=ic-mailbox></i> Queued '+queued+' scheduled cycle letter'+(queued>1?'s':''),'ok');
   }
   updateAutomationUI();
   return queued;
@@ -1957,7 +1957,7 @@ function renderSchedule(){
   box.innerHTML=Object.keys(byDate).sort().map(date=>{
     const d=new Date(date); const label=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
     const overdue=d.getTime()<=Date.now();
-    return '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:'+(overdue?'var(--amber)':'var(--text)')+';margin-bottom:7px;display:flex;align-items:center;gap:8px">📅 '+label+(overdue?' <span class="tag tag-gold">due now</span>':'')+'</div>'
+    return '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:'+(overdue?'var(--amber)':'var(--text)')+';margin-bottom:7px;display:flex;align-items:center;gap:8px"><i class=ic-calendar></i> '+label+(overdue?' <span class="tag tag-gold">due now</span>':'')+'</div>'
       + byDate[date].map(it=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--border)">'
           +'<span class="tag tag-blue" style="font-family:monospace;font-weight:700">'+(it.ref||'—')+'</span>'
           +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">'+it.address+'</div>'
@@ -1998,11 +1998,11 @@ function showLoginDueNotice(){
   ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
   const detail = due ? (due+' from your letter cycles'+(pending?' + '+pending+' waiting in the queue':'')) : (pending+' waiting in the print queue');
   ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:430px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);padding:24px;text-align:center">'
-    +'<div style="font-size:34px;margin-bottom:8px">📬</div>'
+    +'<div style="font-size:34px;margin-bottom:8px"><i class=ic-mailbox></i></div>'
     +'<div style="font-size:18px;font-weight:700;color:var(--text)">'+total+' letter'+(total>1?'s':'')+' due today</div>'
     +'<div style="font-size:13px;color:var(--muted);margin:8px 0 18px;line-height:1.5">'+detail+'. Queue and print them now?</div>'
     +'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
-      +'<button class="btn bp" onclick="loginQueuePrint()">📬 Queue &amp; print</button>'
+      +'<button class="btn bp" onclick="loginQueuePrint()"><i class=ic-mailbox></i> Queue &amp; print</button>'
       +'<button class="btn bs" onclick="loginReview()">Review in queue</button>'
       +'<button class="btn bghost sm-btn" onclick="document.getElementById(\'login-notice\').remove()">Later</button>'
     +'</div></div>';
@@ -2046,14 +2046,14 @@ async function connectPrintNode(){
   try{
     const r=await fetch('/api/printnode?action=printers',{headers:{'x-printnode-key':key}});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--amber)">⚠ '+(d.error||('HTTP '+r.status))+'</span>'; return; }
+    if(!r.ok){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('HTTP '+r.status))+'</span>'; return; }
     const pn=getPrintNode(); pn.key=key; savePrintNode(pn);
     const printers=d.printers||[];
     if(!printers.length){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--muted)">No printers found. Make sure the PrintNode client is running on your PC and the printer is on.</span>'; return; }
     if(box) box.innerHTML='<div class="fg" style="max-width:380px"><label>Choose printer</label><select id="pn-printer" onchange="selectPrinter()">'
       +'<option value="">— select —</option>'+printers.map(p=>'<option value="'+p.id+'" data-name="'+(p.name||'').replace(/"/g,'&quot;')+'"'+(pn.printerId==p.id?' selected':'')+'>'+p.name+(p.computer?' ('+p.computer+')':'')+'</option>').join('')+'</select></div>';
     toast('PrintNode connected — pick your printer','ok');
-  }catch(e){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--amber)">⚠ '+e.message+'</span>'; }
+  }catch(e){ if(box) box.innerHTML='<span style="font-size:12px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</span>'; }
 }
 function selectPrinter(){
   const sel=document.getElementById('pn-printer'); if(!sel||!sel.value) return;
@@ -2062,7 +2062,7 @@ function selectPrinter(){
 }
 function disconnectPrintNode(){ savePrintNode({}); renderPrintNodeUI(); toast('PrintNode disconnected','warn'); }
 async function testPrintNode(){
-  const sent=await printViaPrintNode(['PropMail Pro test letter\n\nIf you can read this on paper, cloud printing is working. 🎉\n\n'+new Date().toLocaleString('en-GB')],'PropMail test');
+  const sent=await printViaPrintNode(['PropMail Pro test letter\n\nIf you can read this on paper, cloud printing is working. <i class=ic-party></i>\n\n'+new Date().toLocaleString('en-GB')],'PropMail test');
   if(sent) toast('Test page sent to your printer','ok');
 }
 async function printViaPrintNode(letters, title){
@@ -2101,7 +2101,7 @@ async function printAllDue(){
     const letters=pend.map(i=>buildLetter(queue[i].tpl?.body||'', queue[i].prop||{}));
     const ok=await printViaPrintNode(letters, 'PropMail – '+letters.length+' letters');
     if(ok){ pend.forEach(i=>queue[i].status='done'); renderQueue(); if(typeof updQStats==='function') updQStats();
-      toast('🖨 Sent '+pend.length+' letter'+(pend.length>1?'s':'')+' to '+(getPrintNode().printerName||'your printer'),'ok'); return pend.length; }
+      toast('<i class=ic-printer></i> Sent '+pend.length+' letter'+(pend.length>1?'s':'')+' to '+(getPrintNode().printerName||'your printer'),'ok'); return pend.length; }
     // fall through to browser print if PrintNode failed
   }
   const pa=document.getElementById('pa'); if(!pa) return 0;
@@ -2110,7 +2110,7 @@ async function printAllDue(){
   pa.style.display='block'; window.print(); pa.style.display='none';
   pend.forEach(i=>{ queue[i].status='done'; });
   renderQueue(); if(typeof updQStats==='function') updQStats();
-  toast('🖨 Printed '+pend.length+' letter'+(pend.length>1?'s':''),'ok');
+  toast('<i class=ic-printer></i> Printed '+pend.length+' letter'+(pend.length>1?'s':''),'ok');
   return pend.length;
 }
 // On a scheduled day/time (while the app is open), gather due letters and offer a one-tap print run.
@@ -2135,11 +2135,11 @@ function showPrintRunModal(n){
   const ov=document.createElement('div'); ov.id='printrun-modal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
   ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);padding:22px 24px;text-align:center">'
-    +'<div style="font-size:34px;margin-bottom:8px">🖨️</div>'
+    +'<div style="font-size:34px;margin-bottom:8px"><i class=ic-printer></i>️</div>'
     +'<div style="font-size:17px;font-weight:700;color:var(--text)">Scheduled print run</div>'
     +'<div style="font-size:13px;color:var(--muted);margin:8px 0 18px;line-height:1.5"><strong style="color:var(--text)">'+n+'</strong> letter'+(n>1?'s are':' is')+' due to go out today. Print them all now?</div>'
     +'<div style="display:flex;gap:8px;justify-content:center">'
-      +'<button class="btn bp" onclick="document.getElementById(\'printrun-modal\').remove();printAllDue()">🖨 Print all now</button>'
+      +'<button class="btn bp" onclick="document.getElementById(\'printrun-modal\').remove();printAllDue()"><i class=ic-printer></i> Print all now</button>'
       +'<button class="btn bs" onclick="document.getElementById(\'printrun-modal\').remove()">Later</button>'
     +'</div></div>';
   ov.onclick=(e)=>{ if(e.target===ov) ov.remove(); };
@@ -2232,7 +2232,7 @@ function showCycleModal(prop){
   ov.onclick=(e)=>{ if(e.target===ov) cycleClose(); };
   const gopts=groups.map(g=>'<option value="'+g.id+'"'+(g.id===automation.defaultGroupId?' selected':'')+'>'+g.name+' ('+g.steps.length+' letters)</option>').join('');
   ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:480px;width:100%;box-shadow:0 20px 54px rgba(16,24,40,.28);overflow:hidden">'
-    +'<div style="padding:20px 22px;border-bottom:1px solid var(--border)"><div style="font-size:17px;font-weight:700;color:var(--text)">⏱️ Automated letter cycle</div>'
+    +'<div style="padding:20px 22px;border-bottom:1px solid var(--border)"><div style="font-size:17px;font-weight:700;color:var(--text)"><i class=ic-clock></i>️ Automated letter cycle</div>'
     +'<div style="font-size:13px;color:var(--muted);margin-top:5px;line-height:1.5">You just printed a letter for <strong style="color:var(--text)">'+addr.split(',')[0]+'</strong>. Put it on one of your letter cycles?</div></div>'
     +'<div style="padding:18px 22px">'
       +'<label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Letter cycle</label>'
@@ -2344,7 +2344,7 @@ function renderPage(){
     acts.style.cssText='display:flex;gap:7px;align-items:center';
     acts.innerHTML='<button class="btn bs sm-btn" onclick="selectAllProps()">Select All</button>'
       +'<button class="btn bs sm-btn" onclick="selectNoneProps()">None</button>'
-      +'<button class="btn bp sm-btn" onclick="queueSelected()">🖨 Queue Selected</button>';
+      +'<button class="btn bp sm-btn" onclick="queueSelected()"><i class=ic-printer></i> Queue Selected</button>';
     hdr.appendChild(acts);
     list.appendChild(hdr);
   }
@@ -2379,16 +2379,16 @@ function renderPage(){
           // Tags
           +'<div class="lpc-tags">'
             +'<span class="ptag">'+p.type+'</span>'
-            +'<span class="ptag">🛏 '+bedsLabel+'</span>'
+            +'<span class="ptag"><i class=ic-bed></i> '+bedsLabel+'</span>'
             +'<span class="ptag" style="background:'+statusBg+';color:'+accentClr+';font-weight:700">'+priceDisplay+'</span>'
             +(p.status==='For Sale'?'<span class="ptag" style="background:rgba(0,79,154,.08);color:#004F9A">'+p.status+'</span>':'<span class="ptag" style="background:rgba(5,150,105,.08);color:#059669">'+p.status+'</span>')
-            +(p.isNew?'<span class="ptag" style="background:rgba(201,146,26,.12);color:var(--gold)">✨ New</span>':'')
+            +(p.isNew?'<span class="ptag" style="background:rgba(201,146,26,.12);color:var(--gold)"><i class=ic-sparkles></i> New</span>':'')
           +'</div>'
           // ── PORTAL LINKS ──
           +'<div class="lpc-links">'
             // PRIMARY: Direct Rightmove listing link
             +'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lpc-rm-btn">'
-              +(isRealListing?'🏠 View Real Listing on Rightmove →':'🏠 Search on Rightmove →')
+              +(isRealListing?'<i class=ic-home></i> View Real Listing on Rightmove →':'<i class=ic-home></i> Search on Rightmove →')
             +'</a>'
             // All in area
             +'<a href="'+p.rmAreaUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lpc-sec-btn" style="color:#004F9A;border-color:rgba(0,79,154,.25);background:rgba(0,79,154,.06)">All '+p.haCode+'</a>'
@@ -2402,13 +2402,13 @@ function renderPage(){
         +'</div>'
         // Action buttons
         +'<div class="prop-actions" style="flex-direction:column;gap:5px">'
-          +'<button class="bic" onclick="event.stopPropagation();prevForProp('+i+')" title="Preview letter">👁</button>'
-          +'<button class="bic" onclick="event.stopPropagation();queueOne('+i+')" title="Queue letter" style="background:var(--blue);color:#fff">🖨</button>'
+          +'<button class="bic" onclick="event.stopPropagation();prevForProp('+i+')" title="Preview letter"><i class=ic-eye></i></button>'
+          +'<button class="bic" onclick="event.stopPropagation();queueOne('+i+')" title="Queue letter" style="background:var(--blue);color:#fff"><i class=ic-printer></i></button>'
         +'</div>'
       +'</div>'
       // FOOTER — letter address confirmation
       +'<div class="lpc-footer">'
-        +'<div class="lpc-footer-addr">📬 Letter address: <strong>'+(p.displayAddress||p.address)+'</strong>'+(p.postcode?' · '+p.postcode:'')+'</div>'
+        +'<div class="lpc-footer-addr"><i class=ic-mailbox></i> Letter address: <strong>'+(p.displayAddress||p.address)+'</strong>'+(p.postcode?' · '+p.postcode:'')+'</div>'
         +'<div style="display:flex;gap:6px">'
           +'<button class="btn bs sm-btn" style="font-size:10px;padding:4px 9px" onclick="event.stopPropagation();prevForProp('+i+')">Preview Letter</button>'
           +'<button class="btn bp sm-btn" style="font-size:10px;padding:4px 9px" onclick="event.stopPropagation();queueOne('+i+')">Queue</button>'
@@ -2450,11 +2450,11 @@ function queueSelected(){
 function renderQueue(){
   const list=document.getElementById('qlist'); if(!list) return;
   if(!queue.length){
-    list.innerHTML='<div class="es"><div class="ei">📭</div><div class="et">Queue is empty</div><div style="font-size:12px">Search for properties or start the Live Bot to find real listings automatically</div></div>';
+    list.innerHTML='<div class="es"><div class="ei"><i class=ic-mail></i></div><div class="et">Queue is empty</div><div style="font-size:12px">Search for properties or start the Live Bot to find real listings automatically</div></div>';
     return;
   }
   list.innerHTML='';
-  const icons={pend:'⏳',prnt:'⚡',done:'✅',fail:'❌'};
+  const icons={pend:'<i class=ic-hourglass></i>',prnt:'<i class=ic-zap></i>',done:'<i class=ic-check></i>',fail:'<i class=ic-x></i>'};
   queue.forEach((item,i)=>{
     const p=item.prop;
     const addr=(p.displayAddress||p.address||'Address not set');
@@ -2464,7 +2464,7 @@ function renderQueue(){
     d.className='qi';
     d.innerHTML=
       // Status icon
-      '<div class="qist '+item.status+'">'+(item.auto&&item.status==='pend'?'🤖':(icons[item.status]||'⏳'))+'</div>'
+      '<div class="qist '+item.status+'">'+(item.auto&&item.status==='pend'?'<i class=ic-bot></i>':(icons[item.status]||'<i class=ic-hourglass></i>'))+'</div>'
       // Info block
       +'<div class="q-info" style="flex:1;min-width:0">'
         // Address — letter delivery target
@@ -2473,17 +2473,17 @@ function renderQueue(){
           +addr
         +'</div>'
         // Postcode on its own line
-        +(pc?'<div style="font-size:11px;font-weight:700;color:var(--blue);margin:2px 0">📮 '+pc+'</div>':'')
+        +(pc?'<div style="font-size:11px;font-weight:700;color:var(--blue);margin:2px 0"><i class=ic-send></i> '+pc+'</div>':'')
         // Meta line
-        +'<div class="q-meta">'+item.tpl.name+' · '+(p.portal||'Rightmove')+' · '+item.at.toLocaleTimeString()+(item.auto?' · 🤖 Live Bot':'')+(p.agent?' · '+p.agent:'')+'</div>'
+        +'<div class="q-meta">'+item.tpl.name+' · '+(p.portal||'Rightmove')+' · '+item.at.toLocaleTimeString()+(item.auto?' · <i class=ic-bot></i> Live Bot':'')+(p.agent?' · '+p.agent:'')+'</div>'
         // Rightmove verify link — only for real listings
         +(isLive&&p.rmUrl
-          ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:10px;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px">🔗 Verify real listing on Rightmove →</a>'
+          ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:10px;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:3px;margin-top:3px"><i class=ic-link></i> Verify real listing on Rightmove →</a>'
           :'')
       +'</div>'
       // Print/remove actions
       +'<div class="fr" style="gap:5px;flex-shrink:0">'
-        +(item.status==='pend'?'<button class="btn bp sm-btn" onclick="printItem('+i+')">🖨 Print</button>':'')
+        +(item.status==='pend'?'<button class="btn bp sm-btn" onclick="printItem('+i+')"><i class=ic-printer></i> Print</button>':'')
         +(item.status==='done'?'<button class="btn bs sm-btn" onclick="reprintItem('+i+')">Reprint</button>':'')
         +'<button class="bic" onclick="rmQItem('+i+')" title="Remove">✕</button>'
       +'</div>';
@@ -2494,11 +2494,11 @@ function renderQueue(){
 
 function renderPrinters(){
   const list = document.getElementById('plist'); if (!list) return;
-  if (!disc.length) { list.innerHTML = '<div class="es" style="padding:24px"><div class="ei">🖨</div><div class="et">No printers found</div><div style="font-size:12px">Scan network or add manually</div></div>'; return; }
+  if (!disc.length) { list.innerHTML = '<div class="es" style="padding:24px"><div class="ei"><i class=ic-printer></i></div><div class="et">No printers found</div><div style="font-size:12px">Scan network or add manually</div></div>'; return; }
   list.innerHTML = '';
   disc.forEach(p => {
     const d = document.createElement('div'); d.className = 'pr' + (selPrinter?.id === p.id ? ' sel' : ''); d.onclick = () => selP(p, d);
-    d.innerHTML = '<div style="width:40px;height:40px;background:var(--slate);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🖨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">' + p.name + '</div><div style="font-size:11px;color:var(--muted)">' + p.ip + ' · ' + p.protocol + ' · ' + p.model + '</div></div><span class="pbdg ' + (p.status === 'online' ? 'on' : 'off') + '">' + (p.status === 'online' ? 'Online' : 'Offline') + '</span>';
+    d.innerHTML = '<div style="width:40px;height:40px;background:var(--slate);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0"><i class=ic-printer></i></div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">' + p.name + '</div><div style="font-size:11px;color:var(--muted)">' + p.ip + ' · ' + p.protocol + ' · ' + p.model + '</div></div><span class="pbdg ' + (p.status === 'online' ? 'on' : 'off') + '">' + (p.status === 'online' ? 'Online' : 'Offline') + '</span>';
     list.appendChild(d);
   });
 }
@@ -2515,14 +2515,14 @@ function updateBotUI(){
   const chip = document.getElementById('bchip'), btn = document.getElementById('bot-toggle');
   const hdrChip = document.getElementById('hdr-chip-bot'), navDot = document.getElementById('botnav');
   if (botOn) {
-    if (chip) { chip.className = 'bchip run'; chip.textContent = '▶ Bot Running'; }
-    if (btn)  { btn.className = 'btn br';    btn.textContent  = '⏹ Stop Bot'; }
+    if (chip) { chip.className = 'bchip run'; chip.textContent = '<i class=ic-play></i> Bot Running'; }
+    if (btn)  { btn.className = 'btn br';    btn.textContent  = '<i class=ic-stop></i> Stop Bot'; }
     if (hdrChip) hdrChip.style.display = 'flex';
     const hbt = document.getElementById('hdr-bot-txt'); if (hbt) hbt.textContent = 'Bot: ' + selectedHA.size + ' areas';
     if (navDot) navDot.style.display = 'inline-flex';
   } else {
-    if (chip) { chip.className = 'bchip stop'; chip.textContent = '⏸ Bot Stopped'; }
-    if (btn)  { btn.className = 'btn bg';     btn.textContent  = '▶ Start Bot'; }
+    if (chip) { chip.className = 'bchip stop'; chip.textContent = '<i class=ic-pause></i> Bot Stopped'; }
+    if (btn)  { btn.className = 'btn bg';     btn.textContent  = '<i class=ic-play></i> Start Bot'; }
     if (hdrChip) hdrChip.style.display = 'none'; if (navDot) navDot.style.display = 'none';
   }
 }
@@ -2552,7 +2552,7 @@ function renderLetterChoices(){
   const container = document.getElementById('letter-choices'); if (!container) return;
   const all = [...SUCCESS_LETTERS, ...templates, ...uploadedTpls]; container.innerHTML = '';
   all.forEach((lt, i) => {
-    const isSL = SUCCESS_LETTERS.find(s => s.id === lt.id); const colour = isSL?.colour || '#2563EB'; const icon = isSL?.icon || '📝';
+    const isSL = SUCCESS_LETTERS.find(s => s.id === lt.id); const colour = isSL?.colour || '#2563EB'; const icon = isSL?.icon || '<i class=ic-file></i>';
     const d = document.createElement('div'); d.className = 'letter-choice' + (i === 0 ? ' sel' : ''); d.id = 'lc-' + lt.id; d.onclick = () => selectLetter(lt);
     d.innerHTML = '<div class="letter-choice-icon" style="background:' + colour + '18;color:' + colour + '">' + icon + '</div><div><div style="font-size:13px;font-weight:600;color:var(--text)">' + lt.name + '</div><div style="font-size:11px;color:var(--muted);margin-top:1px">' + (lt.desc || '') + '</div></div>';
     container.appendChild(d);
@@ -2566,7 +2566,7 @@ function renderAddrGrid(){
   slFiltered.slice(start, start + SL_PG).forEach(a => {
     const i = a.idx; const d = document.createElement('div');
     d.className = 'addr-card' + (slSelected.has(i) ? ' sel' : ''); d.id = 'ac-' + i;
-    d.innerHTML = '<div class="pck' + (slSelected.has(i) ? ' on' : '') + '" id="apk-' + i + '" onclick="event.stopPropagation();toggleAddr(' + i + ')"></div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">' + a.line1 + '</div>' + (a.line2 ? '<div style="font-size:12px;color:var(--text2)">' + a.line2 + '</div>' : '') + '<div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px">' + a.area + ' · <strong>' + a.postcode + '</strong><span class="tag ' + (a.type === 'Residential' ? 'tag-green' : 'tag-blue') + '" style="font-size:9px">' + a.type + '</span></div></div><button class="addr-block-btn" title="Block — never send letters here" onclick="event.stopPropagation();blockFromGrid(' + i + ')">🚫</button>';
+    d.innerHTML = '<div class="pck' + (slSelected.has(i) ? ' on' : '') + '" id="apk-' + i + '" onclick="event.stopPropagation();toggleAddr(' + i + ')"></div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">' + a.line1 + '</div>' + (a.line2 ? '<div style="font-size:12px;color:var(--text2)">' + a.line2 + '</div>' : '') + '<div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px">' + a.area + ' · <strong>' + a.postcode + '</strong><span class="tag ' + (a.type === 'Residential' ? 'tag-green' : 'tag-blue') + '" style="font-size:9px">' + a.type + '</span></div></div><button class="addr-block-btn" title="Block — never send letters here" onclick="event.stopPropagation();blockFromGrid(' + i + ')"><i class=ic-ban></i></button>';
     d.onclick = () => toggleAddr(i); grid.appendChild(d);
   });
   renderAddrPag('addr-pag');
@@ -2576,27 +2576,27 @@ function renderIntelResult(result, container){
   const a = result.address, o = result.owner;
   const cp = Math.round((o.overallConfidence || 0.5) * 100); const cc = cp >= 70 ? 'high' : cp >= 45 ? 'med' : 'low';
   container.innerHTML = '<div class="intel-card"><div class="intel-card-head">'
-    + '<div style="width:38px;height:38px;background:var(--blue);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏠</div>'
+    + '<div style="width:38px;height:38px;background:var(--blue);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><i class=ic-home></i></div>'
     + '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">' + a.fullAddress + '</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + (a.propertyType || '') + ' · ' + (a.estimatedPrice || '') + ' · ' + (a.district || '') + '</div>'
     + '<div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span style="font-size:10px;color:var(--muted)">Confidence:</span>'
     + '<div class="conf-bar"><div class="conf-fill cf-' + cc + '" style="width:' + cp + '%"></div></div>'
     + '<span class="conf-badge cb-' + cc + '">' + cp + '%</span></div></div>'
-    + '<button class="btn bp sm-btn" onclick="queueIntelLetter(\'' + result.id + '\')">🖨 Queue Letter</button></div>'
+    + '<button class="btn bp sm-btn" onclick="queueIntelLetter(\'' + result.id + '\')"><i class=ic-printer></i> Queue Letter</button></div>'
     + '<div class="intel-card-body">'
     + '<div style="padding:12px;background:var(--slate);border-radius:var(--r2);margin-bottom:12px">'
-    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px">📍 ' + a.fullAddress + '</div>'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px"><i class=ic-pin2></i> ' + a.fullAddress + '</div>'
     + '<div style="font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px">'
     + '<span><strong>Postcode:</strong> ' + (a.postcode || '—') + '</span>'
     + '<span><strong>Type:</strong> ' + (a.propertyType || '—') + '</span>'
     + '<span><strong>Value:</strong> ' + (a.estimatedPrice || '—') + '</span></div></div>'
     + (o.ownerName ? '<div style="padding:12px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);margin-bottom:12px">'
-    + '<div style="font-size:13px;font-weight:700;margin-bottom:4px">👤 ' + o.ownerName + '</div>'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:4px"><i class=ic-user></i> ' + o.ownerName + '</div>'
     + '<div style="font-size:11px;color:var(--muted)">' + (o.ownerType || '') + ' · Land Reg: ' + (o.landRegTitle || '—') + ' · Purchased: ' + (o.purchaseDate || '—') + ' · Band ' + (o.councilTaxBand || '—') + '</div>'
-    + (o.estimatedEmail || o.phoneFormat ? '<div style="margin-top:8px;padding:7px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;font-size:10px;color:#92400E">⚠️ Illustrative format only: ' + (o.estimatedEmail || '') + (o.phoneFormat ? ' / ' + o.phoneFormat : '') + '</div>' : '') + '</div>' : '')
+    + (o.estimatedEmail || o.phoneFormat ? '<div style="margin-top:8px;padding:7px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;font-size:10px;color:#92400E"><i class=ic-alert></i>️ Illustrative format only: ' + (o.estimatedEmail || '') + (o.phoneFormat ? ' / ' + o.phoneFormat : '') + '</div>' : '') + '</div>' : '')
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'
-    + (result.govLinks || []).map(l => '<a href="' + l.url + '" target="_blank" rel="noopener" class="gov-link"><div style="flex:1"><div class="gov-link-title">' + l.label + '</div><div class="gov-link-desc">' + l.desc + '</div></div><span style="color:var(--blue);font-size:10px">↗</span></a>').join('')
-    + '</div><div style="margin-top:8px;padding:7px;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.12);border-radius:6px;font-size:10px;color:var(--red)">⚠️ Owner data is AI-generated for illustration. Use Land Registry (£3) or Companies House (free) for confirmed data. Comply with UK GDPR.</div></div></div>';
+    + (result.govLinks || []).map(l => '<a href="' + l.url + '" target="_blank" rel="noopener" class="gov-link"><div style="flex:1"><div class="gov-link-title">' + l.label + '</div><div class="gov-link-desc">' + l.desc + '</div></div><span style="color:var(--blue);font-size:10px"><i class=ic-arrowupright></i></span></a>').join('')
+    + '</div><div style="margin-top:8px;padding:7px;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.12);border-radius:6px;font-size:10px;color:var(--red)"><i class=ic-alert></i>️ Owner data is AI-generated for illustration. Use Land Registry (£3) or Companies House (free) for confirmed data. Comply with UK GDPR.</div></div></div>';
 }
 
 /* ── RE-INIT ── */
@@ -2608,7 +2608,7 @@ function renderIntelResult(result, container){
     renderPrinters();
     updateBotUI();
     startRTFeed();
-    blog('PropMail Pro ready — click 🔍 Find Live Properties to start.', 'inf');
+    blog('PropMail Pro ready — click <i class=ic-search></i> Find Live Properties to start.', 'inf');
     loadBlocklist();
     setTimeout(() => {
       try {
@@ -2621,7 +2621,7 @@ function renderIntelResult(result, container){
     console.error('PropMail init error:', e);
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:16px;background:#EF4444;color:#fff;font-family:monospace;font-size:13px;z-index:99999;cursor:pointer';
-    errDiv.innerHTML = '⚠️ PropMail startup error: ' + e.message + ' (line ~' + (e.stack||'').split('\n')[1] + ') — click to dismiss';
+    errDiv.innerHTML = '<i class=ic-alert></i>️ PropMail startup error: ' + e.message + ' (line ~' + (e.stack||'').split('\n')[1] + ') — click to dismiss';
     errDiv.onclick = () => errDiv.remove();
     if(document.body) document.body.appendChild(errDiv);
   }
@@ -2639,7 +2639,7 @@ const IMPROVEMENTS = [
     id: 'personalisation',
     title: 'Hyper-Personalisation Engine',
     headline: 'Replace generic salutations with owner names from Land Registry, property-specific data (exact sale price, years owned, local comparables), and neighbourhood context. Letters addressed to "Mr James Smith" achieve 3× the response rate of "Dear Homeowner".',
-    icon: '🎯',
+    icon: '<i class=ic-target></i>',
     iconBg: 'rgba(37,99,235,.12)',
     iconColor: '#2563EB',
     priority: 'critical',
@@ -2664,7 +2664,7 @@ const IMPROVEMENTS = [
     id: 'timing',
     title: 'Intelligent Timing & Trigger Engine',
     headline: 'Send letters at statistically optimal moments: within 72 hours of a new listing (before competitors), at the 6-week "stale listing" mark, on price reduction days, and when comparable properties sell nearby. Timing alone accounts for a 1.8% response rate uplift.',
-    icon: '⏰',
+    icon: '<i class=ic-clock></i>',
     iconBg: 'rgba(217,119,6,.12)',
     iconColor: '#D97706',
     priority: 'critical',
@@ -2689,7 +2689,7 @@ const IMPROVEMENTS = [
     id: 'followup',
     title: '3-Touch Follow-Up Sequence',
     headline: 'A single letter is forgotten. A coordinated sequence — letter 1 at listing, letter 2 at 3 weeks, letter 3 at 6 weeks with a specific offer — converts 4.2× better than a one-shot campaign. The second and third letters cost almost nothing additional.',
-    icon: '🔄',
+    icon: '<i class=ic-refresh></i>',
     iconBg: 'rgba(5,150,105,.12)',
     iconColor: '#059669',
     priority: 'critical',
@@ -2714,7 +2714,7 @@ const IMPROVEMENTS = [
     id: 'qrcode',
     title: 'QR Code Response Tracking',
     headline: 'Every letter should include a personalised QR code linking to a property-specific landing page with a pre-filled valuation form. This reduces friction from calling to scanning, captures response data, and tells you which letter, area, and template is working.',
-    icon: '📱',
+    icon: '<i class=ic-phonemob></i>',
     iconBg: 'rgba(124,58,237,.12)',
     iconColor: '#7C3AED',
     priority: 'high',
@@ -2739,7 +2739,7 @@ const IMPROVEMENTS = [
     id: 'premium-print',
     title: 'Premium Print Quality & Envelope Design',
     headline: 'Letters printed on 120gsm headed paper with a matching branded envelope achieve 34% higher open rates than plain A4. The physical quality of the letter signals the quality of the agent. A first-class stamp vs franking machine adds credibility and open rate.',
-    icon: '✉️',
+    icon: '<i class=ic-mail></i>️',
     iconBg: 'rgba(201,146,26,.12)',
     iconColor: '#C9921A',
     priority: 'high',
@@ -2764,7 +2764,7 @@ const IMPROVEMENTS = [
     id: 'social-proof',
     title: 'Local Social Proof & Recent Sold Data',
     headline: '"We recently sold 14 Elm Road, 0.2 miles from your home, for £485,000 — 6% above asking price in 18 days." This single sentence, when verifiable and hyperlocal, is the single highest-converting addition to any estate agent letter.',
-    icon: '⭐',
+    icon: '<i class=ic-star></i>',
     iconBg: 'rgba(5,150,105,.12)',
     iconColor: '#059669',
     priority: 'high',
@@ -2789,7 +2789,7 @@ const IMPROVEMENTS = [
     id: 'segmentation',
     title: 'Advanced Audience Segmentation',
     headline: 'Sending the same letter to a first-time buyer flat in HA1 and a 5-bedroom detached in HA6 is waste. Segment by property type, estimated equity, years owned, portfolio landlords vs owner-occupiers, and recent life events. Relevant letters get 4× the response.',
-    icon: '🗂',
+    icon: '<i class=ic-folder></i>',
     iconBg: 'rgba(37,99,235,.12)',
     iconColor: '#2563EB',
     priority: 'high',
@@ -2814,7 +2814,7 @@ const IMPROVEMENTS = [
     id: 'ab-testing',
     title: 'A/B Split Testing Framework',
     headline: 'Most estate agents send every letter the same way forever. A rigorous A/B testing programme — testing headline, offer, CTA, paper colour, agent photo vs no photo — compounds over time. Each test result permanently improves every future campaign.',
-    icon: '🧪',
+    icon: '<i class=ic-flask></i>',
     iconBg: 'rgba(124,58,237,.12)',
     iconColor: '#7C3AED',
     priority: 'medium',
@@ -2839,7 +2839,7 @@ const IMPROVEMENTS = [
     id: 'crm-integration',
     title: 'CRM Integration & Lead Scoring',
     headline: 'Every letter sent should create a lead record in the CRM. Every response should auto-score based on property value, motivation signals, and engagement. High-score leads get a same-day call. This closes the loop that currently loses 70% of responses.',
-    icon: '🔗',
+    icon: '<i class=ic-link></i>',
     iconBg: 'rgba(37,99,235,.12)',
     iconColor: '#2563EB',
     priority: 'medium',
@@ -2864,7 +2864,7 @@ const IMPROVEMENTS = [
     id: 'neighbourhood-data',
     title: 'Neighbourhood Market Intelligence Reports',
     headline: 'Instead of a letter, send a one-page personalised "Your Area Market Report" with local sold prices, average days to sell, supply vs demand score, and a valuation estimate range. This is an irresistible offer — not a sales letter. Response rates of 7–12% are documented.',
-    icon: '📊',
+    icon: '<i class=ic-chart></i>',
     iconBg: 'rgba(5,150,105,.12)',
     iconColor: '#059669',
     priority: 'medium',
@@ -2889,7 +2889,7 @@ const IMPROVEMENTS = [
     id: 'landlord-targeting',
     title: 'Landlord & Investor Portfolio Targeting',
     headline: 'Landlords owning 2+ properties are the highest-value targets in the HA area. A single landlord instruction can mean 3–6 properties managed or sold. Companies House and Land Registry data can identify portfolio owners. One landlord letter campaign = £30,000–£80,000 in fees.',
-    icon: '🏢',
+    icon: '<i class=ic-building></i>',
     iconBg: 'rgba(201,146,26,.12)',
     iconColor: '#C9921A',
     priority: 'high',
@@ -2914,7 +2914,7 @@ const IMPROVEMENTS = [
     id: 'urgent-seller',
     title: 'Motivated Seller Identification',
     headline: 'Properties listed for 90+ days, price reduced 3+ times, or with "must sell" language are highly motivated sellers who are most likely to switch agents. These are the highest-conversion targets — a letter to 200 motivated sellers beats 2,000 random letters.',
-    icon: '🚨',
+    icon: '<i class=ic-alert></i>',
     iconBg: 'rgba(220,38,38,.12)',
     iconColor: '#DC2626',
     priority: 'high',
@@ -3004,7 +3004,7 @@ function renderImprovements(filter) {
     d.id = 'imp-' + imp.id;
     const effortCls = `effort-${imp.effort}`;
     const priorityCls = `pb-${imp.priority}`;
-    const priLabel = {critical:'🔴 Critical', high:'🟠 High Impact', medium:'🔵 Medium', low:'🟢 Low'}[imp.priority] || imp.priority;
+    const priLabel = {critical:'<i class=dot-ef4444></i> Critical', high:'<i class=dot-f59e0b></i> High Impact', medium:'<i class=dot-3b82f6></i> Medium', low:'<i class=dot-22c55e></i> Low'}[imp.priority] || imp.priority;
     d.innerHTML = `
       <div style="display:flex">
         <div class="imp-priority imp-p-${imp.priority}"></div>
@@ -3016,7 +3016,7 @@ function renderImprovements(filter) {
               <div class="imp-headline">${imp.headline}</div>
               <div class="imp-tags">
                 <span class="priority-badge ${priorityCls}">${priLabel}</span>
-                <span class="roi-pill">💰 +£${(imp.annualRevenue/1000).toFixed(0)}k/yr</span>
+                <span class="roi-pill"><i class=ic-pound></i> +£${(imp.annualRevenue/1000).toFixed(0)}k/yr</span>
                 <span class="effort-pill ${effortCls}">Effort: ${imp.effortLabel}</span>
                 ${imp.uplift > 0 ? `<span class="tag tag-green">+${imp.uplift}% response</span>` : ''}
               </div>
@@ -3087,7 +3087,7 @@ function renderChecklist() {
       <div class="check-text">
         <div class="check-title" style="${checklistState[i] ? 'text-decoration:line-through;color:var(--muted)' : ''}">${item.title}</div>
         <div class="check-desc">${item.desc}</div>
-        <div class="check-impact">💰 ${item.impact}</div>
+        <div class="check-impact"><i class=ic-pound></i> ${item.impact}</div>
       </div>`;
     el.appendChild(d);
   });
@@ -3207,31 +3207,31 @@ function initAdvisorScorecard() {
     {
       n: totalSent > 0 ? totalSent.toLocaleString() : '0',
       l: 'Letters Sent',
-      status: totalSent > 100 ? '✅ Good volume' : totalSent > 0 ? '⚠️ Increase volume' : '❌ None sent yet',
+      status: totalSent > 100 ? '<i class=ic-check></i> Good volume' : totalSent > 0 ? '<i class=ic-alert></i>️ Increase volume' : '<i class=ic-x></i> None sent yet',
       cls: totalSent > 100 ? 'm-good' : totalSent > 0 ? 'm-warn' : 'm-bad'
     },
     {
       n: hasMultipleHa,
       l: 'Districts Active',
-      status: hasMultipleHa >= 5 ? '✅ Wide coverage' : hasMultipleHa >= 3 ? '⚠️ Add more areas' : '❌ Too narrow',
+      status: hasMultipleHa >= 5 ? '<i class=ic-check></i> Wide coverage' : hasMultipleHa >= 3 ? '<i class=ic-alert></i>️ Add more areas' : '<i class=ic-x></i> Too narrow',
       cls: hasMultipleHa >= 5 ? 'm-good' : hasMultipleHa >= 3 ? 'm-warn' : 'm-bad'
     },
     {
       n: (templates.length + uploadedTpls.length),
       l: 'Templates',
-      status: hasTemplates >= 4 ? '✅ Good variety' : hasTemplates >= 2 ? '⚠️ Add more variants' : '❌ Only 1 template',
+      status: hasTemplates >= 4 ? '<i class=ic-check></i> Good variety' : hasTemplates >= 2 ? '<i class=ic-alert></i>️ Add more variants' : '<i class=ic-x></i> Only 1 template',
       cls: hasTemplates >= 4 ? 'm-good' : hasTemplates >= 2 ? 'm-warn' : 'm-bad'
     },
     {
       n: hasPersonalisation ? 'Yes' : 'No',
       l: 'Personalisation',
-      status: hasPersonalisation ? '✅ Using property data' : '❌ Generic letters only',
+      status: hasPersonalisation ? '<i class=ic-check></i> Using property data' : '<i class=ic-x></i> Generic letters only',
       cls: hasPersonalisation ? 'm-good' : 'm-bad'
     },
     {
       n: hasBotOn ? 'Live' : 'Off',
       l: 'Live Bot',
-      status: hasBotOn ? '✅ Monitoring 24/7' : '⚠️ Bot not running',
+      status: hasBotOn ? '<i class=ic-check></i> Monitoring 24/7' : '<i class=ic-alert></i>️ Bot not running',
       cls: hasBotOn ? 'm-good' : 'm-warn'
     }
   ];
@@ -3400,7 +3400,7 @@ function generateLocalAdvice(vol, challenge, propType, approach, goals, freetext
     scoreTags: ['Improve Personalisation', 'Add Follow-Up Sequence', 'Optimise Timing'],
     suggestions: [
       {
-        id:'s1', title:'Add Hyperlocal Sold Data to Every Letter', icon:'📍',
+        id:'s1', title:'Add Hyperlocal Sold Data to Every Letter', icon:'<i class=ic-pin2></i>',
         accentColor:'#059669', iconBg:'rgba(5,150,105,.12)', iconColor:'#059669',
         priority:'critical', responseUplift:'+1.8%', revenueImpact:'£65,000/yr', timeToResult:'7 days', effort:'low',
         summary:'The single highest-converting sentence in estate agent letters: a specific, verifiable local sale near the recipient.',
@@ -3411,7 +3411,7 @@ function generateLocalAdvice(vol, challenge, propType, approach, goals, freetext
         impactStats:[{n:'+1.8%',l:'Response Uplift'},{n:'3×',l:'Trust Increase'},{n:'0.3mi',l:'Optimal Proximity'}]
       },
       {
-        id:'s2', title:'Implement a 3-Touch Follow-Up Sequence', icon:'🔄',
+        id:'s2', title:'Implement a 3-Touch Follow-Up Sequence', icon:'<i class=ic-refresh></i>',
         accentColor:'#2563EB', iconBg:'rgba(37,99,235,.12)', iconColor:'#2563EB',
         priority:'critical', responseUplift:'+2.1%', revenueImpact:'£88,000/yr', timeToResult:'14 days', effort:'low',
         summary:'A single letter is forgotten in 48 hours. A coordinated 3-letter campaign converts 4.2× better.',
@@ -3422,7 +3422,7 @@ function generateLocalAdvice(vol, challenge, propType, approach, goals, freetext
         impactStats:[{n:'4.2×',l:'vs Single Letter'},{n:'+2.1%',l:'Response Uplift'},{n:'38p',l:'Cost of Letter 2'}]
       },
       {
-        id:'s3', title:'Personalise With Owner Names From Land Registry', icon:'🎯',
+        id:'s3', title:'Personalise With Owner Names From Land Registry', icon:'<i class=ic-target></i>',
         accentColor:'#7C3AED', iconBg:'rgba(124,58,237,.12)', iconColor:'#7C3AED',
         priority:'critical', responseUplift:'+2.4%', revenueImpact:'£101,000/yr', timeToResult:'14 days', effort:'medium',
         summary:'Letters addressed to "Mr James Smith" achieve 3× the response rate of "Dear Homeowner".',
@@ -3433,7 +3433,7 @@ function generateLocalAdvice(vol, challenge, propType, approach, goals, freetext
         impactStats:[{n:'3×',l:'Response Rate Lift'},{n:'68%',l:'Open Rate Increase'},{n:'£3',l:'Cost per Lookup'}]
       },
       {
-        id:'s4', title:'Activate the Live Bot for 72-Hour First-Mover Advantage', icon:'⚡',
+        id:'s4', title:'Activate the Live Bot for 72-Hour First-Mover Advantage', icon:'<i class=ic-zap></i>',
         accentColor:'#D97706', iconBg:'rgba(217,119,6,.12)', iconColor:'#D97706',
         priority:'high', responseUplift:'+1.2%', revenueImpact:'£50,000/yr', timeToResult:'1 day', effort:'low',
         summary:'Being the first agent to contact a new listing — within 72 hours — achieves 5× the conversion of late contact.',
@@ -3444,7 +3444,7 @@ function generateLocalAdvice(vol, challenge, propType, approach, goals, freetext
         impactStats:[{n:'72hrs',l:'Optimal Window'},{n:'5×',l:'vs Late Contact'},{n:'1 min',l:'Bot Scan Interval'}]
       },
       {
-        id:'s5', title:'Target Motivated Sellers With a Switch-Agent Letter', icon:'🔥',
+        id:'s5', title:'Target Motivated Sellers With a Switch-Agent Letter', icon:'<i class=ic-flame></i>',
         accentColor:'#DC2626', iconBg:'rgba(220,38,38,.1)', iconColor:'#DC2626',
         priority:'high', responseUplift:'+0%', revenueImpact:'£126,000/yr', timeToResult:'21 days', effort:'medium',
         summary:'Properties listed 60+ days with price reductions are the highest-value, highest-converting target cohort in any HA campaign.',
@@ -3455,7 +3455,7 @@ function generateLocalAdvice(vol, challenge, propType, approach, goals, freetext
         impactStats:[{n:'14%',l:'Response Rate'},{n:'60 days',l:'Trigger Point'},{n:'5×',l:'vs Cold List'}]
       },
       {
-        id:'s6', title:'Launch a Landlord Portfolio Campaign for High-Value Instructions', icon:'🏢',
+        id:'s6', title:'Launch a Landlord Portfolio Campaign for High-Value Instructions', icon:'<i class=ic-building></i>',
         accentColor:'#C9921A', iconBg:'rgba(201,146,26,.12)', iconColor:'#C9921A',
         priority:'high', responseUplift:'+0%', revenueImpact:'£168,000/yr', timeToResult:'30 days', effort:'high',
         summary:'One portfolio landlord won equals 3–6 properties managed or sold — the highest-revenue single instruction in estate agency.',
@@ -3510,8 +3510,8 @@ function renderAdvice(data) {
 
   data.suggestions.forEach((s, idx) => {
     const priorityColour = s.priority === 'critical' ? '#DC2626' : s.priority === 'high' ? '#D97706' : '#2563EB';
-    const priorityLabel = s.priority === 'critical' ? '🔴 Critical' : s.priority === 'high' ? '🟠 High Impact' : '🔵 Medium';
-    const effortLabel = s.effort === 'low' ? '⚡ Quick Win' : s.effort === 'medium' ? '🔧 Medium Effort' : '🏗 Larger Project';
+    const priorityLabel = s.priority === 'critical' ? '<i class=dot-ef4444></i> Critical' : s.priority === 'high' ? '<i class=dot-f59e0b></i> High Impact' : '<i class=dot-3b82f6></i> Medium';
+    const effortLabel = s.effort === 'low' ? '<i class=ic-zap></i> Quick Win' : s.effort === 'medium' ? '<i class=ic-wrench></i> Medium Effort' : '<i class=ic-building></i> Larger Project';
     const effortCls = s.effort === 'low' ? 'effort-low' : s.effort === 'medium' ? 'effort-med' : 'effort-high';
 
     const card = document.createElement('div');
@@ -3519,7 +3519,7 @@ function renderAdvice(data) {
     card.innerHTML = `
       <div class="sc-accent" style="background:${s.accentColor || '#2563EB'}"></div>
       <div class="sc-head">
-        <div class="sc-icon" style="background:${s.iconBg || 'rgba(37,99,235,.1)'};color:${s.iconColor || '#2563EB'}">${s.icon || '💡'}</div>
+        <div class="sc-icon" style="background:${s.iconBg || 'rgba(37,99,235,.1)'};color:${s.iconColor || '#2563EB'}">${s.icon || '<i class=ic-bulb></i>'}</div>
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
             <span style="font-size:11px;font-weight:700;color:var(--muted)">${idx + 1} of ${data.suggestions.length}</span>
@@ -3528,10 +3528,10 @@ function renderAdvice(data) {
           <div class="sc-title">${s.title}</div>
           <div class="sc-summary">${s.summary}</div>
           <div class="sc-meta">
-            <span class="tag tag-green">💰 ${s.revenueImpact || 'Revenue impact TBC'}</span>
-            <span class="tag tag-blue">📈 ${s.responseUplift || ''}</span>
+            <span class="tag tag-green"><i class=ic-pound></i> ${s.revenueImpact || 'Revenue impact TBC'}</span>
+            <span class="tag tag-blue"><i class=ic-trend></i> ${s.responseUplift || ''}</span>
             <span class="effort-pill ${effortCls}">${effortLabel}</span>
-            <span class="tag tag-grey">⏱ ${s.timeToResult || 'TBC'}</span>
+            <span class="tag tag-grey"><i class=ic-clock></i> ${s.timeToResult || 'TBC'}</span>
           </div>
         </div>
       </div>
@@ -3545,11 +3545,11 @@ function renderAdvice(data) {
           <div class="sc-section-title">Before vs After</div>
           <div class="sc-before-after">
             <div class="sc-before">
-              <div class="sc-ba-label" style="color:var(--red)">❌ Current approach</div>
+              <div class="sc-ba-label" style="color:var(--red)"><i class=ic-x></i> Current approach</div>
               <div class="sc-ba-text">${s.before}</div>
             </div>
             <div class="sc-after">
-              <div class="sc-ba-label" style="color:var(--green)">✅ Improved approach</div>
+              <div class="sc-ba-label" style="color:var(--green)"><i class=ic-check></i> Improved approach</div>
               <div class="sc-ba-text">${s.after}</div>
             </div>
           </div>
@@ -3567,8 +3567,8 @@ function renderAdvice(data) {
         </div>` : ''}
       </div>
       <div class="sc-action-bar">
-        <button class="btn bp sm-btn" onclick="applyAdvice('${s.id}', '${(s.title||'').replace(/'/g,'\\x27')}')">✅ Apply This Advice</button>
-        <button class="btn bs sm-btn" onclick="askAbout('${(s.title||'').replace(/'/g,'\\x27')}')">💬 Ask About This</button>
+        <button class="btn bp sm-btn" onclick="applyAdvice('${s.id}', '${(s.title||'').replace(/'/g,'\\x27')}')"><i class=ic-check></i> Apply This Advice</button>
+        <button class="btn bs sm-btn" onclick="askAbout('${(s.title||'').replace(/'/g,'\\x27')}')"><i class=ic-message></i> Ask About This</button>
       </div>`;
     sugg.appendChild(card);
   });
@@ -3659,7 +3659,7 @@ Give specific, practical advice. Use real UK estate agency data where possible. 
     addAdviceMsg('ai', reply);
   } catch(e) {
     th.remove();
-    addAdviceMsg('ai', `⚠️ Connection issue. Here's offline advice: ${getFallbackAdvice(msg)}`);
+    addAdviceMsg('ai', `<i class=ic-alert></i>️ Connection issue. Here's offline advice: ${getFallbackAdvice(msg)}`);
   }
 }
 
@@ -3746,7 +3746,7 @@ const DIRECTOR_IDEAS = [
     number: '01',
     title: 'The "Sold in Your Street" Letter',
     tagline: 'Every time we sell a property, we write to every house within 8 doors.',
-    icon: '🏆',
+    icon: '<i class=ic-trophy></i>',
     accent: 'linear-gradient(90deg,#C9921A,#F4B942)',
     iconBg: 'rgba(201,146,26,.12)',
     iconColor: '#C9921A',
@@ -3771,7 +3771,7 @@ const DIRECTOR_IDEAS = [
     number: '02',
     title: 'The Reluctant Vendor Programme',
     tagline: 'The people who most need to sell are often the last to ask for help.',
-    icon: '🔓',
+    icon: '<i class=ic-unlock></i>',
     accent: 'linear-gradient(90deg,#2563EB,#60A5FA)',
     iconBg: 'rgba(37,99,235,.1)',
     iconColor: '#2563EB',
@@ -3796,7 +3796,7 @@ const DIRECTOR_IDEAS = [
     number: '03',
     title: 'Pre-Market Exclusive Database',
     tagline: 'Build a list of vendors before they go on the market. Then match buyers to them directly.',
-    icon: '🔐',
+    icon: '<i class=ic-lock></i>',
     accent: 'linear-gradient(90deg,#7C3AED,#9333EA)',
     iconBg: 'rgba(124,58,237,.1)',
     iconColor: '#7C3AED',
@@ -3821,7 +3821,7 @@ const DIRECTOR_IDEAS = [
     number: '04',
     title: 'The 72-Hour New Listing Strike',
     tagline: 'The first agent to contact a new listing wins it. Not the best agent — the first.',
-    icon: '⚡',
+    icon: '<i class=ic-zap></i>',
     accent: 'linear-gradient(90deg,#DC2626,#EF4444)',
     iconBg: 'rgba(220,38,38,.09)',
     iconColor: '#DC2626',
@@ -3846,7 +3846,7 @@ const DIRECTOR_IDEAS = [
     number: '05',
     title: 'The Competitor Conquest Campaign',
     tagline: 'When a listing goes stale with another agent — that\'s your invitation.',
-    icon: '🎯',
+    icon: '<i class=ic-target></i>',
     accent: 'linear-gradient(90deg,#D97706,#F59E0B)',
     iconBg: 'rgba(217,119,6,.09)',
     iconColor: '#D97706',
@@ -3871,7 +3871,7 @@ const DIRECTOR_IDEAS = [
     number: '06',
     title: 'The Landlord Legacy Letter',
     tagline: 'Every BTL landlord over 60 is thinking about their exit. Help them plan it.',
-    icon: '🔑',
+    icon: '<i class=ic-key></i>',
     accent: 'linear-gradient(90deg,#059669,#10B981)',
     iconBg: 'rgba(5,150,105,.09)',
     iconColor: '#059669',
@@ -3896,7 +3896,7 @@ const DIRECTOR_IDEAS = [
     number: '07',
     title: 'The Wembley Stadium Effect',
     tagline: 'Major local events create a micro-surge in buyer demand. Be ready for it.',
-    icon: '🏟',
+    icon: '<i class=ic-building></i>',
     accent: 'linear-gradient(90deg,#2563EB,#7C3AED)',
     iconBg: 'rgba(37,99,235,.08)',
     iconColor: '#2563EB',
@@ -3921,7 +3921,7 @@ const DIRECTOR_IDEAS = [
     number: '08',
     title: 'School Catchment Area Targeting',
     tagline: 'Parents pay a premium for the right postcode. They respond to letters that speak to it.',
-    icon: '🎓',
+    icon: '<i class=ic-cap></i>',
     accent: 'linear-gradient(90deg,#7C3AED,#C4B5FD)',
     iconBg: 'rgba(124,58,237,.08)',
     iconColor: '#7C3AED',
@@ -3946,7 +3946,7 @@ const DIRECTOR_IDEAS = [
     number: '09',
     title: 'The New Resident Welcome Pack',
     tagline: 'Every property that sells is a new household moving in — and potentially, moving out.',
-    icon: '📦',
+    icon: '<i class=ic-box></i>',
     accent: 'linear-gradient(90deg,#059669,#34D399)',
     iconBg: 'rgba(5,150,105,.08)',
     iconColor: '#059669',
@@ -3971,7 +3971,7 @@ const DIRECTOR_IDEAS = [
     number: '10',
     title: 'The Video Valuation Letter',
     tagline: 'A QR code that plays a 60-second personal video from your agent. Nothing converts like a face.',
-    icon: '📱',
+    icon: '<i class=ic-phonemob></i>',
     accent: 'linear-gradient(90deg,#DC2626,#EF4444)',
     iconBg: 'rgba(220,38,38,.08)',
     iconColor: '#DC2626',
@@ -3996,7 +3996,7 @@ const DIRECTOR_IDEAS = [
     number: '11',
     title: 'The Anniversary Valuation Campaign',
     tagline: 'Every property in the HA area hits a 3-year, 5-year, and 10-year ownership anniversary. Be there for all of them.',
-    icon: '📅',
+    icon: '<i class=ic-calendar></i>',
     accent: 'linear-gradient(90deg,#C9921A,#F4B942)',
     iconBg: 'rgba(201,146,26,.1)',
     iconColor: '#C9921A',
@@ -4021,7 +4021,7 @@ const DIRECTOR_IDEAS = [
     number: '12',
     title: 'The Buyer-to-Vendor Bridge',
     tagline: 'The buyer who can\'t find what they want is the vendor who doesn\'t know you\'re looking for them.',
-    icon: '🤝',
+    icon: '<i class=ic-handshake></i>',
     accent: 'linear-gradient(90deg,#2563EB,#3B82F6)',
     iconBg: 'rgba(37,99,235,.08)',
     iconColor: '#2563EB',
@@ -4046,7 +4046,7 @@ const DIRECTOR_IDEAS = [
     number: '13',
     title: 'The Social Proof Engine',
     tagline: 'Real numbers, real streets, real results. Build a living library of local sold evidence.',
-    icon: '⭐',
+    icon: '<i class=ic-star></i>',
     accent: 'linear-gradient(90deg,#059669,#10B981)',
     iconBg: 'rgba(5,150,105,.08)',
     iconColor: '#059669',
@@ -4071,7 +4071,7 @@ const DIRECTOR_IDEAS = [
     number: '14',
     title: 'The Premium Print Experience',
     tagline: 'The quality of the paper is the quality of the agent. Don\'t send a £500k pitch on 80gsm A4.',
-    icon: '🖨',
+    icon: '<i class=ic-printer></i>',
     accent: 'linear-gradient(90deg,#374151,#6B7280)',
     iconBg: 'rgba(55,65,81,.08)',
     iconColor: '#374151',
@@ -4096,7 +4096,7 @@ const DIRECTOR_IDEAS = [
     number: '15',
     title: 'The PropMail Performance Dashboard',
     tagline: 'What gets measured gets managed. Real-time conversion tracking across every campaign.',
-    icon: '📊',
+    icon: '<i class=ic-chart></i>',
     accent: 'linear-gradient(90deg,#7C3AED,#A855F7)',
     iconBg: 'rgba(124,58,237,.08)',
     iconColor: '#7C3AED',
@@ -4143,23 +4143,23 @@ function renderIdeas(filter) {
   grid.innerHTML = '';
 
   if (!items.length) {
-    grid.innerHTML = '<div class="es" style="grid-column:1/-1"><div class="ei">🔍</div><div class="et">No ideas in this category</div></div>';
+    grid.innerHTML = '<div class="es" style="grid-column:1/-1"><div class="ei"><i class=ic-search></i></div><div class="et">No ideas in this category</div></div>';
     return;
   }
 
   items.forEach((idea, idx) => {
     const priorityMap = {
-      immediate: { cls: 'pi-immediate', label: '🔴 Do This Week' },
-      short:     { cls: 'pi-short',     label: '🟠 This Month' },
-      medium:    { cls: 'pi-medium',    label: '🔵 Next 90 Days' },
-      strategic: { cls: 'pi-strategic', label: '🟣 Strategic Play' }
+      immediate: { cls: 'pi-immediate', label: '<i class=dot-ef4444></i> Do This Week' },
+      short:     { cls: 'pi-short',     label: '<i class=dot-f59e0b></i> This Month' },
+      medium:    { cls: 'pi-medium',    label: '<i class=dot-3b82f6></i> Next 90 Days' },
+      strategic: { cls: 'pi-strategic', label: '<i class=dot-a855f7></i> Strategic Play' }
     };
     const catBadges = {
-      tech: '<span class="cat-badge cb-tech">💻 Tech</span>',
-      content: '<span class="cat-badge cb-content">✍️ Content</span>',
-      data: '<span class="cat-badge cb-data">📊 Data</span>',
-      brand: '<span class="cat-badge cb-brand">🎨 Brand</span>',
-      ops: '<span class="cat-badge cb-ops">⚙️ Ops</span>'
+      tech: '<span class="cat-badge cb-tech"><i class=ic-monitor></i> Tech</span>',
+      content: '<span class="cat-badge cb-content"><i class=ic-pencil></i>️ Content</span>',
+      data: '<span class="cat-badge cb-data"><i class=ic-chart></i> Data</span>',
+      brand: '<span class="cat-badge cb-brand"><i class=ic-palette></i> Brand</span>',
+      ops: '<span class="cat-badge cb-ops"><i class=ic-gear></i>️ Ops</span>'
     };
     const pri = priorityMap[idea.priority] || priorityMap.medium;
     const cats = idea.categories.filter(c => !['immediate','short','medium','strategic'].includes(c));
@@ -4210,7 +4210,7 @@ function renderIdeas(filter) {
           </div>
         </div>
         <div class="idea-footer">
-          <div class="rev-badge">💰 ${idea.revenue}</div>
+          <div class="rev-badge"><i class=ic-pound></i> ${idea.revenue}</div>
           <div style="flex:1"></div>
           <div style="font-size:10px;color:var(--muted);font-style:italic;max-width:280px;line-height:1.4">Build into: ${idea.buildInto}</div>
         </div>
@@ -4281,7 +4281,7 @@ if(typeof SUCCESS_LETTERS==='undefined') var SUCCESS_LETTERS=[
   {
     id:'sl-intro',
     name:'Introduction Letter',
-    icon:'✉️',
+    icon:'<i class=ic-mail></i>️',
     colour:'#1E6FD9',
     desc:'Professional introduction to your services for all residents',
     body:`{{date}}
@@ -4311,7 +4311,7 @@ Yours sincerely,
   {
     id:'sl-valuation',
     name:'Free Valuation Offer',
-    icon:'🏠',
+    icon:'<i class=ic-home></i>',
     colour:'#16A34A',
     desc:'Offer a free property valuation to every address',
     body:`{{date}}
@@ -4343,7 +4343,7 @@ Yours sincerely,
   {
     id:'sl-cash',
     name:'Cash Buyer Offer',
-    icon:'💰',
+    icon:'<i class=ic-pound></i>',
     colour:'#D4A017',
     desc:'Direct cash purchase offer to all homeowners',
     body:`{{date}}
@@ -4376,7 +4376,7 @@ Yours faithfully,
   {
     id:'sl-landlord',
     name:'Landlord Services',
-    icon:'🔑',
+    icon:'<i class=ic-key></i>',
     colour:'#6b1fa0',
     desc:'Target landlords and rental property owners',
     body:`{{date}}
@@ -4408,7 +4408,7 @@ Yours sincerely,
   {
     id:'sl-success',
     name:'Success Story Letter',
-    icon:'⭐',
+    icon:'<i class=ic-star></i>',
     colour:'#cc0000',
     desc:'Share a local success story to build trust',
     body:`{{date}}
@@ -4503,7 +4503,7 @@ async function doPostcodeLookup(postcodes){
             };
           });
           liveCount += foundAddresses.length;
-          blog(`✅ ${pc}: ${foundAddresses.length} addresses found (${data.source||'live'})`,'ok');
+          blog(`<i class=ic-check></i> ${pc}: ${foundAddresses.length} addresses found (${data.source||'live'})`,'ok');
         } else if(data.error){
           blog(`${pc}: ${data.error}`,'warn');
         }
@@ -4590,7 +4590,7 @@ function finishAddressLookup(rawResults, lastSource, liveCount){
   if(card && card.scrollIntoView) { try{ card.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){} }
 
   if(!allResults.length){ toast('No residential addresses found — try a different postcode or street', 'warn'); return; }
-  if(!preselect){ toast(`${allResults.length} addresses found — large list, so none pre-selected. Tap ☑ All, or filter then select.`, 'inf'); return; }
+  if(!preselect){ toast(`${allResults.length} addresses found — large list, so none pre-selected. Tap <i class=ic-check></i> All, or filter then select.`, 'inf'); return; }
   toast(`${allResults.length} addresses found${liveCount?' ('+liveCount+' live)':''}`, 'ok');
 }
 
@@ -4627,7 +4627,7 @@ async function doStreetLookup(street){
       });
       if(data.error) blog(`Street search: ${data.error}`,'warn');
       const pcs=[...new Set(allResults.map(a=>a.postcode).filter(Boolean))];
-      blog(`🔎 "${street}": ${allResults.length} addresses across ${pcs.length} postcode${pcs.length===1?'':'s'}`,'ok');
+      blog(`<i class=ic-search></i> "${street}": ${allResults.length} addresses across ${pcs.length} postcode${pcs.length===1?'':'s'}`,'ok');
     } else {
       blog(`Street search failed (HTTP ${resp.status})`,'warn');
     }
@@ -5052,12 +5052,12 @@ function slFileUp(e){
   if(ext==='.txt'){
     const r=new FileReader();
     r.onload=ev=>{
-      const t={id:'sl-up-'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:'Uploaded letter',body:ev.target.result,icon:'📄',colour:'#1E6FD9'};
+      const t={id:'sl-up-'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:'Uploaded letter',body:ev.target.result,icon:'<i class=ic-file></i>',colour:'#1E6FD9'};
       SUCCESS_LETTERS.push(t);renderLetterChoices();selectLetter(t);toast('Letter uploaded and selected','ok');
     };
     r.readAsText(file);
   } else {
-    const t={id:'sl-up-'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:`Uploaded ${ext}`,body:`{{date}}\n\n{{address}}\n\nDear Resident,\n\n[Content from ${file.name}]\n\nYours sincerely,\n[Your Name]`,icon:'📄',colour:'#1E6FD9'};
+    const t={id:'sl-up-'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:`Uploaded ${ext}`,body:`{{date}}\n\n{{address}}\n\nDear Resident,\n\n[Content from ${file.name}]\n\nYours sincerely,\n[Your Name]`,icon:'<i class=ic-file></i>',colour:'#1E6FD9'};
     SUCCESS_LETTERS.push(t);renderLetterChoices();selectLetter(t);toast('Letter uploaded','ok');
   }
 }
@@ -5298,7 +5298,7 @@ Return ONLY this JSON (no markdown, no explanation outside JSON):
     console.error('Intel search error:', err);
     document.getElementById('intel-result-area').innerHTML =
       '<div class="card" style="border-color:var(--red)">'
-      +'<div style="color:var(--red);font-weight:700;margin-bottom:8px">⚠️ Search Error</div>'
+      +'<div style="color:var(--red);font-weight:700;margin-bottom:8px"><i class=ic-alert></i>️ Search Error</div>'
       +'<div style="font-size:13px;color:var(--text2)">'+err.message+'</div>'
       +'<div style="font-size:12px;color:var(--muted);margin-top:10px">Try searching with a full UK postcode (e.g. HA1 2SB) or a Rightmove property URL.</div>'
       +'</div>';
@@ -5325,7 +5325,7 @@ function updateIntelTable(){
   const wrap=document.getElementById('intel-table-wrap');if(!wrap||!intelResults.length)return;
   wrap.innerHTML=`<div style="overflow-x:auto"><table class="intel-result-table"><thead><tr><th>Address</th><th>Owner</th><th>Type</th><th>Land Reg</th><th>CT Band</th><th>Confidence</th><th>Action</th></tr></thead><tbody>${intelResults.map(r=>{
     const a=r.address,o=r.owner,cp=Math.round((o.overallConfidence||0.5)*100),cc=cp>=70?'high':cp>=45?'med':'low';
-    return`<tr><td><div style="font-weight:600;font-size:12px">${a.fullAddress}</div><div style="font-size:10px;color:var(--mut)">${a.district||''}</div></td><td><div style="font-weight:600">${o.ownerName||'—'}</div><div style="font-size:10px;color:var(--mut)">${o.ownerType||''}</div></td><td style="font-size:12px">${a.estimatedPrice||'—'}</td><td style="font-family:monospace;font-size:11px">${o.landRegTitle||'—'}</td><td>Band ${o.councilTaxBand||'—'}</td><td><span class="conf-badge cb-${cc}">${cp}%</span></td><td><button class="btn bp sm-btn" onclick="queueIntelLetter('${r.id}')">🖨</button></td></tr>`;
+    return`<tr><td><div style="font-weight:600;font-size:12px">${a.fullAddress}</div><div style="font-size:10px;color:var(--mut)">${a.district||''}</div></td><td><div style="font-weight:600">${o.ownerName||'—'}</div><div style="font-size:10px;color:var(--mut)">${o.ownerType||''}</div></td><td style="font-size:12px">${a.estimatedPrice||'—'}</td><td style="font-family:monospace;font-size:11px">${o.landRegTitle||'—'}</td><td>Band ${o.councilTaxBand||'—'}</td><td><span class="conf-badge cb-${cc}">${cp}%</span></td><td><button class="btn bp sm-btn" onclick="queueIntelLetter('${r.id}')"><i class=ic-printer></i></button></td></tr>`;
   }).join('')}</tbody></table></div>`;
 }
 
