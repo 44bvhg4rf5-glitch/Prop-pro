@@ -7,6 +7,8 @@ let uploadedTpls=[];
 let slAddresses=[], slFiltered=[], slSelected=new Set(), slActiveLetter=null, slAddrPage=0;
 const SL_PG=30;
 let pmBlocked=[], pmBlockedConfigured=false; // do-not-mail suppression list
+const SL_TYPE_LABEL={homes:'homes',houses:'houses',flats:'flats / maisonettes',all:'addresses (incl. commercial)'};
+function slTypes(){ const el=document.getElementById('sl-type'); return (el&&el.value)||'homes'; }
 let intelResults=[], chatHistory=[];
 let bdQueued=0;
 let activeTpl=null, selPrinter=null;
@@ -851,6 +853,7 @@ function queueSuccessLetters(){
     const prop={
       address: a.fullAddress,
       displayAddress: a.line2 ? a.line1+', '+a.line2 : a.line1,
+      uprn: a.uprn||'',
       postcode: a.postcode||'',
       district: a.area||a.postcode?.split(' ')[0]||'',
       haCode: a.postcode?.split(' ')[0]||'',
@@ -4480,7 +4483,7 @@ async function doPostcodeLookup(postcodes){
     // ── Live address lookup via /api/addresses (Royal Mail / OS Places, EPC fallback) ──
     try{
       setStage(2);
-      const resp = await fetch(`/api/addresses?postcode=${encodeURIComponent(pc)}`);
+      const resp = await fetch(`/api/addresses?postcode=${encodeURIComponent(pc)}&types=${slTypes()}`);
       if(resp.ok){
         const data = await resp.json();
         const list = Array.isArray(data.addresses) ? data.addresses : [];
@@ -4494,6 +4497,8 @@ async function doPostcodeLookup(postcodes){
               line2: '',
               area: (a.fullAddress||'').split(',').slice(-2,-1)[0]?.trim() || pc.split(' ')[0],
               postcode: a.postcode || pc,
+              uprn: a.uprn || '',
+              kind: a.kind || '',
               type,
               fullAddress: a.fullAddress || `${line1}, ${pc}`,
               selected: true,
@@ -4538,10 +4543,9 @@ async function doPostcodeLookup(postcodes){
 // Shared finish step for postcode/batch/street lookups: hide commercial,
 // reveal the results UI, populate counters, render and scroll into view.
 function finishAddressLookup(rawResults, lastSource, liveCount){
-  // Hide commercial premises completely — we only write to homes.
-  // Also strip any do-not-mail addresses (server already filters when the
-  // cloud list is configured; this also covers this-device-only mode).
-  let allResults = rawResults.filter(a=>a.type!=='Commercial' && !isBlockedAddr(a));
+  // The backend already filtered by the chosen property type; here we just
+  // strip any do-not-mail addresses (belt-and-braces, and covers this-device mode).
+  let allResults = rawResults.filter(a=>!isBlockedAddr(a));
   // For large lists (e.g. a whole district), don't pre-tick — avoids an
   // accidental mass print. Smaller lists stay fully pre-selected.
   const PRESELECT_MAX = 500;
@@ -4550,7 +4554,7 @@ function finishAddressLookup(rawResults, lastSource, liveCount){
 
   setStage(3);
   showPCStatus('ok',`Found ${allResults.length} addresses`,100,
-    `${allResults.length} residential${lastSource?' · via '+lastSource:''}`);
+    `${allResults.length} ${SL_TYPE_LABEL[slTypes()]||'addresses'}${lastSource?' · via '+lastSource:''}`);
 
   slAddresses = allResults;
   slFiltered = [...slAddresses];
@@ -4608,7 +4612,7 @@ async function doStreetLookup(street){
   const allResults=[]; let lastSource='';
   try{
     setStage(2);
-    const resp = await fetch(`/api/addresses?street=${encodeURIComponent(street)}`);
+    const resp = await fetch(`/api/addresses?street=${encodeURIComponent(street)}&types=${slTypes()}`);
     if(resp.ok){
       const data = await resp.json();
       const list = Array.isArray(data.addresses) ? data.addresses : [];
@@ -4620,6 +4624,7 @@ async function doStreetLookup(street){
           line1, line2:'',
           area: (a.fullAddress||'').split(',').slice(-2,-1)[0]?.trim() || '',
           postcode: a.postcode || '',
+          uprn: a.uprn || '', kind: a.kind || '',
           type,
           fullAddress: a.fullAddress || line1,
           selected:true, isLive:true, sortKey:i, idx:i

@@ -1,5 +1,5 @@
 import https from 'https';
-import { EPC_BASE, fetchJson, sendJson } from '../lib/helpers.js';
+import { EPC_BASE, fetchJson, sendJson, guardOrigin } from '../lib/helpers.js';
 import { getBlocklist, buildMatcher, isSuppressed } from '../lib/blocklist.js';
 
 function getJson(url) {
@@ -23,6 +23,15 @@ function tcAddr(s) {
 // Normalise a street/town for loose comparison.
 function norm(s) { return (s || '').toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
 
+// Classify a PAF record into a property kind for the search filter.
+function classifyKind(d) {
+  const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
+  if (cls.startsWith('C')) return 'commercial';
+  if (!cls.startsWith('R')) return 'other';
+  const flatish = /^RD0?6|^RD0?7/.test(cls) || !!d.SUB_BUILDING_NAME || /\b(FLAT|APARTMENT|MAISONETTE)\b/i.test(d.ADDRESS || '');
+  return flatish ? 'flat' : 'house';
+}
+
 // Map an OS Places DPA record to our address shape.
 function mapDpa(d, fallbackPc) {
   const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
@@ -33,17 +42,28 @@ function mapDpa(d, fallbackPc) {
     postcode: d.POSTCODE || fallbackPc || '',
     uprn: d.UPRN ? String(d.UPRN) : '',
     type: cls.startsWith('R') ? 'Residential' : cls.startsWith('C') ? 'Commercial' : 'Other',
+    kind: classifyKind(d),
   };
 }
 
-// De-duplicate by full address, drop commercial, sort house-number order.
+// De-duplicate by full address, sort house-number order. (Type filtering is a
+// separate step so the user's dropdown choice governs what's kept.)
 function cleanAddresses(list) {
   const seen = new Map();
-  list.filter((a) => a.type !== 'Commercial' && a.fullAddress).forEach((a) => {
+  list.filter((a) => a.fullAddress).forEach((a) => {
     const k = a.fullAddress.toLowerCase();
     if (!seen.has(k)) seen.set(k, a);
   });
   return [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+}
+
+// Apply the user's "what to produce" dropdown choice.
+//   homes (default) = houses + flats   ·   houses   ·   flats   ·   all (+ commercial)
+function filterByType(list, types) {
+  if (types === 'all') return list;
+  if (types === 'houses') return list.filter((a) => a.kind === 'house');
+  if (types === 'flats') return list.filter((a) => a.kind === 'flat');
+  return list.filter((a) => a.kind === 'house' || a.kind === 'flat');
 }
 
 // Pull a UK postcode / outcode token out of free text, returning the cleaned
@@ -89,7 +109,7 @@ async function osPaged(kind, value, OS, maxAddr) {
 // via the OS Places free-text "find" endpoint (paged). OS key required.
 // An optional postcode/outcode in the query (e.g. "Kenton Road HA3") narrows
 // results to that district.
-async function streetSearch(res, rawStreet, OS, notBlocked = () => true) {
+async function streetSearch(res, rawStreet, OS, notBlocked = () => true, types = 'homes') {
   if (!OS) {
     sendJson(res, 200, { street: rawStreet, total: 0, addresses: [], error: 'Street search needs an OS Places key (the EPC register can only look up by postcode).' });
     return;
@@ -107,7 +127,7 @@ async function streetSearch(res, rawStreet, OS, notBlocked = () => true) {
     const inPrefix = !prefix || (d.POSTCODE || '').toUpperCase().replace(/\s+/g, '').startsWith(prefix);
     return onStreet && inTown && inPrefix;
   }).map((d) => mapDpa(d));
-  const addresses = cleanAddresses(wanted).filter(notBlocked);
+  const addresses = filterByType(cleanAddresses(wanted).filter(notBlocked), types);
   const postcodes = [...new Set(addresses.map((a) => a.postcode).filter(Boolean))];
   sendJson(res, 200, {
     street: rawStreet, source: 'Royal Mail / OS Places', total: addresses.length, addresses, postcodes,
@@ -120,6 +140,7 @@ async function streetSearch(res, rawStreet, OS, notBlocked = () => true) {
 // PAF) when an OS_PLACES_KEY is configured; otherwise falls back to the EPC
 // register for postcode lookups.
 export default async function handler(req, res) {
+  if (!guardOrigin(req, res)) return;
   const u = new URL(req.url, 'http://localhost');
   const OS_KEY = process.env.OS_PLACES_KEY || '';
 
@@ -140,6 +161,11 @@ export default async function handler(req, res) {
     return;
   }
 
+  // What to produce — the search dropdown choice.
+  const allowedTypes = ['homes', 'houses', 'flats', 'all'];
+  let types = (u.searchParams.get('types') || 'homes').toLowerCase();
+  if (!allowedTypes.includes(types)) types = 'homes';
+
   // Load the do-not-mail list once; blocked addresses are stripped from every
   // result path so a suppressed property can never surface.
   const block = await getBlocklist();
@@ -148,7 +174,7 @@ export default async function handler(req, res) {
 
   // Street mode takes precedence when a ?street= is supplied.
   const street = (u.searchParams.get('street') || '').trim();
-  if (street) { await streetSearch(res, street, OS_KEY, notBlocked); return; }
+  if (street) { await streetSearch(res, street, OS_KEY, notBlocked, types); return; }
 
   const postcode = (u.searchParams.get('postcode') || '').trim().toUpperCase();
   if (!postcode) { sendJson(res, 400, { error: 'postcode or street is required' }); return; }
@@ -156,7 +182,7 @@ export default async function handler(req, res) {
   // 1. OS Places — full Royal Mail PAF address list. A full postcode pulls that
   // postcode; an outcode/sector (e.g. "HA3" or "HA3 5") pulls the whole district.
   const OS = OS_KEY;
-  const debug = u.searchParams.get('debug') === '1';
+  const debug = !!process.env.DEBUG_KEY && u.searchParams.get('debug') === process.env.DEBUG_KEY;
   const isFull = /\d[A-Z]{2}$/.test(postcode.replace(/\s+/g, ''));
   const cap = isFull ? 500 : 3000;
   let osDiag = { osKeyPresent: !!OS, osStatus: null, osError: null };
@@ -165,7 +191,7 @@ export default async function handler(req, res) {
       const { status, results, total } = await osPaged('postcode', postcode, OS, cap);
       osDiag.osStatus = status;
       if (status === 200) {
-        const addresses = cleanAddresses(results.map((d) => mapDpa(d, postcode))).filter(notBlocked);
+        const addresses = filterByType(cleanAddresses(results.map((d) => mapDpa(d, postcode))).filter(notBlocked), types);
         sendJson(res, 200, {
           postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses,
           totalAvailable: total,
@@ -196,9 +222,9 @@ export default async function handler(req, res) {
         const pc = (r.postcode || '').replace(/\+/g, ' ');
         const full = [...lines, r.postTown, pc].filter(Boolean).join(', ');
         const key = full.toLowerCase();
-        if (full && !seen.has(key)) seen.set(key, { line1: r.addressLine1 || lines[0] || '', fullAddress: full, postcode: pc, uprn: r.uprn ? String(r.uprn) : '', type: 'Residential' });
+        if (full && !seen.has(key)) seen.set(key, { line1: r.addressLine1 || lines[0] || '', fullAddress: full, postcode: pc, uprn: r.uprn ? String(r.uprn) : '', type: 'Residential', kind: /\b(flat|apartment|maisonette)\b/i.test(full) ? 'flat' : 'house' });
       });
-      const addresses = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true })).filter(notBlocked);
+      const addresses = filterByType([...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true })).filter(notBlocked), types);
       sendJson(res, 200, {
         postcode, source: 'EPC register', total: addresses.length, addresses,
         note: addresses.length

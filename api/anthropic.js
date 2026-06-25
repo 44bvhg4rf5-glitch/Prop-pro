@@ -1,7 +1,8 @@
 import https from 'https';
-import { readBody, sendJson } from '../lib/helpers.js';
+import { readBody, sendJson, guardOrigin } from '../lib/helpers.js';
 
 export default async function handler(req, res) {
+  if (!guardOrigin(req, res)) return;
   if (req.method !== 'POST') { sendJson(res, 405, { error: { message: 'Method not allowed' } }); return; }
 
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';

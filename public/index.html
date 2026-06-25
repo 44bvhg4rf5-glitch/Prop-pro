@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-noemoji">
+  <link rel="stylesheet" href="styles.css?v=20260626-pro">
 </head>
 <body>
 <!-- HEADER -->
@@ -393,6 +393,16 @@
   </div>
   <div class="card">
     <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-search></i></div>Postcode Lookup</div>
+    <div class="sl-type-row">
+      <label for="sl-type" class="sl-type-label">Produce</label>
+      <select id="sl-type" class="sl-type-select">
+        <option value="homes">All homes (houses &amp; flats)</option>
+        <option value="houses">Houses only</option>
+        <option value="flats">Flats &amp; maisonettes only</option>
+        <option value="all">Homes + commercial premises</option>
+      </select>
+      <span class="sl-type-hint">choose what the search returns</span>
+    </div>
     <div class="pc-input-wrap" style="margin-bottom:4px">
       <input id="pc-input" placeholder="Postcode or whole district — e.g. HA1 2SB or HA3" maxlength="9" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')lookupPostcode()">
       <button class="pc-lookup-btn" id="pc-btn" onclick="lookupPostcode()"><i class=ic-send></i> Find All Addresses</button>
@@ -1334,6 +1344,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-noemoji"></script>
+<script src="app.js?v=20260626-pro"></script>
 </body>
 </html>
