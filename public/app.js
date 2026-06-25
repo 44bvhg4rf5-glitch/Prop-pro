@@ -4809,6 +4809,69 @@ function renderBlockedPanel(){
   }).join('');
 }
 
+// Bulk paste block — one address per line.
+async function bulkBlock(){
+  const raw=(document.getElementById('blk-bulk')||{}).value||'';
+  const lines=[...new Set(raw.split('\n').map(l=>l.trim()).filter(l=>l.length>4))];
+  if(!lines.length){ toast('Paste some addresses first (one per line)','warn'); return; }
+  if(pmBlockedConfigured){
+    try{
+      const r=await fetch('/api/suppress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bulk:lines,reason:'bulk import'})});
+      const d=await r.json();
+      if(r.ok && d.configured){
+        pmBlocked=d.entries||pmBlocked; localStorage.setItem('pmBlocked',JSON.stringify(pmBlocked));
+        updateBlockedBadge(); renderBlockedPanel();
+        const el=document.getElementById('blk-bulk'); if(el) el.value='';
+        toast(`${d.added} address(es) blocked${d.added<lines.length?' ('+(lines.length-d.added)+' already blocked)':''}`,'ok');
+        return;
+      }
+    }catch(e){ /* fall through to local */ }
+  }
+  // this-device fallback
+  let added=0;
+  for(const line of lines){ if(await blockAdd({fullAddress:line, reason:'bulk import'})) added++; }
+  const el=document.getElementById('blk-bulk'); if(el) el.value='';
+  renderBlockedPanel(); toast(`${added} address(es) blocked`,'ok');
+}
+
+// ── Single-address autocomplete on the Success Letters search ──
+let slAddrSuggestTimer=null;
+function slAddrSuggest(v){
+  v=(v||'').trim();
+  const box=document.getElementById('sl-addr-suggest'); if(!box) return;
+  if(v.length<3){ box.style.display='none'; box.innerHTML=''; return; }
+  clearTimeout(slAddrSuggestTimer);
+  slAddrSuggestTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/addresses?suggest='+encodeURIComponent(v));
+      if(!r.ok) return;
+      const d=await r.json();
+      const list=d.suggestions||[];
+      if(!list.length){ box.innerHTML='<div class="suggest-empty">No matches — try adding the town or postcode</div>'; box.style.display='block'; return; }
+      box._items=list;
+      box.innerHTML=list.map((a,i)=>`<div class="suggest-item" onmousedown="slAddrPick(${i})">${a.fullAddress}</div>`).join('');
+      box.style.display='block';
+    }catch(e){ /* ignore */ }
+  },220);
+}
+function slAddrPick(i){
+  const box=document.getElementById('sl-addr-suggest'); if(!box) return;
+  const a=(box._items||[])[i]; if(!a) return;
+  const inp=document.getElementById('sl-addr-input'); if(inp) inp.value='';
+  box.style.display='none'; box.innerHTML='';
+  const addr={
+    line1: a.line1 || (a.fullAddress||'').split(',')[0] || '',
+    line2: '', area: (a.fullAddress||'').split(',').slice(-2,-1)[0]?.trim() || '',
+    postcode: a.postcode||'', uprn: a.uprn||'', type: 'Residential',
+    fullAddress: a.fullAddress, selected:true, isLive:true, sortKey:0, idx:0
+  };
+  if(isBlockedAddr(addr)){ toast('That address is on the do-not-mail list','warn'); return; }
+  const stages=document.getElementById('pc-stages'); if(stages) stages.style.display='flex';
+  finishAddressLookup([addr], 'Royal Mail / OS Places', 1);
+  toast('Address ready — choose a letter, then Print or Queue','ok');
+}
+function slAddrSuggestBlur(){ setTimeout(()=>{ const box=document.getElementById('sl-addr-suggest'); if(box) box.style.display='none'; },150); }
+
 function exportBlocked(){
   if(!pmBlocked.length){ toast('Nothing to export','warn'); return; }
   const h=['Full Address','House','Postcode','UPRN','Reason','Blocked At'];

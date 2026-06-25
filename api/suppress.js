@@ -1,5 +1,5 @@
 import { readBody, sendJson } from '../lib/helpers.js';
-import { getBlocklist, addEntry, removeEntry } from '../lib/blocklist.js';
+import { getBlocklist, addEntry, addEntries, removeEntry } from '../lib/blocklist.js';
 
 // Do-not-mail suppression list API.
 //   GET                      → { configured, count, entries }
@@ -25,6 +25,25 @@ export default async function handler(req, res) {
   if (method === 'POST') {
     let body = {};
     try { body = JSON.parse(await readBody(req)); } catch { /* ignore */ }
+
+    // Bulk paste: { bulk: ["addr line", ...] }
+    if (Array.isArray(body.bulk)) {
+      const list = body.bulk.map((x) => {
+        const fa = (typeof x === 'string' ? x : (x && x.fullAddress) || '').trim();
+        if (!fa) return null;
+        return {
+          id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          uprn: '', fullAddress: fa, postcode: '', house: '',
+          line1: fa.split(',')[0] || '', reason: (body.reason || 'bulk import').trim(),
+          addedAt: new Date().toISOString(),
+        };
+      }).filter(Boolean);
+      const r = await addEntries(list);
+      if (!r.configured) { sendJson(res, 200, { configured: false }); return; }
+      sendJson(res, 200, { configured: true, added: r.added, count: r.entries.length, entries: r.entries });
+      return;
+    }
+
     const fullAddress = (body.fullAddress || '').trim();
     const postcode = (body.postcode || '').trim();
     const house = (body.house || '').trim();

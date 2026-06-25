@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260625-autofill">
+  <link rel="stylesheet" href="styles.css?v=20260625-both">
 </head>
 <body>
 <!-- HEADER -->
@@ -413,6 +413,12 @@
         <button class="pc-lookup-btn" id="st-btn" onclick="lookupStreet()">🛣️ Find Street</button>
       </div>
     </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;position:relative">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px">🔎 Find One Address</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:7px">Type any address and pick it from the list to letter it directly.</div>
+      <input id="sl-addr-input" autocomplete="off" placeholder="Start typing… e.g. 12 Hindes Road, Harrow" style="width:100%" oninput="slAddrSuggest(this.value)" onblur="slAddrSuggestBlur()">
+      <div id="sl-addr-suggest" class="suggest-box" style="display:none"></div>
+    </div>
   </div>
   <div class="progress-stages" id="pc-stages" style="display:none">
     <div class="stage" id="stg1">1 · Lookup</div>
@@ -509,6 +515,12 @@
       </div>
       <button class="btn bp" onclick="addBlockedManual()" style="align-self:flex-start">🚫 Block this address</button>
     </div>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2">📋</div>Bulk block — paste a list</div>
+    <div style="font-size:12px;color:var(--muted);margin:2px 0 12px">Got several complaints at once? Paste one address per line and block them all together.</div>
+    <textarea id="blk-bulk" rows="5" placeholder="One address per line:&#10;12 Hindes Road, Harrow, HA1 1SH&#10;5 Station Road, Harrow, HA1 2TX&#10;Flat 2, 9 Greenhill Way, HA1 1LE" style="width:100%;font-size:12px"></textarea>
+    <button class="btn bp" onclick="bulkBlock()" style="margin-top:10px">🚫 Block all pasted</button>
   </div>
   <div class="card">
     <div class="sec-hdr">
@@ -1322,6 +1334,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260625-autofill"></script>
+<script src="app.js?v=20260625-both"></script>
 </body>
 </html>
