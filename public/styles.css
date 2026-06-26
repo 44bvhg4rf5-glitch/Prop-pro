@@ -1152,3 +1152,9 @@ input::placeholder,textarea::placeholder{ color:var(--muted2); }
 .owner-h{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
 .owner-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0}
 .owner-row + .owner-row{border-top:1px solid var(--border)}
+
+/* Investor-ready polish: premium selected states */
+.ha-btn{ transition:all .15s ease; }
+.ha-btn:hover:not(.sel){ border-color:var(--blue-l); transform:translateY(-1px); }
+.ha-btn.sel{ background:linear-gradient(135deg,#2563EB,#1E3A8A); border-color:transparent; color:#fff; box-shadow:0 4px 16px rgba(37,99,235,.3); }
+.letter-choice.sel{ border-color:var(--blue); background:var(--blue-gl); }
