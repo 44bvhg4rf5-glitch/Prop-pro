@@ -1048,7 +1048,7 @@ function queueIntelLetter(id){
   const r=intelResults.find(x=>x.id===id);if(!r)return;
   const tId=(document.getElementById('f-tpl')||{}).value;
   const tpl=[...templates,...uploadedTpls].find(t=>t.id===tId)||templates[0];
-  const p={address:r.address.fullAddress,district:r.address.district||'Harrow',haCode:r.address.district||'HA',portal:'Rightmove',price:0,beds:0,type:r.address.propertyType||'Property',status:'For Sale'};
+  const p={address:r.address.fullAddress,fullAddress:r.address.fullAddress,uprn:r.address.uprn||'',postcode:r.address.postcode||'',district:r.address.district||'Harrow',haCode:r.address.district||'HA',portal:'Rightmove',price:0,beds:0,type:r.address.propertyType||'Property',status:'For Sale'};
   queue.push({id:Date.now()+Math.random(),prop:p,tpl,status:'pend',at:new Date(),auto:false,intel:true});
   updQBadge();updQStats();
   toast(`Letter queued for ${r.address.street||r.address.fullAddress}`,'ok');
@@ -2849,29 +2849,62 @@ function renderAddrGrid(){
 
 function renderIntelResult(result, container){
   const a = result.address, o = result.owner;
+  const owners = o.candidates || (o.ownerName ? [{ name: o.ownerName, role: o.ownerType, source: '' }] : []);
+  const planning = result.planning || [];
   const cp = Math.round((o.overallConfidence || 0.5) * 100); const cc = cp >= 70 ? 'high' : cp >= 45 ? 'med' : 'low';
+  const addrBadge = a.confirmed
+    ? '<span class="conf-badge cb-high">Address confirmed</span>'
+    : (a.candidateCount ? '<span class="conf-badge cb-med">' + a.candidateCount + ' possible</span>' : '<span class="conf-badge cb-low">Street only</span>');
+  const dataAttr = (n) => 'data-n="' + esc(n) + '" data-addr="' + esc(a.fullAddress) + '" data-uprn="' + esc(a.uprn || '') + '"';
+
   container.innerHTML = '<div class="intel-card"><div class="intel-card-head">'
     + '<div style="width:38px;height:38px;background:var(--blue);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"><i class=ic-home></i></div>'
-    + '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">' + a.fullAddress + '</div>'
-    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + (a.propertyType || '') + ' · ' + (a.estimatedPrice || '') + ' · ' + (a.district || '') + '</div>'
-    + '<div style="display:flex;align-items:center;gap:8px;margin-top:5px"><span style="font-size:10px;color:var(--muted)">Confidence:</span>'
-    + '<div class="conf-bar"><div class="conf-fill cf-' + cc + '" style="width:' + cp + '%"></div></div>'
-    + '<span class="conf-badge cb-' + cc + '">' + cp + '%</span></div></div>'
+    + '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">' + esc(a.fullAddress) + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + esc([a.propertyType, a.estimatedPrice, a.district].filter(Boolean).join(' · ')) + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-top:5px">' + addrBadge
+    + (result.rightmoveUrl ? '<a href="' + esc(result.rightmoveUrl) + '" target="_blank" rel="noopener" style="font-size:10px;color:var(--blue)">View listing ↗</a>' : '') + '</div></div>'
     + '<button class="btn bp sm-btn" onclick="queueIntelLetter(\'' + result.id + '\')"><i class=ic-printer></i> Queue Letter</button></div>'
     + '<div class="intel-card-body">'
+    // ── Address (from the address finder) ──
     + '<div style="padding:12px;background:var(--slate);border-radius:var(--r2);margin-bottom:12px">'
-    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px"><i class=ic-pin2></i> ' + a.fullAddress + '</div>'
-    + '<div style="font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px">'
-    + '<span><strong>Postcode:</strong> ' + (a.postcode || '—') + '</span>'
-    + '<span><strong>Type:</strong> ' + (a.propertyType || '—') + '</span>'
-    + '<span><strong>Value:</strong> ' + (a.estimatedPrice || '—') + '</span></div></div>'
-    + (o.ownerName ? '<div style="padding:12px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);margin-bottom:12px">'
-    + '<div style="font-size:13px;font-weight:700;margin-bottom:4px"><i class=ic-user></i> ' + o.ownerName + '</div>'
-    + '<div style="font-size:11px;color:var(--muted)">' + (o.ownerType || '') + ' · Land Reg: ' + (o.landRegTitle || '—') + ' · Purchased: ' + (o.purchaseDate || '—') + ' · Band ' + (o.councilTaxBand || '—') + '</div>'
-    + (o.estimatedEmail || o.phoneFormat ? '<div style="margin-top:8px;padding:7px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:6px;font-size:10px;color:#92400E"><i class=ic-alert></i>️ Illustrative format only: ' + (o.estimatedEmail || '') + (o.phoneFormat ? ' / ' + o.phoneFormat : '') + '</div>' : '') + '</div>' : '')
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px"><i class=ic-pin2></i> ' + esc(a.fullAddress) + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px">'
+    + '<span><strong>Postcode:</strong> ' + esc(a.postcode || '—') + '</span>'
+    + '<span><strong>Type:</strong> ' + esc(a.propertyType || '—') + '</span>'
+    + '<span><strong>Price:</strong> ' + esc(a.estimatedPrice || '—') + '</span></div>'
+    + '<div style="font-size:11px;color:' + (a.confirmed ? 'var(--green)' : 'var(--muted)') + '">' + esc(a.note || '') + '</div></div>'
+    // ── Owner research (Companies House + planning) ──
+    + '<div style="padding:12px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.14);border-radius:var(--r2);margin-bottom:12px">'
+    + '<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Owner research — free public records</div>'
+    + (owners.length
+        ? owners.map(w => '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.05)">'
+            + '<div style="min-width:0"><div style="font-size:13px;font-weight:700"><i class=ic-user></i> ' + esc(w.name) + '</div>'
+            + '<div style="font-size:11px;color:var(--muted)">' + esc([w.role, w.source, w.detail].filter(Boolean).join(' · ')) + '</div></div>'
+            + '<button class="btn bs sm-btn" onclick="useIntelOwner(this)" ' + dataAttr(w.name) + '>Use on letters</button></div>').join('')
+        : '<div style="font-size:12px;color:var(--muted)">No owner found in free records. Use the links below, or a Land Registry title (~£3) for the registered owner.</div>')
+    + '</div>'
+    // ── Planning history ──
+    + (planning.length ? '<div style="padding:12px;background:var(--slate);border-radius:var(--r2);margin-bottom:12px">'
+        + '<div style="font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Planning history (' + planning.length + ')</div>'
+        + planning.map(p => '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0">'
+            + '<div style="min-width:0"><div style="font-size:12px">' + esc(p.description || p.ref || 'Application') + '</div>'
+            + '<div style="font-size:11px;color:var(--muted)">' + esc([p.date, (p.applicant && p.applicant !== 'See planning record') ? p.applicant : ''].filter(Boolean).join(' · ')) + '</div></div>'
+            + (p.url ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener" class="btn bs sm-btn">Read ↗</a>' : '') + '</div>').join('')
+        + '</div>' : '')
+    // ── Official record links ──
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'
-    + (result.govLinks || []).map(l => '<a href="' + l.url + '" target="_blank" rel="noopener" class="gov-link"><div style="flex:1"><div class="gov-link-title">' + l.label + '</div><div class="gov-link-desc">' + l.desc + '</div></div><span style="color:var(--blue);font-size:10px"><i class=ic-arrowupright></i></span></a>').join('')
-    + '</div><div style="margin-top:8px;padding:7px;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.12);border-radius:6px;font-size:10px;color:var(--red)"><i class=ic-alert></i>️ Owner data is AI-generated for illustration. Use Land Registry (£3) or Companies House (free) for confirmed data. Comply with UK GDPR.</div></div></div>';
+    + (result.govLinks || []).filter(l => l.url).map(l => '<a href="' + esc(l.url) + '" target="_blank" rel="noopener" class="gov-link"><div style="flex:1"><div class="gov-link-title">' + esc(l.label) + '</div><div class="gov-link-desc">' + esc(l.desc) + '</div></div><span style="color:var(--blue);font-size:10px"><i class=ic-arrowupright></i></span></a>').join('')
+    + '</div>'
+    + '<div style="margin-top:8px;padding:7px;background:rgba(217,119,6,.06);border:1px solid rgba(217,119,6,.14);border-radius:6px;font-size:10px;color:#92400E"><i class=ic-alert></i> Names are from public records (Companies House / planning). Verify before posting, use for postal contact only, and screen against the MPS and your do-not-mail list (UK GDPR / PECR).</div>'
+    + '</div></div>';
+}
+
+// Save an owner name from an intel card so letters to that address personalise.
+function useIntelOwner(btn){
+  const name = btn.dataset.n || '';
+  const a = { fullAddress: btn.dataset.addr || '', uprn: btn.dataset.uprn || '' };
+  setOwnerName(a, name);
+  toast('Saved — letters to ' + (a.fullAddress || 'this address') + ' will open “Dear ' + name + ',”', 'ok');
 }
 
 /* ── RE-INIT ── */
@@ -5389,196 +5422,121 @@ async function callAI(prompt, maxTokens=1500, useWebSearch=false){
 }
 
 async function analyseProperty(input){
-  setThinking(true,'Searching for property and owner information…');
-  document.getElementById('intel-result-area').innerHTML='';
+  input = String(input || '').trim();
+  const isUrl = /^https?:\/\//i.test(input);
+  const PC_RE = /[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i;
 
-  const isUrl = input.startsWith('http');
-  const isPostcode = /^[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}$/i.test(input.trim());
-
-  // ── Build comprehensive owner-finding prompt ──
-  const ownerPrompt = `You are a UK property research specialist. Search multiple public sources to find the owner and full details of this property: "${input}"
-
-Search these sources in order:
-1. HM Land Registry (search "land registry title register ${input}") - ownership records
-2. Companies House (search "companies house ${input}") - if company-owned
-3. Electoral roll / 192.com / voters register mentions
-4. Rightmove / Zoopla / OnTheMarket - current or past listings with agent details
-5. Planning applications (search "planning application ${input}") - often has applicant name
-6. Council tax records (sometimes publicly mentioned)
-7. News articles, local planning notices, or other public mentions
-
-For each source searched, report what you found or didn't find.
-
-Return ONLY this JSON (no markdown, no explanation outside JSON):
-{
-  "address": {
-    "fullAddress": "COMPLETE ADDRESS WITH POSTCODE",
-    "line1": "HOUSE NUMBER AND STREET",
-    "postcode": "FULL POSTCODE",
-    "uprn": "UPRN IF FOUND",
-    "propertyType": "Flat/Semi-Detached/Terraced/Detached",
-    "estimatedValue": "£XXX,XXX",
-    "bedrooms": NUMBER_OR_NULL
-  },
-  "owner": {
-    "ownerName": "FULL NAME IF FOUND or null",
-    "ownerType": "individual OR company OR unknown",
-    "confidence": "high/medium/low",
-    "purchaseDate": "YEAR IF KNOWN",
-    "purchasePrice": "£XXX,XXX IF KNOWN",
-    "landRegTitle": "TITLE NUMBER IF FOUND",
-    "companyNumber": "CH NUMBER IF COMPANY",
-    "registeredAddress": "OWNER ADDRESS IF DIFFERENT",
-    "sourcesChecked": ["Land Registry","Companies House","Electoral Roll","Planning Apps","Property Portals"],
-    "sourcesFound": ["list only sources that returned data"],
-    "evidenceNotes": "Summary of what each source revealed",
-    "contactHints": "Any publicly available contact info found (email/phone formats only if public)"
-  },
-  "rightmoveUrl": "https://www.rightmove.co.uk/properties/NNNNN IF FOUND ELSE null",
-  "zoplaUrl": "https://www.zoopla.co.uk/... IF FOUND ELSE null",
-  "currentlyListed": true_or_false,
-  "listingPrice": "£XXX,XXX IF CURRENTLY LISTED",
-  "agent": "AGENT NAME IF LISTED",
-  "govLinks": [
-    {"label":"Land Registry Title Register","url":"https://eservices.landregistry.gov.uk/eservices/FindAProperty/view/QuickEnquiryInit.do","desc":"Official ownership records (£3)"},
-    {"label":"Companies House","url":"https://find-and-update.company-information.service.gov.uk/","desc":"Free company ownership search"},
-    {"label":"Planning Portal","url":"https://www.planningportal.co.uk/","desc":"Planning applications by address"},
-    {"label":"192.com People Search","url":"https://www.192.com/","desc":"Electoral roll and people finder"}
-  ]
-}`;
-
-  try{
-    // Multi-turn call with web_search
-    const messages = [{role:'user', content:ownerPrompt}];
-    let finalText = '';
-    let turn = 0;
-    const MAX = 6;
-
-    while(turn < MAX){
-      turn++;
-      setThinking(true, `Searching source ${turn} of up to ${MAX}…`);
-
-      const resp = await fetch('/api/ai',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'auto',
-          max_tokens:3000,
-          tools:[{type:'web_search_20250305',name:'web_search'}],
-          messages
-        })
-      });
-
-      if(!resp.ok) throw new Error('API '+resp.status);
-      const data = await resp.json();
-      const blocks = data.content || [];
-      blocks.filter(b=>b.type==='text').forEach(b=>{ finalText += b.text; });
-
-      if(data.stop_reason==='end_turn') break;
-      if(data.stop_reason==='tool_use'){
-        const toolUses = blocks.filter(b=>b.type==='tool_use');
-        if(!toolUses.length) break;
-        messages.push({role:'assistant',content:blocks});
-        messages.push({role:'user',content:toolUses.map(tu=>({
-          type:'tool_result',tool_use_id:tu.id,
-          content:'Search complete. Continue searching other sources or compile final JSON.'
-        }))});
-      } else break;
-    }
-
-    setThinking(true,'Processing results…');
-
-    // Parse the JSON result
-    let parsed = null;
-    const patterns = [
-      /\{"address"[\s\S]*?"govLinks"[\s\S]*?\]\s*\}/,
-      /\{[\s\S]*?"owner"[\s\S]*?"govLinks"[\s\S]*?\]\s*\}/,
-      /\{[\s\S]*?"address"[\s\S]*?\}/,
-    ];
-    for(const pat of patterns){
-      const m = finalText.match(pat);
-      if(m){ try{ parsed = JSON.parse(m[0]); if(parsed?.address) break; }catch(e){} }
-    }
-
-    if(!parsed){
-      // Ask AI to reformat
-      const reformat = await fetch('/api/ai',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'auto',max_tokens:2000,messages:[{role:'user',content:
-          `Extract all property and owner information found and format as clean JSON matching this structure exactly. Input text:\n${finalText.slice(0,3000)}\n\nReturn ONLY valid JSON with keys: address (fullAddress,line1,postcode,propertyType,estimatedValue), owner (ownerName,ownerType,confidence,purchaseDate,sourcesFound,evidenceNotes), rightmoveUrl, currentlyListed, agent, govLinks`
-        }]})
-      });
-      if(reformat.ok){
-        const rd = await reformat.json();
-        const rt = rd.content?.find(b=>b.type==='text')?.text||'';
-        const rm = rt.match(/\{[\s\S]*\}/);
-        if(rm) try{ parsed = JSON.parse(rm[0]); }catch(e){}
-      }
-    }
-
-    if(!parsed) throw new Error('Could not extract property data from search results');
-
-    setThinking(false);
-
-    // Add to intel results
-    const result = {
-      id: 'intel-'+Date.now(),
-      address: {
-        fullAddress: parsed.address?.fullAddress || input,
-        line1: parsed.address?.line1 || '',
-        postcode: parsed.address?.postcode || '',
-        propertyType: parsed.address?.propertyType || '',
-        estimatedPrice: parsed.address?.estimatedValue || '',
-        district: parsed.address?.postcode?.split(' ')?.[0] || '',
-        addressNotes: parsed.currentlyListed ? `Currently listed at ${parsed.listingPrice||'price TBC'} with ${parsed.agent||'agent unknown'}` : 'Not currently listed'
-      },
-      owner: {
-        ownerName: parsed.owner?.ownerName || 'Not found in public records',
-        ownerType: parsed.owner?.ownerType || 'unknown',
-        overallConfidence: parsed.owner?.confidence==='high'?0.85:parsed.owner?.confidence==='medium'?0.60:0.30,
-        purchaseDate: parsed.owner?.purchaseDate || '—',
-        purchasePrice: parsed.owner?.purchasePrice || '—',
-        landRegTitle: parsed.owner?.landRegTitle || '—',
-        companyNumber: parsed.owner?.companyNumber || '',
-        registeredAddress: parsed.owner?.registeredAddress || '',
-        councilTaxBand: '—',
-        sourceDetails: (parsed.owner?.sourcesChecked||['Web Search']).map(s=>({
-          source:s,
-          finding: parsed.owner?.sourcesFound?.includes(s) ? 'Data found' : 'No public record found',
-          confidence: parsed.owner?.sourcesFound?.includes(s) ? 0.7 : 0.1
-        })),
-        researchNotes: parsed.owner?.evidenceNotes || 'Searched public records',
-        estimatedEmail: parsed.owner?.contactHints?.includes('@')?parsed.owner.contactHints:'',
-        phoneFormat: ''
-      },
-      govLinks: parsed.govLinks || [
-        {label:'Land Registry',url:'https://eservices.landregistry.gov.uk/eservices/FindAProperty/view/QuickEnquiryInit.do',desc:'Official ownership (£3)'},
-        {label:'Companies House',url:'https://find-and-update.company-information.service.gov.uk/',desc:'Free company search'},
-        {label:'Planning Portal',url:'https://www.planningportal.co.uk/',desc:'Planning applications'},
-        {label:'192.com',url:'https://www.192.com/',desc:'People and electoral roll'}
-      ],
-      rightmoveUrl: parsed.rightmoveUrl || null,
-      currentlyListed: parsed.currentlyListed || false
+  // ── 1. Get the listing's address details ──
+  //     A Rightmove URL is scraped server-side; a typed postcode/address is
+  //     used as-is. No AI guessing — only real listing data from here on.
+  let listing;
+  if (isUrl){
+    if (!/rightmove\.co\.uk/i.test(input)) throw new Error('Paste a Rightmove property link, or type a UK postcode / full address.');
+    setThinking(true, 'Reading the Rightmove listing…');
+    const r = await fetch('/api/property?' + new URLSearchParams({ url: input }).toString());
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(d.error || ('Could not read the listing (HTTP ' + r.status + ').'));
+    if (!d.found) throw new Error(d.note || 'Could not read this listing automatically. Paste the postcode or full address instead.');
+    listing = d;
+  } else {
+    const pcM = input.match(PC_RE);
+    listing = {
+      displayAddress: input,
+      postcode: pcM ? pcM[0].toUpperCase() : '',
+      lat:null, lon:null, type:'', beds:0, price:0, priceLabel:'', sizeSqft:null,
+      url:null, source:'Manual entry',
     };
-
-    intelResults.push(result);
-    updateIntelTable();
-    renderIntelResult(result, document.getElementById('intel-result-area'));
-
-    const ownerFound = result.owner.ownerName && result.owner.ownerName !== 'Not found in public records';
-    toast(`${ownerFound?'Owner found: '+result.owner.ownerName:'Search complete — see results below'}`, ownerFound?'ok':'');
-
-  }catch(err){
-    setThinking(false);
-    console.error('Intel search error:', err);
-    document.getElementById('intel-result-area').innerHTML =
-      '<div class="card" style="border-color:var(--red)">'
-      +'<div style="color:var(--red);font-weight:700;margin-bottom:8px"><i class=ic-alert></i>️ Search Error</div>'
-      +'<div style="font-size:13px;color:var(--text2)">'+err.message+'</div>'
-      +'<div style="font-size:12px;color:var(--muted);margin-top:10px">Try searching with a full UK postcode (e.g. HA1 2SB) or a Rightmove property URL.</div>'
-      +'</div>';
-    toast('Search error: '+err.message.slice(0,60), 'err');
   }
+
+  const district = (listing.postcode || '').split(' ')[0]
+    || ((listing.displayAddress || '').match(/\bHA\d\b/i) || [''])[0].toUpperCase();
+
+  // ── 2. Resolve the EXACT address (EPC register + OS Places / Royal Mail) ──
+  setThinking(true, 'Finding the exact address…');
+  let resolved = null;
+  try {
+    const qs = new URLSearchParams({ street: listing.displayAddress || '', type: listing.type || '', district });
+    if (PC_RE.test(listing.postcode || '')) qs.set('postcode', listing.postcode);
+    if (listing.lat != null && listing.lon != null){ qs.set('lat', listing.lat); qs.set('lon', listing.lon); }
+    if (listing.sizeSqft > 0) qs.set('size', listing.sizeSqft);
+    const rr = await fetch('/api/resolve?' + qs.toString());
+    if (rr.ok) resolved = await rr.json();
+  } catch(e){ /* resolve is best-effort */ }
+
+  const cands = (resolved && resolved.candidates) || [];
+  const best = cands[0] || null;
+  const addrConfirmed = !!(resolved && resolved.confirmed);
+  const fullAddress = (best && best.fullAddress)
+    || (PC_RE.test(listing.displayAddress) ? listing.displayAddress
+        : (listing.displayAddress + (listing.postcode ? (', ' + listing.postcode) : '')));
+  const line1 = (best && best.line1) || (listing.displayAddress || '').split(',')[0] || '';
+  const postcode = (best && best.postcode) || listing.postcode || '';
+
+  // ── 3. Research the owner — Companies House + planning (free public records) ──
+  setThinking(true, 'Researching the owner (Companies House + planning)…');
+  let ownerData = null;
+  try {
+    const oq = new URLSearchParams();
+    if (fullAddress) oq.set('address', fullAddress);
+    if (postcode) oq.set('postcode', postcode);
+    if (line1) oq.set('line1', line1);
+    if (postcode || fullAddress){
+      const orr = await fetch('/api/owner?' + oq.toString());
+      if (orr.ok) ownerData = await orr.json();
+    }
+  } catch(e){ /* owner research is best-effort */ }
+
+  const owners = (ownerData && ownerData.owners) || [];
+  const planning = (ownerData && ownerData.planning) || [];
+  const firstOwner = owners[0] || null;
+  setThinking(false);
+
+  const addrNote = !resolved ? 'Address not resolved — open the listing to read the house number.'
+    : addrConfirmed ? ('Exact address confirmed from ' + (resolved.source || 'public records') + '.')
+    : (cands.length ? (cands.length + ' possible address' + (cands.length>1?'es':'') + ' on this street — open the Search panel to confirm the house number.')
+       : (resolved.note || 'No exact address found — open the listing on Rightmove to read the house number.'));
+
+  return {
+    id: 'intel-' + Date.now() + Math.random().toString(36).slice(2,6),
+    address: {
+      fullAddress: fullAddress || input,
+      line1, postcode,
+      uprn: (best && best.uprn) || '',
+      propertyType: listing.type || '',
+      estimatedPrice: listing.priceLabel || (listing.price ? '£' + Number(listing.price).toLocaleString() : ''),
+      district: district || (postcode.split(' ')[0] || ''),
+      confirmed: addrConfirmed,
+      resolveSource: (resolved && resolved.source) || null,
+      candidateCount: cands.length,
+      note: addrNote,
+    },
+    owner: {
+      ownerName: firstOwner ? firstOwner.name : '',
+      ownerType: firstOwner ? ((firstOwner.role || '') + (firstOwner.source ? (' · ' + firstOwner.source) : '')) : '',
+      overallConfidence: addrConfirmed ? (firstOwner ? 0.8 : 0.5) : (firstOwner ? 0.55 : 0.3),
+      candidates: owners,
+      sources: (ownerData && ownerData.sources) || [],
+      researchNote: (ownerData && ownerData.note) || '',
+      landRegTitle: '—', purchaseDate: '—', purchasePrice: '—', councilTaxBand: '—',
+      companyNumber: '', estimatedEmail: '', phoneFormat: '',
+    },
+    planning,
+    listing: { url: listing.url || null, source: listing.source, beds: listing.beds, price: listing.price },
+    govLinks: (ownerData && ownerData.links) ? [
+      { label:'Companies House', url: ownerData.links.companiesHouse, desc:'Free company ownership search' },
+      { label:'Planning applications', url: ownerData.links.planning, desc:'PlanIt — applications at this address' },
+      { label:'Land Registry title', url: ownerData.links.landRegistry, desc:'Official registered owner (~£3)' },
+      { label:'Electoral roll / 192.com', url: ownerData.links.openRegister, desc:'People at this postcode' },
+    ] : [
+      { label:'Companies House', url:'https://find-and-update.company-information.service.gov.uk/', desc:'Free company search' },
+      { label:'Planning Portal', url:'https://www.planningportal.co.uk/', desc:'Planning applications' },
+      { label:'Land Registry', url:'https://search-property-information.service.gov.uk/', desc:'Official owner (~£3)' },
+      { label:'192.com', url:'https://www.192.com/', desc:'People and electoral roll' },
+    ],
+    rightmoveUrl: listing.url || null,
+    currentlyListed: isUrl,
+    timestamp: new Date(),
+  };
 }
 
 
