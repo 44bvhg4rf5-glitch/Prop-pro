@@ -93,25 +93,26 @@ export default async function handler(req, res) {
     pcList = [...new Set(pcList)].filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 14);
   }
 
-  // 2. OS Places rescue — full Royal Mail coverage of the street.
-  let osCands = [];
-  if (OS && pcList.length && wantStreet) osCands = await osStreetAddresses(OS, pcList, wantStreet, area);
-
-  // 3. Merge into one result with a confidence flag.
+  // 2. Merge. EPC is preferred — its candidates are real, certified,
+  // house-numbered addresses. We only fall back to OS Places when EPC has
+  // nothing on the street, and even then it auto-matches ONLY when the street
+  // has a single address (an exact match); a multi-house street is not a usable
+  // "this is the property" result, so it's left unmatched rather than guessed.
   let confirmed = false, candidates = [], source = '';
-  if (epcConfident && epcCands.length) {
-    confirmed = true; source = 'EPC register';
-    candidates = [epcCands[0], ...osCands.filter((o) => norm(o.fullAddress) !== norm(epcCands[0].fullAddress))];
-  } else if (osCands.length) {
-    source = 'Royal Mail / OS Places'; candidates = osCands; confirmed = osCands.length === 1;
-  } else if (epcCands.length) {
-    source = 'EPC register'; candidates = epcCands; confirmed = epcCands.length === 1;
+  if (epcCands.length) {
+    source = 'EPC register';
+    confirmed = epcConfident || epcCands.length === 1;
+    candidates = epcCands;
+  } else if (OS && pcList.length && wantStreet) {
+    const osCands = await osStreetAddresses(OS, pcList, wantStreet, area);
+    if (osCands.length === 1) { source = 'Royal Mail / OS Places'; candidates = osCands; confirmed = true; }
   }
 
   sendJson(res, 200, {
     confirmed, source: source || null, street: wantStreet || null,
+    epcMatch: source === 'EPC register',
     sizeMatched: !!(epc && epc.sizeMatched),
     total: candidates.length, candidates: candidates.slice(0, 60),
-    note: candidates.length ? undefined : 'No address match — open the listing on Rightmove to read the road.',
+    note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
   });
 }
