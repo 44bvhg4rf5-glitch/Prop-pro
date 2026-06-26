@@ -13,6 +13,7 @@ import landregistry from './api/landregistry.js';
 import addresses from './api/addresses.js';
 import resolve from './api/resolve.js';
 import owner from './api/owner.js';
+import lead from './api/lead.js';
 import suppress from './api/suppress.js';
 import printnode from './api/printnode.js';
 import ai from './api/ai.js';
@@ -39,6 +40,7 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/addresses')) { addresses(req, res); return; }
   if (req.url.startsWith('/api/resolve')) { resolve(req, res); return; }
   if (req.url.startsWith('/api/owner')) { owner(req, res); return; }
+  if (req.url.startsWith('/api/lead')) { lead(req, res); return; }
   if (req.url.startsWith('/api/suppress')) { suppress(req, res); return; }
   if (req.url.startsWith('/api/printnode')) { printnode(req, res); return; }
   if (req.url.startsWith('/api/epc-monitor')) { epcMonitor(req, res); return; }
@@ -49,6 +51,7 @@ const server = http.createServer((req, res) => {
   // ── Static files ──
   let url = req.url === '/' ? '/index.html' : req.url;
   url = url.split('?')[0]; // strip query string
+  if (!path.extname(url) && url !== '/') url += '.html'; // clean URLs (/valuation → valuation.html)
   const safePath = path
     .normalize(url)
     .replace(/^(\.\.[/\\])+/, '')

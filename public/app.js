@@ -370,6 +370,65 @@ function buildLetter(body,p){
     .replace(/\{\{type\}\}/g,p.type);
   return applyOwnerSalutation(out, owner);
 }
+/* ── Valuation leads (from the public landing page) ── */
+let pmLeads=[];
+async function loadLeads(){
+  const list=document.getElementById('leads-list'); if(list) list.innerHTML='<div style="padding:20px;color:var(--muted);font-size:13px">Loading…</div>';
+  try{
+    const r=await fetch('/api/lead');
+    const d=await r.json();
+    pmLeads=Array.isArray(d.leads)?d.leads:[];
+    const card=document.getElementById('leads-status-card'); if(card) card.style.display=d.configured?'none':'';
+  }catch(e){ pmLeads=[]; }
+  renderLeads();
+}
+function leadsBadge(){
+  const b=document.getElementById('leads-nav-badge'); if(!b) return;
+  const n=pmLeads.filter(l=>l.status==='new').length;
+  b.textContent=n; b.style.display=n?'inline-flex':'none';
+}
+function renderLeads(){
+  leadsBadge();
+  const sub=document.getElementById('leads-count-sub'); if(sub) sub.textContent=pmLeads.length?`${pmLeads.length} enquir${pmLeads.length===1?'y':'ies'} · ${pmLeads.filter(l=>l.status==='new').length} new`:'No leads yet';
+  const list=document.getElementById('leads-list'); if(!list) return;
+  if(!pmLeads.length){ list.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No valuation enquiries yet. They’ll appear here as soon as someone submits the form on your <a href="/valuation" target="_blank" rel="noopener" style="color:var(--blue)">Free Valuation page</a>.</div>'; return; }
+  const svc={sale:'Sell',let:'Let',both:'Sell or let'};
+  list.innerHTML=pmLeads.map(l=>{
+    const when=(l.at||'').slice(0,10);
+    const isNew=l.status==='new';
+    return `<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 6px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${esc(l.name)}</span>
+          ${isNew?'<span style="font-size:9px;font-weight:800;letter-spacing:.4px;background:rgba(5,150,105,.12);color:#059669;padding:2px 7px;border-radius:4px">NEW</span>':''}
+          <span class="tag tag-blue" style="font-size:9px">${svc[l.service]||'Sell'}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text2);margin-top:3px">${esc(l.address)}${l.postcode?' · <strong>'+esc(l.postcode)+'</strong>':''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;display:flex;gap:14px;flex-wrap:wrap">
+          ${l.email?'<a href="mailto:'+esc(l.email)+'" style="color:var(--blue)">'+esc(l.email)+'</a>':''}
+          ${l.phone?'<a href="tel:'+esc(l.phone)+'" style="color:var(--blue)">'+esc(l.phone)+'</a>':''}
+          <span>${when}</span>
+        </div>
+        ${l.message?'<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic">“'+esc(l.message)+'”</div>':''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+        ${isNew?'<button class="btn bp sm-btn" onclick="markLead(\''+l.id+'\')">Mark contacted</button>':'<span style="font-size:11px;color:var(--green);font-weight:600;text-align:center">✓ Contacted</span>'}
+        <button class="btn bghost sm-btn" onclick="removeLead(\''+l.id+'\')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function markLead(id){
+  const l=pmLeads.find(x=>x.id===id); if(l){ l.status='contacted'; renderLeads(); }
+  // (status is a local view aid; the lead stays stored)
+}
+async function removeLead(id){
+  if(!confirm('Delete this lead?')) return;
+  try{ const r=await fetch('/api/lead?id='+encodeURIComponent(id),{method:'DELETE'}); const d=await r.json(); if(r.ok){ pmLeads=d.leads||pmLeads.filter(l=>l.id!==id); } }
+  catch(e){ pmLeads=pmLeads.filter(l=>l.id!==id); }
+  renderLeads();
+}
+
 /* ── Owner research popup (Companies House + planning, free public records) ── */
 async function researchOwner(a){
   if(!a){ return; }
@@ -415,7 +474,7 @@ function openOwnerModal(a, data, loading){
         +'</div>':'')
       +'<div class="owner-sec"><div class="owner-h">Set the name for letters</div>'
         +'<div style="display:flex;gap:8px"><input id="owner-manual" placeholder="e.g. Mr &amp; Mrs Patel" value="'+esc(current)+'" style="flex:1"><button class="btn bp" onclick="useOwnerName(document.getElementById(\'owner-manual\').value)">Save</button></div>'
-        +(current?'<div style="font-size:11px;color:var(--green);margin-top:6px">Letters to this address will open “Dear '+esc(current)+',”. <a href="#" onclick="clearOwnerName();return false" style="color:var(--red)">Remove</a></div>':'')
+        +(current?'<div style="font-size:11px;color:var(--green);margin-top:6px">Letters to this address will open “Dear '+esc(current)+',”. <a role="button" tabindex="0" onclick="clearOwnerName()" style="color:var(--red);cursor:pointer;text-decoration:underline">Remove</a></div>':'')
       +'</div>'
       +'<div class="owner-sec"><div class="owner-h">Look up the rest yourself (public records)</div><div style="display:flex;gap:7px;flex-wrap:wrap">'
         +Object.entries(data.links||{}).map(([k,v])=>'<a href="'+esc(v)+'" target="_blank" rel="noopener" class="btn bs sm-btn">'+(labels[k]||k)+' ↗</a>').join('')
@@ -2478,6 +2537,7 @@ function showPanel(n){
   if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); }
   if (n === 'queue')     renderQueue();
   if (n === 'blocked')   { loadBlocklist().then(renderBlockedPanel); renderBlockedPanel(); }
+  if (n === 'leads')     loadLeads();
   if (n === 'success')   loadBlocklist();
   if (n === 'printers')  { renderPrinters(); renderPrintNodeUI(); }
   if (n === 'bot')       updateBotUI();
@@ -2802,6 +2862,7 @@ function renderIntelResult(result, container){
     startRTFeed();
     blog('PropMail Pro ready — click <i class=ic-search></i> Find Live Properties to start.', 'inf');
     loadBlocklist();
+    loadLeads();
     setTimeout(() => {
       try {
         const s1 = genHAProps('HA1', 'all', 'all', '0', '', 1, 12345).slice(0, 8);
