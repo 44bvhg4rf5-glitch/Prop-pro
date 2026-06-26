@@ -1,7 +1,7 @@
 import { readBody, sendJson, guardOrigin } from '../lib/helpers.js';
 import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 import { requireAuth, getSession, tkey, getAccounts, authConfigured } from '../lib/auth.js';
-import { llmConfigured, callClaude, textOf, extractJson } from '../lib/llm.js';
+import { llmConfigured, runLLM, extractJson } from '../lib/llm.js';
 import { emailConfigured, sendEmail } from '../lib/email.js';
 
 export const config = { maxDuration: 60 };
@@ -81,16 +81,16 @@ async function generate(tenant) {
   const list = (await getJSON(tkey(tenant, REPORTS), [])) || [];
   const recent = list.slice(0, 5).map((r) => r.headline).filter(Boolean);
 
-  const r = await callClaude({
-    max_tokens: 4000,
+  const r = await runLLM({
     system: SYSTEM,
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
-    messages: [{ role: 'user', content: userPrompt(snap, recent) }],
-  }, 55000);
+    user: userPrompt(snap, recent),
+    maxTokens: 4000,
+    search: true,
+    timeoutMs: 55000,
+  });
 
-  if (r.error) return { ok: false, error: r.error };
-  if (r.status && r.status >= 400) return { ok: false, error: 'AI error ' + r.status };
-  const parsed = extractJson(textOf(r.json));
+  if (r.error) return { ok: false, error: r.error === 'no_key' ? 'AI key not configured' : 'AI error: ' + r.error };
+  const parsed = extractJson(r.text);
   if (!parsed || !parsed.headline) return { ok: false, error: 'Could not parse a report' };
 
   const report = {
