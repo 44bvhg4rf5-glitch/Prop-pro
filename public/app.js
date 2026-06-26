@@ -2575,20 +2575,44 @@ const HOME_TOOLS = [
     { id:'printers', name:'Printers', desc:'Manage your network printers', svg:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>' },
   ]},
 ];
+// The core day-to-day workflow, surfaced at the top of Home for one-click access.
+const FEATURED = ['ha', 'intel', 'queue'];
+
+// Live count / status shown on a Home card (refreshed each time Home is opened).
+function homeStat(id){
+  try{
+    if(id === 'queue'){ const n = (typeof queue !== 'undefined' ? queue.filter(q => q.status === 'pend').length : 0); return n ? { text: n + ' waiting', tone:'gold' } : null; }
+    if(id === 'leads'){ const n = (typeof pmLeads !== 'undefined' ? pmLeads.filter(l => l && l.status === 'new').length : 0); return n ? { text: n + ' new', tone:'green' } : null; }
+    if(id === 'blocked'){ const n = (typeof pmBlocked !== 'undefined' ? pmBlocked.length : 0); return n ? { text: n + ' on list', tone:'red' } : null; }
+    if(id === 'ha'){ const n = (typeof props !== 'undefined' ? props.length : 0); return n ? { text: n + ' found', tone:'blue' } : null; }
+    if(id === 'campaigns'){ const n = (typeof contacts !== 'undefined' && typeof isFollowupDue === 'function' ? Object.values(contacts).filter(isFollowupDue).length : 0); return n ? { text: n + ' due', tone:'gold' } : null; }
+    if(id === 'bot'){ return (typeof botOn !== 'undefined' && botOn) ? { text:'Live', tone:'green', pulse:true } : null; }
+  }catch(e){}
+  return null;
+}
+
 function renderHome(){
   const el = document.getElementById('home-grid'); if (!el) return;
-  el.innerHTML = HOME_TOOLS.map(sec =>
-    '<div class="home-section"><div class="home-section-label">' + sec.group + '</div><div class="home-grid">'
-    + sec.items.map(t =>
-        '<button class="home-card" onclick="showPanel(\'' + t.id + '\')">'
-        + '<span class="home-card-ic"><svg viewBox="0 0 24 24">' + t.svg + '</svg></span>'
-        + '<span class="home-card-body"><span class="home-card-name">' + esc(t.name)
-        + (t.badge ? ' <span class="home-card-badge ' + (t.badgeColor || 'b-blue') + '">' + esc(t.badge) + '</span>' : '')
-        + '</span><span class="home-card-desc">' + esc(t.desc) + '</span></span>'
-        + '</button>'
-      ).join('')
-    + '</div></div>'
-  ).join('');
+  const byId = {}; HOME_TOOLS.forEach(s => s.items.forEach(t => { byId[t.id] = t; }));
+  const card = (t, featured) => {
+    const st = homeStat(t.id);
+    return '<button class="home-card' + (featured ? ' featured' : '') + '" onclick="showPanel(\'' + t.id + '\')">'
+      + '<span class="home-card-ic"><svg viewBox="0 0 24 24">' + t.svg + '</svg></span>'
+      + '<span class="home-card-body"><span class="home-card-name">' + esc(t.name)
+      + (t.badge ? ' <span class="home-card-badge ' + (t.badgeColor || 'b-blue') + '">' + esc(t.badge) + '</span>' : '')
+      + '</span><span class="home-card-desc">' + esc(t.desc) + '</span></span>'
+      + (st ? '<span class="home-card-stat tone-' + st.tone + (st.pulse ? ' pulsing' : '') + '">' + esc(st.text) + '</span>' : '')
+      + '</button>';
+  };
+  const section = (label, items, featured) =>
+    '<div class="home-section"><div class="home-section-label">' + label + '</div><div class="home-grid">'
+    + items.map(t => card(t, featured)).join('') + '</div></div>';
+
+  let html = '';
+  const feat = FEATURED.map(id => byId[id]).filter(Boolean);
+  if (feat.length) html += section('Quick start', feat, true);
+  html += HOME_TOOLS.map(sec => section(sec.group, sec.items, false)).join('');
+  el.innerHTML = html;
 }
 
 function showPanel(n){
