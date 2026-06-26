@@ -10,6 +10,7 @@ let pmBlocked=[], pmBlockedConfigured=false; // do-not-mail suppression list
 const SL_TYPE_LABEL={homes:'homes',houses:'houses',flats:'flats / maisonettes',all:'addresses (incl. commercial)'};
 function slTypes(){ const el=document.getElementById('sl-type'); return (el&&el.value)||'homes'; }
 let intelResults=[], chatHistory=[];
+let perfState={outcomes:[],targets:{},prints:{}}, perfConfigured=false, perfLoaded=false;
 let bdQueued=0;
 let activeTpl=null, selPrinter=null;
 let adviceHistory=[], currentAdvice=null, selectedContexts=new Set(), rewrittenLetter='';
@@ -314,6 +315,7 @@ function printItem(i, fromBatch){
   queue[i].status='prnt'; renderQueue();
   if(queue[i]?.prop && queue[i]?.tpl) doPrint(buildLetter(queue[i].tpl.body,queue[i].prop));
   setTimeout(()=>{if(queue[i]){queue[i].status='done';renderQueue();toast(`Printed: ${queue[i]?.prop?.address?.split(',')?.[0]||'Letter'}`,'ok');
+    logLetterPrinted(1);
     if(!fromBatch && queue[i]?.prop && typeof showCycleModal==='function') showCycleModal(queue[i].prop);
   }},800);
 }
@@ -690,7 +692,7 @@ async function botCycle(){
           if(queue[qi]&&queue[qi].status==='pend'){
             queue[qi].status='prnt';
             doPrint(buildLetter(queue[qi].tpl.body,queue[qi].prop));
-            setTimeout(()=>{if(queue[qi]){queue[qi].status='done';bdPrinted++;updBotDash();updQStats();}},700);
+            setTimeout(()=>{if(queue[qi]){queue[qi].status='done';bdPrinted++;updBotDash();updQStats();logLetterPrinted(1);}},700);
           }
         },1200);
       }
@@ -2372,7 +2374,7 @@ async function printAllDue(){
   if(printNodeConnected()){
     const letters=pend.map(i=>buildLetter(queue[i].tpl?.body||'', queue[i].prop||{}));
     const ok=await printViaPrintNode(letters, 'PropMail – '+letters.length+' letters');
-    if(ok){ pend.forEach(i=>queue[i].status='done'); renderQueue(); if(typeof updQStats==='function') updQStats();
+    if(ok){ pend.forEach(i=>queue[i].status='done'); renderQueue(); if(typeof updQStats==='function') updQStats(); logLetterPrinted(pend.length);
       toast('<i class=ic-printer></i> Sent '+pend.length+' letter'+(pend.length>1?'s':'')+' to '+(getPrintNode().printerName||'your printer'),'ok'); return pend.length; }
     // fall through to browser print if PrintNode failed
   }
@@ -2381,7 +2383,7 @@ async function printAllDue(){
     return '<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:36px 54px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111;page-break-after:always">'+content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'; }).join('');
   pa.style.display='block'; window.print(); pa.style.display='none';
   pend.forEach(i=>{ queue[i].status='done'; });
-  renderQueue(); if(typeof updQStats==='function') updQStats();
+  renderQueue(); if(typeof updQStats==='function') updQStats(); logLetterPrinted(pend.length);
   toast('<i class=ic-printer></i> Printed '+pend.length+' letter'+(pend.length>1?'s':''),'ok');
   return pend.length;
 }
@@ -2566,6 +2568,7 @@ const HOME_TOOLS = [
     { id:'leads', name:'Valuation Leads', desc:'Enquiries from your public valuation page', svg:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>' },
   ]},
   { group: 'Strategy', items: [
+    { id:'performance', name:'Performance', desc:'Letters → valuations → instructions → fees, vs target', badge:'ROI', badgeColor:'b-gold', svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
     { id:'investor', name:'Investor Board', desc:'Revenue KPIs and ROI scenarios', badge:'ROI', badgeColor:'b-gold', svg:'<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>' },
     { id:'advisor', name:'AI Advisor', desc:'Campaign health analysis and tips', svg:'<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/>' },
     { id:'director', name:"Director's Vision", desc:'Strategic growth ideas for the agency', badge:'NEW', badgeColor:'b-gold', svg:'<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>' },
@@ -2587,6 +2590,7 @@ function homeStat(id){
     if(id === 'ha'){ const n = (typeof props !== 'undefined' ? props.length : 0); return n ? { text: n + ' found', tone:'blue' } : null; }
     if(id === 'campaigns'){ const n = (typeof contacts !== 'undefined' && typeof isFollowupDue === 'function' ? Object.values(contacts).filter(isFollowupDue).length : 0); return n ? { text: n + ' due', tone:'gold' } : null; }
     if(id === 'bot'){ return (typeof botOn !== 'undefined' && botOn) ? { text:'Live', tone:'green', pulse:true } : null; }
+    if(id === 'performance'){ const m = perfMonthData(perfCurrentMonth()); return m.fees ? { text:'£' + Math.round(m.fees).toLocaleString() + ' won', tone:'gold' } : null; }
   }catch(e){}
   return null;
 }
@@ -2621,6 +2625,7 @@ function showPanel(n){
   document.getElementById('panel-' + n)?.classList.add('active');
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'home') renderHome();
+  if (n === 'performance') initPerf();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
   if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
@@ -2636,6 +2641,270 @@ function showPanel(n){
   if (n === 'investor'  && typeof initInvestorDashboard === 'function') initInvestorDashboard();
   if (n === 'advisor'   && typeof initAdvisorScorecard  === 'function') initAdvisorScorecard();
   if (n === 'director'  && typeof initDirectorPanel    === 'function') initDirectorPanel();
+}
+
+/* ═══════════════════════════════════════════
+   PERFORMANCE & ROI TRACKER
+   Letters → valuations → instructions → agreed business (with fees),
+   measured against a monthly target. Durable via /api/results (KV) with a
+   localStorage mirror so it works offline / without the cloud store.
+═══════════════════════════════════════════ */
+function perfCurrentMonth(){
+  const el = document.getElementById('perf-month');
+  if (el && el.value) return el.value;
+  return new Date().toISOString().slice(0, 7);
+}
+function perfMonthLabel(m){
+  try { const [y, mo] = m.split('-'); return new Date(+y, (+mo) - 1, 1).toLocaleDateString('en-GB', { month:'long', year:'numeric' }); }
+  catch { return m; }
+}
+function perfSaveLocal(){ try { localStorage.setItem('pmPerf', JSON.stringify(perfState)); } catch {} }
+
+async function loadPerf(force){
+  // localStorage first — instant, and the source of truth when the cloud store is off.
+  try { const raw = localStorage.getItem('pmPerf'); if (raw){ const j = JSON.parse(raw); if (j && typeof j === 'object') perfState = { outcomes:j.outcomes||[], targets:j.targets||{}, prints:j.prints||{} }; } } catch {}
+  try {
+    const r = await fetch('/api/results');
+    if (r.ok){
+      const d = await r.json();
+      perfConfigured = !!d.configured;
+      if (d.configured){ perfState = { outcomes:d.outcomes||[], targets:d.targets||{}, prints:d.prints||{} }; perfSaveLocal(); }
+    }
+  } catch {}
+  perfLoaded = true;
+  if (force) renderPerf();
+}
+function initPerf(){
+  const mEl = document.getElementById('perf-month');
+  if (mEl && !mEl.value) mEl.value = new Date().toISOString().slice(0, 7);
+  if (!perfLoaded) loadPerf(true); else renderPerf();
+}
+
+function perfMonthData(month){
+  const out = perfState.outcomes || [];
+  const inM = (d) => typeof d === 'string' && d.slice(0, 7) === month;
+  const agreedList = out.filter(o => inM(o.agreedDate));
+  return {
+    letters: (perfState.prints || {})[month] || 0,
+    valuations: out.filter(o => inM(o.valuationDate)).length,
+    instructions: out.filter(o => inM(o.instructionDate)).length,
+    agreed: agreedList.length,
+    fees: agreedList.reduce((s, o) => s + (+o.fee || 0), 0),
+  };
+}
+function perfTarget(month){ return (perfState.targets || {})[month] || { letters:0, valuations:0, instructions:0, agreed:0, fees:0 }; }
+function perfAllTime(){
+  const out = perfState.outcomes || [];
+  const agreedList = out.filter(o => o.agreedDate);
+  return {
+    letters: Object.values(perfState.prints || {}).reduce((s, n) => s + (+n || 0), 0),
+    valuations: out.filter(o => o.valuationDate).length,
+    instructions: out.filter(o => o.instructionDate).length,
+    agreed: agreedList.length,
+    fees: agreedList.reduce((s, o) => s + (+o.fee || 0), 0),
+  };
+}
+function perfPct(n, d){ return d > 0 ? Math.round((n / d) * 100) : 0; }
+function perfMoney(n){ return '£' + Math.round(+n || 0).toLocaleString(); }
+
+function renderPerf(){
+  if (!document.getElementById('perf-targets')) return;
+  const month = perfCurrentMonth();
+  const lbl = document.getElementById('perf-month-label'); if (lbl) lbl.textContent = perfMonthLabel(month);
+  const warn = document.getElementById('perf-store-warn'); if (warn) warn.style.display = perfConfigured ? 'none' : 'block';
+  const m = perfMonthData(month), t = perfTarget(month);
+
+  const metric = (label, val, target, isMoney, tone) => {
+    const v = isMoney ? perfMoney(val) : val.toLocaleString();
+    const tv = isMoney ? perfMoney(target) : target.toLocaleString();
+    const p = target > 0 ? Math.min(100, perfPct(val, target)) : 0;
+    return '<div class="perf-metric"><div class="perf-metric-label">' + label + '</div>'
+      + '<div class="perf-metric-val">' + v + '</div>'
+      + (target > 0
+        ? '<div class="perf-bar"><div class="perf-bar-fill tone-' + tone + '" style="width:' + p + '%"></div></div><div class="perf-metric-sub">' + p + '% of ' + tv + '</div>'
+        : '<div class="perf-metric-sub">No target set</div>') + '</div>';
+  };
+  document.getElementById('perf-targets').innerHTML =
+      metric('Letters printed', m.letters, t.letters, false, 'blue')
+    + metric('Valuations', m.valuations, t.valuations, false, 'gold')
+    + metric('Instructions', m.instructions, t.instructions, false, 'green')
+    + metric('Agreed business', m.agreed, t.agreed, false, 'green')
+    + metric('Agreed fees', m.fees, t.fees, true, 'gold');
+
+  // Funnel for the selected month
+  const stages = [
+    { k:'Letters', v:m.letters, tone:'blue' },
+    { k:'Valuations', v:m.valuations, tone:'gold' },
+    { k:'Instructions', v:m.instructions, tone:'green' },
+    { k:'Agreed', v:m.agreed, tone:'green' },
+  ];
+  const maxV = Math.max(1, ...stages.map(s => s.v));
+  let funnel = '<div class="perf-funnel">';
+  stages.forEach((s, i) => {
+    const conv = i > 0 ? perfPct(s.v, stages[i - 1].v) : null;
+    funnel += '<div class="perf-fn-row"><div class="perf-fn-label">' + s.k + '</div>'
+      + '<div class="perf-fn-track"><div class="perf-fn-bar tone-' + s.tone + '" style="width:' + Math.max(4, Math.round((s.v / maxV) * 100)) + '%">' + s.v + '</div></div>'
+      + '<div class="perf-fn-conv">' + (conv === null ? '' : conv + '%') + '</div></div>';
+  });
+  funnel += '</div><div class="perf-fn-summary"><span><strong>' + perfPct(m.instructions, m.letters) + '%</strong> letter → instruction</span>'
+    + '<span><strong>' + perfMoney(m.fees) + '</strong> agreed this month</span>'
+    + (m.agreed ? '<span><strong>' + perfMoney(m.fees / m.agreed) + '</strong> average fee</span>' : '') + '</div>';
+  document.getElementById('perf-funnel').innerHTML = funnel;
+
+  // All-time investor summary
+  const a = perfAllTime();
+  document.getElementById('perf-roi').innerHTML =
+      '<div class="perf-roi-grid">'
+    + '<div><div class="perf-roi-n">' + a.letters.toLocaleString() + '</div><div class="perf-roi-l">Letters sent</div></div>'
+    + '<div><div class="perf-roi-n">' + a.valuations.toLocaleString() + '</div><div class="perf-roi-l">Valuations</div></div>'
+    + '<div><div class="perf-roi-n">' + a.instructions.toLocaleString() + '</div><div class="perf-roi-l">Instructions</div></div>'
+    + '<div><div class="perf-roi-n">' + perfMoney(a.fees) + '</div><div class="perf-roi-l">Fees won</div></div></div>'
+    + '<div class="perf-roi-line">Every <strong>100 letters</strong> produces <strong>' + (a.letters ? (a.valuations / a.letters * 100).toFixed(1) : '0') + '</strong> valuations and <strong>' + (a.letters ? (a.instructions / a.letters * 100).toFixed(1) : '0') + '</strong> instructions'
+    + (a.instructions ? ', worth <strong>' + perfMoney(a.fees / a.instructions) + '</strong> each in fees' : '') + '.</div>';
+
+  renderPerfOutcomes();
+}
+
+function perfStageBadge(stage){
+  const map = { response:['Response','b-blue'], valuation:['Valuation','b-gold'], instruction:['Instruction','b-green'], agreed:['Agreed','b-green'], lost:['Lost','b-red'] };
+  const [t, c] = map[stage] || map.response;
+  return '<span class="perf-badge ' + c + '">' + t + '</span>';
+}
+function renderPerfOutcomes(){
+  const wrap = document.getElementById('perf-outcomes'); if (!wrap) return;
+  const out = (perfState.outcomes || []).slice().sort((x, y) => String(y.updatedAt || '').localeCompare(String(x.updatedAt || '')));
+  const cEl = document.getElementById('perf-out-count');
+  if (cEl) cEl.textContent = out.length ? (out.length + ' response' + (out.length === 1 ? '' : 's') + ' tracked') : 'No responses logged yet';
+  if (!out.length){ wrap.innerHTML = '<div class="es"><div class="et">Nothing tracked yet</div>Click “Log a response” when a letter brings in an enquiry, valuation, instruction or agreed deal.</div>'; return; }
+  wrap.innerHTML = '<div style="overflow-x:auto"><table class="perf-table"><thead><tr><th>Property</th><th>Stage</th><th>Valuation</th><th>Instruction</th><th>Agreed</th><th>Fee</th><th></th></tr></thead><tbody>'
+    + out.map(o => '<tr>'
+      + '<td><div style="font-weight:600;font-size:12px">' + esc(String(o.address || '').split(',')[0]) + '</div><div style="font-size:10px;color:var(--muted)">' + esc([o.postcode, o.source].filter(Boolean).join(' · ')) + '</div></td>'
+      + '<td>' + perfStageBadge(o.stage) + '</td>'
+      + '<td style="font-size:11px">' + esc(o.valuationDate || '—') + '</td>'
+      + '<td style="font-size:11px">' + esc(o.instructionDate || '—') + '</td>'
+      + '<td style="font-size:11px">' + esc(o.agreedDate || '—') + '</td>'
+      + '<td style="font-size:12px;font-weight:600">' + (o.fee ? perfMoney(o.fee) : '—') + '</td>'
+      + '<td style="white-space:nowrap"><button class="bic" title="Edit" onclick="openOutcomeModal(\'' + o.id + '\')"><i class=ic-pencil></i></button> <button class="bic" title="Delete" onclick="deleteOutcome(\'' + o.id + '\')"><i class=ic-trash></i></button></td>'
+      + '</tr>').join('')
+    + '</tbody></table></div>';
+}
+
+function perfModalShell(){
+  let ov = document.getElementById('perf-modal');
+  if (!ov){ ov = document.createElement('div'); ov.id = 'perf-modal'; ov.className = 'perf-ov'; ov.onclick = (e) => { if (e.target === ov) closePerfModal(); }; document.body.appendChild(ov); }
+  return ov;
+}
+function closePerfModal(){ const ov = document.getElementById('perf-modal'); if (ov) ov.style.display = 'none'; }
+
+function openOutcomeModal(id){
+  const o = (perfState.outcomes || []).find(x => x.id === id) || {};
+  const opt = { response:'Response / enquiry received', valuation:'Valuation booked', instruction:'Instruction won', agreed:'Agreed — business won', lost:'Lost / no longer pursuing' };
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
+    + '<div class="perf-modal-title">' + (id ? 'Update response' : 'Log a response from a letter') + '</div>'
+    + '<input type="hidden" id="pm-id" value="' + esc(o.id || '') + '"><input type="hidden" id="pm-createdAt" value="' + esc(o.createdAt || '') + '">'
+    + '<label class="perf-lbl">Property address *</label><input id="pm-address" placeholder="12 Hindes Road, Harrow" value="' + esc(o.address || '') + '">'
+    + '<div class="perf-row2"><div><label class="perf-lbl">Postcode</label><input id="pm-postcode" placeholder="HA1 1SH" value="' + esc(o.postcode || '') + '"></div>'
+    + '<div><label class="perf-lbl">From letter / template</label><input id="pm-source" placeholder="e.g. Just Sold" value="' + esc(o.source || '') + '"></div></div>'
+    + '<label class="perf-lbl">What’s happened?</label><select id="pm-stage" onchange="perfStageFields()">'
+    + Object.keys(opt).map(s => '<option value="' + s + '"' + (o.stage === s ? ' selected' : '') + '>' + opt[s] + '</option>').join('') + '</select>'
+    + '<div id="pm-valwrap" class="perf-cond"><label class="perf-lbl">Valuation date</label><input type="date" id="pm-valdate" value="' + esc(o.valuationDate || '') + '"></div>'
+    + '<div id="pm-instwrap" class="perf-cond"><label class="perf-lbl">Instruction date</label><input type="date" id="pm-instdate" value="' + esc(o.instructionDate || '') + '"></div>'
+    + '<div id="pm-agrwrap" class="perf-cond"><div class="perf-row2"><div><label class="perf-lbl">Agreed date</label><input type="date" id="pm-agrdate" value="' + esc(o.agreedDate || '') + '"></div>'
+    + '<div><label class="perf-lbl">Fee agreed (£)</label><input id="pm-fee" inputmode="numeric" placeholder="4500" value="' + (o.fee || '') + '"></div></div></div>'
+    + '<label class="perf-lbl">Notes</label><textarea id="pm-notes" rows="2" placeholder="Optional">' + esc(o.notes || '') + '</textarea>'
+    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="saveOutcome()">Save</button></div></div>';
+  ov.style.display = 'flex';
+  perfStageFields();
+}
+function perfStageFields(){
+  const s = (document.getElementById('pm-stage') || {}).value || 'response';
+  const lvl = { response:0, valuation:1, instruction:2, agreed:3, lost:0 }[s];
+  const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? 'block' : 'none'; };
+  show('pm-valwrap', lvl >= 1); show('pm-instwrap', lvl >= 2); show('pm-agrwrap', lvl >= 3);
+  const today = new Date().toISOString().slice(0, 10);
+  if (lvl >= 1){ const v = document.getElementById('pm-valdate'); if (v && !v.value) v.value = today; }
+  if (lvl >= 2){ const v = document.getElementById('pm-instdate'); if (v && !v.value) v.value = today; }
+  if (lvl >= 3){ const v = document.getElementById('pm-agrdate'); if (v && !v.value) v.value = today; }
+}
+async function saveOutcome(){
+  const g = (id) => (document.getElementById(id) || {}).value || '';
+  const stage = g('pm-stage') || 'response';
+  const lvl = { response:0, valuation:1, instruction:2, agreed:3, lost:0 }[stage];
+  const rec = {
+    kind:'outcome',
+    id: g('pm-id') || ('o' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+    createdAt: g('pm-createdAt') || new Date().toISOString(),
+    address: g('pm-address').trim(),
+    postcode: g('pm-postcode').trim().toUpperCase(),
+    source: g('pm-source').trim(),
+    stage,
+    valuationDate: lvl >= 1 ? g('pm-valdate') : '',
+    instructionDate: lvl >= 2 ? g('pm-instdate') : '',
+    agreedDate: lvl >= 3 ? g('pm-agrdate') : '',
+    fee: lvl >= 3 ? (+String(g('pm-fee')).replace(/[^0-9.]/g, '') || 0) : 0,
+    notes: g('pm-notes').trim(),
+  };
+  if (!rec.address){ toast('Enter the property address', 'warn'); return; }
+  rec.updatedAt = new Date().toISOString();
+  const stored = { ...rec }; delete stored.kind;
+  const list = perfState.outcomes || [];
+  const idx = list.findIndex(o => o.id === rec.id);
+  if (idx >= 0){ stored.createdAt = list[idx].createdAt || stored.createdAt; list[idx] = stored; } else list.unshift(stored);
+  perfState.outcomes = list; perfSaveLocal();
+  closePerfModal(); renderPerf();
+  try { await fetch('/api/results', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) }); } catch {}
+  toast('Saved', 'ok');
+}
+async function deleteOutcome(id){
+  if (!confirm('Delete this tracked response?')) return;
+  perfState.outcomes = (perfState.outcomes || []).filter(o => o.id !== id); perfSaveLocal(); renderPerf();
+  try { await fetch('/api/results?id=' + encodeURIComponent(id), { method:'DELETE' }); } catch {}
+}
+
+function openTargetModal(){
+  const month = perfCurrentMonth(); const t = perfTarget(month);
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
+    + '<div class="perf-modal-title">Targets for ' + perfMonthLabel(month) + '</div>'
+    + '<div class="perf-row2"><div><label class="perf-lbl">Letters printed</label><input id="pt-letters" inputmode="numeric" value="' + (t.letters || '') + '"></div>'
+    + '<div><label class="perf-lbl">Valuations</label><input id="pt-valuations" inputmode="numeric" value="' + (t.valuations || '') + '"></div></div>'
+    + '<div class="perf-row2"><div><label class="perf-lbl">Instructions</label><input id="pt-instructions" inputmode="numeric" value="' + (t.instructions || '') + '"></div>'
+    + '<div><label class="perf-lbl">Agreed deals</label><input id="pt-agreed" inputmode="numeric" value="' + (t.agreed || '') + '"></div></div>'
+    + '<label class="perf-lbl">Agreed fees target (£)</label><input id="pt-fees" inputmode="numeric" value="' + (t.fees || '') + '">'
+    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="saveTarget()">Save targets</button></div></div>';
+  ov.style.display = 'flex';
+}
+async function saveTarget(){
+  const month = perfCurrentMonth();
+  const n = (id) => +String((document.getElementById(id) || {}).value || '').replace(/[^0-9.]/g, '') || 0;
+  const t = { letters:n('pt-letters'), valuations:n('pt-valuations'), instructions:n('pt-instructions'), agreed:n('pt-agreed'), fees:n('pt-fees') };
+  perfState.targets = perfState.targets || {}; perfState.targets[month] = t; perfSaveLocal();
+  closePerfModal(); renderPerf();
+  try { await fetch('/api/results', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'target', month, ...t }) }); } catch {}
+  toast('Targets saved', 'ok');
+}
+
+// Count a printed letter toward this month's total (auto-called when a letter prints).
+function logLetterPrinted(n){
+  n = n || 1;
+  const m = new Date().toISOString().slice(0, 7);
+  perfState.prints = perfState.prints || {};
+  perfState.prints[m] = (perfState.prints[m] || 0) + n;
+  perfSaveLocal();
+  try { fetch('/api/results', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind:'print', count:n, at:new Date().toISOString() }) }).catch(() => {}); } catch {}
+  if (document.getElementById('panel-performance')?.classList.contains('active')) renderPerf();
+}
+
+function exportPerfCSV(){
+  const out = perfState.outcomes || [];
+  if (!out.length){ toast('Nothing to export', 'warn'); return; }
+  const h = ['Address','Postcode','Source','Stage','ValuationDate','InstructionDate','AgreedDate','Fee','Notes','Created'];
+  const rows = out.map(o => [o.address, o.postcode, o.source, o.stage, o.valuationDate, o.instructionDate, o.agreedDate, o.fee, o.notes, o.createdAt]
+    .map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(','));
+  const b = new Blob([[h.join(','), ...rows].join('\n')], { type:'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'propmail_performance_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+  toast('Performance CSV exported', 'ok');
 }
 
 function updateKPIs(){
@@ -2991,6 +3260,7 @@ function useIntelOwner(btn){
     blog('PropMail Pro ready — click <i class=ic-search></i> Find Live Properties to start.', 'inf');
     loadBlocklist();
     loadLeads();
+    loadPerf();
   } catch(e) {
     console.error('PropMail init error:', e);
     const errDiv = document.createElement('div');
