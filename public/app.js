@@ -248,7 +248,7 @@ function clrAllHA(){ HA_DISTRICTS.forEach(d=>{selectedHA.delete(d.code);document
 
 // Convert raw Rightmove JSON API property to prop object
 
-// Fetch a Rightmove search results page and extract real listings via Claude
+// Fetch a Rightmove search results page and extract real listings via AI
 
 // ── AI-powered Rightmove search with real addresses ──
 
@@ -817,11 +817,11 @@ async function sendChat(){
   th.innerHTML='<div class="ai-dots"><span></span><span></span><span></span></div>';
   wrap.appendChild(th);wrap.scrollTop=wrap.scrollHeight;
   try{
-    const resp=await fetch('/api/anthropic',{
+    const resp=await fetch('/api/ai',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-6',max_tokens:600,
+        model:'auto',max_tokens:600,
         system:`You are a UK property intelligence assistant expert in: HM Land Registry, Companies House, VOA, Planning Portal, 192.com, electoral roll, BT Phone Book, Rightmove/Zoopla. Help users find property ownership information using legitimate free UK sources. Be concise and practical. Always remind users to verify via official sources.`,
         messages:chatHistory
       })
@@ -1294,7 +1294,7 @@ async function runLiveSearch(){
   const typeLine  = (typeF && typeF !== 'all') ? `${typeF} ` : '';
 
   // ── THE PROMPT ──
-  // Ask Claude to search for actual property listing pages on Rightmove.
+  // Ask AI to search for actual property listing pages on Rightmove.
   // Rightmove listing pages appear in Google search results with titles like:
   // "3 bed semi-detached house for sale | 14 Hindes Road, Harrow | Rightmove"
   // The address is in the title, the property ID is in the URL.
@@ -1334,18 +1334,18 @@ Return ONLY this JSON (absolutely no text before or after, no markdown fences):
       setStatus('Searching Rightmove…', `Scan ${turn} — extracting addresses`, 10 + turn*12, props.length || '…');
       addLog(`Search turn ${turn}…`);
 
-      const resp = await fetch('/api/anthropic', {
+      const resp = await fetch('/api/ai', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'auto',
           max_tokens: 6000,
           tools: [{type:'web_search_20250305', name:'web_search'}],
           messages
         })
       });
 
-      if(!resp.ok) throw new Error(`Claude API returned ${resp.status}`);
+      if(!resp.ok) throw new Error(`AI API returned ${resp.status}`);
       const data = await resp.json();
       const blocks = data.content || [];
 
@@ -1384,14 +1384,14 @@ Return ONLY this JSON (absolutely no text before or after, no markdown fences):
     };
     parsed = tryParse(rawText) || tryParse(rawText.replace(/```json\n?|```\n?/gi,''));
 
-    // Strategy 3: ask Claude to clean and reformat
+    // Strategy 3: ask AI to clean and reformat
     if(!parsed?.properties?.length && rawText.length > 50){
       addLog('Reformatting data…');
       setStatus('Reformatting…', 'Structuring property data', 88, '…');
-      const rfResp = await fetch('/api/anthropic',{
+      const rfResp = await fetch('/api/ai',{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          model:'claude-sonnet-4-6', max_tokens:5000,
+          model:'auto', max_tokens:5000,
           messages:[{role:'user',content:
             `From this text, extract all UK property listings and return ONLY this JSON (no other text):
 {"properties":[{"address":"14 Hindes Road, Harrow, HA1 1SL","displayAddress":"14 Hindes Road, Harrow","postcode":"HA1 1SL","propertyId":"156823401","price":485000,"priceLabel":"£485,000","beds":3,"type":"Semi-Detached","status":"For Sale","haCode":"HA1","agent":"Chancellors","addedDate":"Today","description":"Extended home"}]}
@@ -3476,7 +3476,7 @@ async function runAdvisor() {
     }
   }, 800);
 
-  // Build rich context for Claude
+  // Build rich context for AI
   const templateSummary = templates.slice(0, 3).map(t => `Template "${t.name}": ${t.body.slice(0, 200)}`).join('\n\n');
   const activeDistricts = [...selectedHA].join(', ');
   const queueStats = `${queue.length} total in queue, ${queue.filter(q=>q.status==='done').length} printed, ${queue.filter(q=>q.status==='pend').length} pending`;
@@ -3544,11 +3544,11 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON):
 Generate exactly 6 suggestions. Make them SPECIFIC to the agent's goals (${goals}) and challenge (${challenge}). Include realistic UK estate agency data and HA-area specifics.`;
 
   try {
-    const resp = await fetch('/api/anthropic', {
+    const resp = await fetch('/api/ai', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'auto',
         max_tokens: 4000,
         messages: [{role: 'user', content: prompt}]
       })
@@ -3834,11 +3834,11 @@ Current campaign context:
 
 Give specific, practical advice. Use real UK estate agency data where possible. Reference the Harrow/Wembley market specifically. Always give actionable next steps, not generic advice.`;
 
-    const resp = await fetch('/api/anthropic', {
+    const resp = await fetch('/api/ai', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'auto',
         max_tokens: 800,
         system: systemPrompt,
         messages: adviceHistory
@@ -5275,7 +5275,7 @@ function setThinking(on,msg='AI is analysing…'){
   const tm=document.getElementById('intel-think-txt');if(tm)tm.textContent=msg;
 }
 
-async function callClaude(prompt, maxTokens=1500, useWebSearch=false){
+async function callAI(prompt, maxTokens=1500, useWebSearch=false){
   // Multi-turn handler for web_search tool use
   const tools = useWebSearch ? [{type:'web_search_20250305', name:'web_search'}] : [];
   const messages = [{role:'user', content:prompt}];
@@ -5285,10 +5285,10 @@ async function callClaude(prompt, maxTokens=1500, useWebSearch=false){
 
   while(turn < MAX){
     turn++;
-    const body = {model:'claude-sonnet-4-6', max_tokens:maxTokens, messages};
+    const body = {model:'auto', max_tokens:maxTokens, messages};
     if(tools.length) body.tools = tools;
 
-    const resp = await fetch('/api/anthropic',{
+    const resp = await fetch('/api/ai',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body)
@@ -5381,11 +5381,11 @@ Return ONLY this JSON (no markdown, no explanation outside JSON):
       turn++;
       setThinking(true, `Searching source ${turn} of up to ${MAX}…`);
 
-      const resp = await fetch('/api/anthropic',{
+      const resp = await fetch('/api/ai',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          model:'claude-sonnet-4-6',
+          model:'auto',
           max_tokens:3000,
           tools:[{type:'web_search_20250305',name:'web_search'}],
           messages
@@ -5424,10 +5424,10 @@ Return ONLY this JSON (no markdown, no explanation outside JSON):
     }
 
     if(!parsed){
-      // Ask Claude to reformat
-      const reformat = await fetch('/api/anthropic',{
+      // Ask AI to reformat
+      const reformat = await fetch('/api/ai',{
         method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:
+        body:JSON.stringify({model:'auto',max_tokens:2000,messages:[{role:'user',content:
           `Extract all property and owner information found and format as clean JSON matching this structure exactly. Input text:\n${finalText.slice(0,3000)}\n\nReturn ONLY valid JSON with keys: address (fullAddress,line1,postcode,propertyType,estimatedValue), owner (ownerName,ownerType,confidence,purchaseDate,sourcesFound,evidenceNotes), rightmoveUrl, currentlyListed, agent, govLinks`
         }]})
       });
