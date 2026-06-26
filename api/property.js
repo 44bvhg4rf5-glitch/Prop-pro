@@ -5,6 +5,11 @@ import { fetchText, sendJson, guardOrigin } from '../lib/helpers.js';
 // price, floor area). This is the first step of the chain:
 //   property URL → THIS → /api/resolve (exact address) → /api/owner (research)
 // Everything here is real, scraped from the public listing — nothing invented.
+//
+// Rightmove embeds the listing as `window.PAGE_MODEL = { data: "<json>", … }`
+// where `data` is a FLATTENED index pool (flatted-style): every value is an
+// integer index into a shared array, resolved recursively. We parse that pool
+// and dereference the propertyData subtree.
 
 // Balanced-brace JSON parse of the object literal that follows `marker`.
 function jsonAfter(text, marker) {
@@ -26,13 +31,20 @@ function jsonAfter(text, marker) {
   return null;
 }
 
-// Deep-find the first node that looks like Rightmove's propertyData.
-function findPropertyData(o, seen = new Set()) {
-  if (!o || typeof o !== 'object' || seen.has(o)) return null;
-  seen.add(o);
-  if (o.address && o.address.displayAddress !== undefined && o.location) return o;
-  for (const k in o) { const r = findPropertyData(o[k], seen); if (r) return r; }
-  return null;
+// Resolve a flatted index reference into its real value (depth-capped, and
+// cycle-safe along the current path so shared nodes still resolve).
+function makeDeref(arr) {
+  return function deref(idx, d, path) {
+    if (typeof idx !== 'number' || idx < 0 || idx >= arr.length) return null;
+    if (d > 12 || path.has(idx)) return null;
+    const node = arr[idx];
+    if (node === null || typeof node !== 'object') return node;
+    const p = new Set(path); p.add(idx);
+    if (Array.isArray(node)) return node.map((x) => deref(x, d + 1, p));
+    const out = {};
+    for (const k in node) out[k] = deref(node[k], d + 1, p);
+    return out;
+  };
 }
 
 const priceNum = (s) => parseInt(String(s).replace(/[^\d]/g, ''), 10) || 0;
@@ -50,9 +62,19 @@ export default async function handler(req, res) {
   try { page = await fetchText(url); } catch (e) { sendJson(res, 502, { error: 'Could not fetch the listing: ' + e.message }); return; }
   if (page.status !== 200) { sendJson(res, 502, { error: 'The listing returned HTTP ' + page.status + '.' }); return; }
 
-  const model = jsonAfter(page.body, 'window.PAGE_MODEL') || jsonAfter(page.body, 'PAGE_MODEL =');
-  const pd = (model && (model.propertyData || findPropertyData(model))) || null;
-  if (!pd) {
+  const model = jsonAfter(page.body, 'PAGE_MODEL =') || jsonAfter(page.body, 'window.PAGE_MODEL');
+  let pd = null;
+  try {
+    if (model && typeof model.data === 'string') {
+      const arr = JSON.parse(model.data);
+      const root = Array.isArray(arr) ? arr[0] : null;
+      if (root && typeof root.propertyData === 'number') pd = makeDeref(arr)(root.propertyData, 0, new Set());
+    } else if (model && model.propertyData) {
+      pd = model.propertyData; // legacy (non-flattened) shape
+    }
+  } catch { /* fall through to found:false */ }
+
+  if (!pd || !pd.address) {
     sendJson(res, 200, { found: false, note: 'Could not read this listing automatically. Open it on Rightmove and paste the postcode or full address into the search box instead.' });
     return;
   }
@@ -60,13 +82,18 @@ export default async function handler(req, res) {
   const addr = pd.address || {};
   const loc = pd.location || {};
   const postcode = [addr.outcode, addr.incode].filter(Boolean).join(' ').toUpperCase();
-  const sizing = Array.isArray(pd.sizings) ? pd.sizings.find((s) => s && (s.maximumSize || s.minimumSize)) : null;
+
+  // Prefer the listing's own square-feet sizing; convert from sq m if that's all there is.
   let sizeSqft = null;
-  if (sizing) {
-    const v = sizing.maximumSize || sizing.minimumSize;
-    sizeSqft = /sq\.?\s*m/i.test(sizing.unit || '') ? Math.round(v * 10.7639) : Math.round(v);
+  if (Array.isArray(pd.sizings)) {
+    const sf = pd.sizings.find((s) => s && /sqft|sq\.?\s*ft/i.test((s.unit || s.displayUnit || '')));
+    const sm = pd.sizings.find((s) => s && /sqm|sq\.?\s*m/i.test((s.unit || s.displayUnit || '')));
+    if (sf && (sf.maximumSize || sf.minimumSize)) sizeSqft = Math.round(sf.maximumSize || sf.minimumSize);
+    else if (sm && (sm.maximumSize || sm.minimumSize)) sizeSqft = Math.round((sm.maximumSize || sm.minimumSize) * 10.7639);
   }
-  const price = (pd.prices && (pd.prices.primaryPrice || pd.prices.price)) || pd.price || '';
+
+  const price = (pd.prices && pd.prices.primaryPrice) || pd.price || '';
+  const channel = /rent|let/i.test(pd.transactionType || '') ? 'rent' : 'sale';
 
   sendJson(res, 200, {
     found: true,
@@ -80,7 +107,7 @@ export default async function handler(req, res) {
     price: typeof price === 'number' ? price : priceNum(price),
     priceLabel: typeof price === 'string' ? price : price ? '£' + Number(price).toLocaleString() : '',
     sizeSqft,
-    channel: pd.transactionType && /rent|let/i.test(pd.transactionType) ? 'rent' : 'sale',
+    channel,
     url,
     source: 'Rightmove',
   });
