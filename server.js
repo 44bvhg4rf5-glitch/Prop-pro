@@ -55,9 +55,9 @@ const server = http.createServer((req, res) => {
   if (req.url === '/api/config')            { config(req, res); return; }
 
   // ── Static files ──
-  let url = req.url === '/' ? '/index.html' : req.url;
-  url = url.split('?')[0]; // strip query string
-  if (!path.extname(url) && url !== '/') url += '.html'; // clean URLs (/valuation → valuation.html)
+  let url = req.url.split('?')[0]; // strip query string first
+  if (url === '/' || url === '') url = '/index.html'; // root (with or without ?query) → app shell
+  else if (!path.extname(url)) url += '.html'; // clean URLs (/valuation → valuation.html)
   const safePath = path
     .normalize(url)
     .replace(/^(\.\.[/\\])+/, '')

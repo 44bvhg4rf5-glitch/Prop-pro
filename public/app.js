@@ -11,7 +11,8 @@ const SL_TYPE_LABEL={homes:'homes',houses:'houses',flats:'flats / maisonettes',a
 function slTypes(){ const el=document.getElementById('sl-type'); return (el&&el.value)||'homes'; }
 let intelResults=[], chatHistory=[];
 let perfState={outcomes:[],targets:{},prints:{}}, perfConfigured=false, perfLoaded=false;
-let authState={enabled:false,authed:false,open:true,needsSetup:false,account:null};
+let authState={configured:false,active:false,authed:false,open:true,canSetup:false,emailReset:false,account:null};
+let authResetToken=null;
 let bdQueued=0;
 let activeTpl=null, selPrinter=null;
 let adviceHistory=[], currentAdvice=null, selectedContexts=new Set(), rewrittenLetter='';
@@ -2959,16 +2960,45 @@ async function loadAuth(){
   try { const r = await fetch('/api/auth?action=me'); if (r.ok) authState = await r.json(); } catch (e) { /* offline → stay open */ }
   applyAuthGate();
 }
+function showAuthMode(mode){
+  ['login', 'setup', 'forgot', 'reset'].forEach((m) => { const el = document.getElementById('auth-mode-' + m); if (el) el.style.display = m === mode ? 'block' : 'none'; });
+}
+function authDetectReset(){ try { const t = new URL(location.href).searchParams.get('reset'); if (t) authResetToken = t; } catch (e) {} }
 function applyAuthGate(){
   const gate = document.getElementById('auth-gate');
-  // Block the app when it's first-run setup, or when accounts are live and nobody is signed in.
-  const locked = authState.canSetup || (authState.active && !authState.authed);
   if (gate){
+    if (authResetToken){ gate.style.display = 'flex'; showAuthMode('reset'); renderAccountPanel(); return; }
+    // Block the app when it's first-run setup, or when accounts are live and nobody is signed in.
+    const locked = authState.canSetup || (authState.active && !authState.authed);
     gate.style.display = locked ? 'flex' : 'none';
-    const setup = document.getElementById('auth-mode-setup'), login = document.getElementById('auth-mode-login');
-    if (setup && login){ setup.style.display = authState.canSetup ? 'block' : 'none'; login.style.display = authState.canSetup ? 'none' : 'block'; }
+    if (locked){
+      showAuthMode(authState.canSetup ? 'setup' : 'login');
+      const fl = document.getElementById('auth-forgot-link'); if (fl) fl.style.display = (!authState.canSetup && authState.emailReset) ? 'block' : 'none';
+    }
   }
   renderAccountPanel();
+}
+function authShowForgot(){ showAuthMode('forgot'); }
+function authShowLogin(){ showAuthMode('login'); const fl = document.getElementById('auth-forgot-link'); if (fl) fl.style.display = authState.emailReset ? 'block' : 'none'; }
+async function authSendForgot(){
+  const email = (document.getElementById('auth-forgot-email') || {}).value || '';
+  const msg = document.getElementById('auth-forgot-msg'); if (msg){ msg.style.color = ''; msg.textContent = ''; }
+  try {
+    await fetch('/api/auth?action=forgot', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
+    if (msg){ msg.style.color = 'var(--green)'; msg.textContent = 'If that email is registered, a reset link is on its way — check your inbox.'; }
+  } catch (e){ if (msg) msg.textContent = 'Connection error — try again.'; }
+}
+async function authDoReset(){
+  const password = (document.getElementById('auth-reset-pw') || {}).value || '';
+  const msg = document.getElementById('auth-reset-msg'); if (msg){ msg.style.color = ''; msg.textContent = ''; }
+  try {
+    const r = await fetch('/api/auth?action=reset-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token: authResetToken, password }) });
+    const d = await r.json();
+    if (!r.ok){ if (msg) msg.textContent = d.error || 'Could not reset your password.'; return; }
+    authResetToken = null;
+    try { const u = new URL(location.href); u.searchParams.delete('reset'); history.replaceState({}, '', u.pathname + u.search); } catch (e) {}
+    await loadAuth(); postLogin(); toast('Password updated — you’re signed in', 'ok');
+  } catch (e){ if (msg) msg.textContent = 'Connection error — try again.'; }
 }
 async function authLogin(){
   const email = (document.getElementById('auth-email') || {}).value || '';
@@ -3447,6 +3477,7 @@ function useIntelOwner(btn){
 (function initApp() {
   try {
     activeTpl = templates[0];
+    authDetectReset();
     loadAuth();
     renderHome();
     initHAGrid();

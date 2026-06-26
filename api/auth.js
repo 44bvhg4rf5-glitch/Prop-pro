@@ -5,7 +5,9 @@ import {
   hashPassword, saveAccount, deleteAccount, getAccounts, accountCount,
   getOffices, saveOffice, removeOffice, officeMemberCount,
   newToken, makeSessionCookie, clearSessionCookie, resetAuth,
+  createResetToken, consumeResetToken, resetThrottled,
 } from '../lib/auth.js';
+import { emailConfigured, sendEmail } from '../lib/email.js';
 
 // Accounts & office portals. Dispatched by ?action=.
 //   me | login | logout | setup                         — sign-in flow
@@ -30,8 +32,47 @@ export default async function handler(req, res) {
       canSetup: authConfigured() && count === 0,
       authed: !!s && !s.open,
       open: !!(s && s.open),
+      emailReset: emailConfigured(),
       account: s && !s.open ? { email: s.email, name: s.name, role: s.role, tenant: s.tenant } : null,
     });
+    return;
+  }
+
+  // Forgot password — always answers the same way, so it never reveals whether
+  // an email is registered. Sends a one-time reset link when possible.
+  if (action === 'forgot' && method === 'POST') {
+    const b = await readJson();
+    const addr = email(b.email);
+    const generic = { ok: true, sent: emailConfigured() };
+    if (authConfigured() && emailConfigured() && addr) {
+      const acc = await getAccountByEmail(addr);
+      if (acc && !(await resetThrottled(addr))) {
+        const token = await createResetToken(acc.id);
+        const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
+        const link = 'https://' + host + '/?reset=' + token;
+        await sendEmail({
+          to: acc.email,
+          subject: 'Reset your PropMail Pro password',
+          text: 'Hi ' + (acc.name || '') + ',\n\nReset your PropMail Pro password using this link (valid for 1 hour):\n' + link + '\n\nIf you did not request this, ignore this email.',
+          html: '<p>Hi ' + (acc.name || '') + ',</p><p>Reset your PropMail Pro password using the link below (valid for 1 hour):</p><p><a href="' + link + '">Reset my password</a></p><p style="color:#6b7280;font-size:13px">If you did not request this, you can ignore this email.</p>',
+        });
+      }
+    }
+    sendJson(res, 200, generic);
+    return;
+  }
+
+  // Complete a reset with the token from the email link.
+  if (action === 'reset-password' && method === 'POST') {
+    const b = await readJson();
+    if (String(b.password || '').length < 8) { sendJson(res, 400, { error: 'Choose a password of at least 8 characters.' }); return; }
+    const id = await consumeResetToken(b.token || '');
+    if (!id) { sendJson(res, 400, { error: 'This reset link is invalid or has expired — request a new one.' }); return; }
+    const acc = await getAccountById(id);
+    if (!acc) { sendJson(res, 400, { error: 'This reset link is no longer valid.' }); return; }
+    acc.passwordHash = hashPassword(b.password); await saveAccount(acc);
+    res.setHeader('Set-Cookie', makeSessionCookie(await newToken(acc.id)));
+    sendJson(res, 200, { ok: true, account: { email: acc.email, name: acc.name, role: acc.role } });
     return;
   }
 
