@@ -63,6 +63,7 @@ future edits slower. Say the word if you want it and accept that trade-off.
 | `ANTHROPIC_API_KEY` | AI features | Optional |
 | `PRINTNODE_API_KEY` | Silent printing | Optional |
 | `REDIS_URL` (or `KV_REST_API_URL`+`KV_REST_API_TOKEN`) | Durable do-not-mail list | Recommended |
+| `CH_API_KEY` | Free Companies House API key — powers "Find owner" auto-lookup of directors at company-owned addresses. Register at developer.company-information.service.gov.uk. Planning (PlanIt) needs no key. | Optional |
 | `ALLOWED_ORIGINS` | Extra domains allowed to use the API (comma-separated). Set this if you move to a **custom domain** so the origin lock keeps working. | Only on custom domain |
 | `DEBUG_KEY` | Unlocks diagnostic endpoints (`?debug=<key>`). Leave unset in normal use. | No |
 

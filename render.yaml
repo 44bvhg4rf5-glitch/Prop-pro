@@ -23,6 +23,12 @@ services:
       # https://osdatahub.os.uk (free OS Places API plan).
       - key: OS_PLACES_KEY
         sync: false
+      # Optional — free Companies House API key. Powers the "Find owner"
+      # research (directors at a company-owned address). Register at
+      # https://developer.company-information.service.gov.uk . Planning data
+      # (PlanIt) needs no key.
+      - key: CH_API_KEY
+        sync: false
       # Do-Not-Mail / suppression list storage (durable, cross-device). On
       # Vercel: Storage → Create Database → KV auto-adds these. Elsewhere, create
       # a free Upstash Redis DB and copy its REST URL + token here. Without them
