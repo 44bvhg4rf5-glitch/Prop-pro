@@ -3015,14 +3015,14 @@ function renderMarketing(){
   const latest = document.getElementById('mk-latest'); if (!latest) return;
   if (!mkState.configured){
     latest.innerHTML = '<div class="card">'
-      + '<div style="font-size:15px;font-weight:700;margin-bottom:6px"><i class=ic-alert></i> One quick setup step</div>'
-      + '<div style="font-size:13px;color:var(--text2);line-height:1.7">The Marketing AI writes its reports with Claude, so it needs an <strong>AI key</strong> on your server. It’s a one-time setup:</div>'
+      + '<div style="font-size:15px;font-weight:700;margin-bottom:6px"><i class=ic-alert></i> One quick (free) setup step</div>'
+      + '<div style="font-size:13px;color:var(--text2);line-height:1.7">The Marketing AI needs an AI key. You can use <strong>Google Gemini — free, no card needed</strong>:</div>'
       + '<ol style="font-size:13px;color:var(--text2);line-height:1.8;margin:10px 0 10px 18px;padding:0">'
-      + '<li>Create an API key at <strong>console.anthropic.com</strong> (sign up → Billing → add a little credit → API Keys → Create key).</li>'
-      + '<li>In <strong>Vercel → your project → Settings → Environment Variables</strong>, add <code>ANTHROPIC_API_KEY</code> = your key (Production).</li>'
+      + '<li>Go to <strong>aistudio.google.com/apikey</strong>, sign in with a Google account, and click <strong>Create API key</strong> — copy it.</li>'
+      + '<li>In <strong>Vercel → your project → Settings → Environment Variables</strong>, add <code>GEMINI_API_KEY</code> = your key (Production).</li>'
       + '<li>Redeploy, then come back here and tap “Generate today’s report”.</li>'
       + '</ol>'
-      + '<div style="font-size:12px;color:var(--muted);line-height:1.6">Cost is tiny — roughly a few pence per daily report. The same key also powers the AI Advisor and chat assistant. Tell me once it’s added and I’ll verify it’s working.</div>'
+      + '<div style="font-size:12px;color:var(--muted);line-height:1.6">No cost on Gemini’s free tier, and it includes live web search for market intelligence. The same key also powers the AI Advisor and chat assistant. Tell me once it’s added and I’ll verify it’s working.</div>'
       + '</div>';
     return;
   }
