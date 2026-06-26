@@ -2803,12 +2803,13 @@ function openOutcomeModal(id){
   ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
     + '<div class="perf-modal-title">' + (id ? 'Update response' : 'Log a response from a letter') + '</div>'
     + '<input type="hidden" id="pm-id" value="' + esc(o.id || '') + '"><input type="hidden" id="pm-createdAt" value="' + esc(o.createdAt || '') + '">'
-    + '<label class="perf-lbl">Property address *</label>'
-    + '<div style="position:relative"><input id="pm-address" autocomplete="off" placeholder="Start typing… e.g. 12 Hindes Road" value="' + esc(o.address || '') + '" oninput="perfSuggest(this.value)" onblur="perfSuggestBlur()">'
+    + '<label class="perf-lbl">Postcode</label>'
+    + '<div style="display:flex;gap:8px;position:relative"><input id="pm-postcode" autocomplete="off" placeholder="HA1 1SH" value="' + esc(o.postcode || '') + '" style="flex:1" oninput="perfPcInput(this.value)" onblur="perfBoxBlur()">'
+    + '<button type="button" class="btn bs sm-btn" style="flex-shrink:0;white-space:nowrap" onclick="perfFindAddresses()">Find addresses</button>'
     + '<div id="pm-suggest" class="suggest-box" style="display:none"></div></div>'
-    + '<div style="font-size:10.5px;color:var(--muted);margin-top:4px">Pick a suggestion to fill the exact address &amp; postcode automatically — avoids typos.</div>'
-    + '<div class="perf-row2"><div><label class="perf-lbl">Postcode</label><input id="pm-postcode" placeholder="HA1 1SH" value="' + esc(o.postcode || '') + '"></div>'
-    + '<div><label class="perf-lbl">From letter / template</label><input id="pm-source" placeholder="e.g. Just Sold" value="' + esc(o.source || '') + '"></div></div>'
+    + '<div style="font-size:10.5px;color:var(--muted);margin:4px 0 0">Enter the postcode and pick the exact property — it fills the address for you and avoids typos.</div>'
+    + '<label class="perf-lbl">Property address *</label><input id="pm-address" autocomplete="off" placeholder="12 Hindes Road, Harrow" value="' + esc(o.address || '') + '">'
+    + '<label class="perf-lbl">From letter / template</label><input id="pm-source" placeholder="e.g. Just Sold" value="' + esc(o.source || '') + '">'
     + '<label class="perf-lbl">What’s happened?</label><select id="pm-stage" onchange="perfStageFields()">'
     + Object.keys(opt).map(s => '<option value="' + s + '"' + (o.stage === s ? ' selected' : '') + '>' + opt[s] + '</option>').join('') + '</select>'
     + '<div id="pm-valwrap" class="perf-cond"><label class="perf-lbl">Valuation date</label><input type="date" id="pm-valdate" value="' + esc(o.valuationDate || '') + '"></div>'
@@ -2831,24 +2832,31 @@ function perfStageFields(){
   if (lvl >= 3){ const v = document.getElementById('pm-agrdate'); if (v && !v.value) v.value = today; }
 }
 
-// ── Live address finder for the response form (Royal Mail / OS Places) ──
-let perfSuggestTimer = null;
-function perfSuggest(v){
-  v = (v || '').trim();
+// ── Postcode-driven address finder for the response form ──
+// Uses /api/addresses?postcode= (Royal Mail / OS Places when an OS key is set,
+// EPC register otherwise) so it works without any extra key and prevents typos.
+const FULL_PC = /^[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}$/;
+let perfPcTimer = null, perfBoxTimer = null;
+function perfPcInput(v){
+  clearTimeout(perfBoxTimer); clearTimeout(perfPcTimer);
+  const pc = (v || '').trim().toUpperCase();
+  if (FULL_PC.test(pc)) { perfPcTimer = setTimeout(perfFindAddresses, 350); }
+  else { const box = document.getElementById('pm-suggest'); if (box){ box.style.display = 'none'; box.innerHTML = ''; } }
+}
+async function perfFindAddresses(){
+  clearTimeout(perfBoxTimer);
   const box = document.getElementById('pm-suggest'); if (!box) return;
-  if (v.length < 3){ box.style.display = 'none'; box.innerHTML = ''; return; }
-  clearTimeout(perfSuggestTimer);
-  perfSuggestTimer = setTimeout(async () => {
-    try {
-      const r = await fetch('/api/addresses?suggest=' + encodeURIComponent(v));
-      if (!r.ok) return;
-      const list = (await r.json()).suggestions || [];
-      if (!list.length){ box.innerHTML = '<div class="suggest-empty">No matches yet — keep typing, or enter the address by hand.</div>'; box.style.display = 'block'; return; }
-      box._items = list;
-      box.innerHTML = list.map((a, i) => '<div class="suggest-item" onmousedown="perfPick(' + i + ')">' + esc(a.fullAddress) + '</div>').join('');
-      box.style.display = 'block';
-    } catch (e) { /* ignore */ }
-  }, 220);
+  const pc = ((document.getElementById('pm-postcode') || {}).value || '').trim().toUpperCase();
+  if (!FULL_PC.test(pc)){ box.innerHTML = '<div class="suggest-empty">Enter a full postcode (e.g. HA1 1SH) to list addresses.</div>'; box.style.display = 'block'; return; }
+  box.innerHTML = '<div class="suggest-empty">Finding addresses…</div>'; box.style.display = 'block';
+  try {
+    const r = await fetch('/api/addresses?postcode=' + encodeURIComponent(pc) + '&types=all');
+    const list = (await r.json()).addresses || [];
+    if (!list.length){ box.innerHTML = '<div class="suggest-empty">No addresses found for ' + esc(pc) + ' — type the address by hand.</div>'; box.style.display = 'block'; return; }
+    box._items = list;
+    box.innerHTML = list.map((a, i) => '<div class="suggest-item" onmousedown="perfPick(' + i + ')">' + esc(a.fullAddress) + '</div>').join('');
+    box.style.display = 'block';
+  } catch (e) { box.innerHTML = '<div class="suggest-empty">Couldn’t fetch addresses — type it by hand.</div>'; box.style.display = 'block'; }
 }
 function perfPick(i){
   const box = document.getElementById('pm-suggest'); if (!box) return;
@@ -2857,7 +2865,7 @@ function perfPick(i){
   const pc = document.getElementById('pm-postcode'); if (pc && a.postcode) pc.value = a.postcode;
   box.style.display = 'none'; box.innerHTML = '';
 }
-function perfSuggestBlur(){ setTimeout(() => { const box = document.getElementById('pm-suggest'); if (box) box.style.display = 'none'; }, 150); }
+function perfBoxBlur(){ perfBoxTimer = setTimeout(() => { const box = document.getElementById('pm-suggest'); if (box) box.style.display = 'none'; }, 200); }
 
 async function saveOutcome(){
   const g = (id) => (document.getElementById(id) || {}).value || '';
