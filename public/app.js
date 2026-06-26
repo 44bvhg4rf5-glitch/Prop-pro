@@ -339,10 +339,25 @@ function printAll(){
 }
 function clrDone(){queue=queue.filter(q=>q.status!=='done');renderQueue();updQStats();}
 
+/* ── Owner-name store (free public-record research; postal personalisation) ── */
+function ownerKey(a){
+  if(!a) return '';
+  if(a.uprn) return 'u:'+String(a.uprn);
+  return 'a:'+String(a.fullAddress||a.address||'').toLowerCase().replace(/\s+/g,' ').trim();
+}
+function getOwnerName(a){ try{ const m=JSON.parse(localStorage.getItem('pmOwners')||'{}'); return (a&&a.ownerName)||m[ownerKey(a)]||''; }catch{ return (a&&a.ownerName)||''; } }
+function setOwnerName(a,name){ try{ const m=JSON.parse(localStorage.getItem('pmOwners')||'{}'); const k=ownerKey(a); if(name) m[k]=name; else delete m[k]; localStorage.setItem('pmOwners',JSON.stringify(m)); }catch{} }
+// Swap the generic salutation for the real owner name when we have one.
+function applyOwnerSalutation(text,name){
+  if(!name) return text;
+  return text.replace(/\bDear\s+(Homeowner|Home Owner|Property Owner|Landlord|Resident|Sir\/Madam|Owner)\b/gi,'Dear '+name);
+}
+
 function buildLetter(body,p){
   if(!p||typeof body!=='string') return body||'';
   const _addr=p.address||p.fullAddress||'';
-  return body
+  const owner=getOwnerName(p);
+  let out = body
     .replace(/\{\{date\}\}/g,new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}))
     .replace(/\{\{address\}\}/g,_addr)
     .replace(/\{\{area\}\}/g,p.district||'Harrow')
@@ -350,9 +365,91 @@ function buildLetter(body,p){
     .replace(/\{\{source\}\}/g,p.portal||'Rightmove')
     .replace(/\{\{price\}\}/g,p.priceLabel||(p.status==='To Let'?`£${(p.price||0).toLocaleString()}/pcm`:`£${(p.price||0).toLocaleString()}`))
     .replace(/\{\{bedrooms\}\}/g,p.beds===0?'Studio':p.beds)
-    .replace(/\{\{name\}\}/g,'Homeowner')
+    .replace(/\{\{name\}\}/g,owner||'Homeowner')
+    .replace(/\{\{ownerName\}\}/g,owner||'Homeowner')
     .replace(/\{\{type\}\}/g,p.type);
+  return applyOwnerSalutation(out, owner);
 }
+/* ── Owner research popup (Companies House + planning, free public records) ── */
+async function researchOwner(a){
+  if(!a){ return; }
+  openOwnerModal(a, null, true);
+  try{
+    const qs=new URLSearchParams({
+      address:a.fullAddress||a.address||'',
+      line1:a.line1||(a.fullAddress||a.address||'').split(',')[0]||'',
+      postcode:(a.postcode||'').replace(/—.*/,'').trim(),
+    });
+    const r=await fetch('/api/owner?'+qs.toString());
+    const d=await r.json();
+    openOwnerModal(a, d, false);
+  }catch(e){ openOwnerModal(a, {error:e.message}, false); }
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function openOwnerModal(a, data, loading){
+  let ov=document.getElementById('owner-modal');
+  if(!ov){ ov=document.createElement('div'); ov.id='owner-modal'; ov.className='owner-ov'; ov.onclick=(e)=>{ if(e.target===ov) closeOwnerModal(); }; document.body.appendChild(ov); }
+  ov._addr=a; if(data && !loading) ov._data=data;
+  const propLink=a.rmUrl||a.portalUrl||a.rmAreaUrl||'';
+  const current=getOwnerName(a);
+  let body;
+  if(loading){
+    body='<div style="padding:34px;text-align:center;color:var(--muted)"><div style="font-weight:600;margin-bottom:6px">Searching public records…</div><div style="font-size:12px">Companies House + planning applications</div></div>';
+  } else if(data && data.error){
+    body='<div style="padding:20px;color:var(--amber)">'+esc(data.error)+'</div>';
+  } else {
+    const owners=data.owners||[], planning=data.planning||[];
+    const labels={landRegistry:'Land Registry',companiesHouse:'Companies House',planning:'Planning portal',openRegister:'Open register'};
+    body=''
+      +'<div class="owner-note">'
+        +'<div style="font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--gold-l);text-transform:uppercase;margin-bottom:6px">Owner Research</div>'
+        +'<div style="font-size:16px;font-weight:700;color:#fff">'+esc(owners[0]?owners[0].name:'No name found in free records')+'</div>'
+        +'<div style="font-size:12px;color:rgba(255,255,255,.72);margin-top:3px">'+esc(a.fullAddress||a.address||'')+'</div>'
+        +(propLink?'<a href="'+esc(propLink)+'" target="_blank" rel="noopener" class="owner-link">View property listing ↗</a>':'')
+      +'</div>'
+      +(owners.length?'<div class="owner-sec"><div class="owner-h">Names found in public records</div>'
+        +owners.map(o=>'<div class="owner-row"><div style="min-width:0"><div style="font-weight:600">'+esc(o.name)+'</div><div style="font-size:11px;color:var(--muted)">'+esc(o.role)+' · '+esc(o.source)+(o.detail?' · '+esc(o.detail):'')+'</div></div><button class="btn bp sm-btn" onclick="useOwnerName(this.dataset.n)" data-n="'+esc(o.name)+'">Use on letters</button></div>').join('')
+        +'</div>':'')
+      +(planning.length?'<div class="owner-sec"><div class="owner-h">Planning history ('+planning.length+')</div>'
+        +planning.map(p=>'<div class="owner-row"><div style="min-width:0"><div style="font-size:12px">'+esc(p.description||p.ref||'Application')+'</div><div style="font-size:11px;color:var(--muted)">'+esc(p.date||'')+(p.applicant&&p.applicant!=='See planning record'?' · '+esc(p.applicant):'')+'</div></div>'+(p.url?'<a href="'+esc(p.url)+'" target="_blank" rel="noopener" class="btn bs sm-btn">Read ↗</a>':'')+'</div>').join('')
+        +'</div>':'')
+      +'<div class="owner-sec"><div class="owner-h">Set the name for letters</div>'
+        +'<div style="display:flex;gap:8px"><input id="owner-manual" placeholder="e.g. Mr &amp; Mrs Patel" value="'+esc(current)+'" style="flex:1"><button class="btn bp" onclick="useOwnerName(document.getElementById(\'owner-manual\').value)">Save</button></div>'
+        +(current?'<div style="font-size:11px;color:var(--green);margin-top:6px">Letters to this address will open “Dear '+esc(current)+',”. <a href="#" onclick="clearOwnerName();return false" style="color:var(--red)">Remove</a></div>':'')
+      +'</div>'
+      +'<div class="owner-sec"><div class="owner-h">Look up the rest yourself (public records)</div><div style="display:flex;gap:7px;flex-wrap:wrap">'
+        +Object.entries(data.links||{}).map(([k,v])=>'<a href="'+esc(v)+'" target="_blank" rel="noopener" class="btn bs sm-btn">'+(labels[k]||k)+' ↗</a>').join('')
+        +'</div></div>'
+      +'<div style="font-size:11px;margin-top:10px;padding:9px 11px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;color:#92400E">'+esc(data.note||'')+'</div>';
+  }
+  ov.innerHTML='<div class="owner-card"><button class="owner-x" onclick="closeOwnerModal()" aria-label="Close">×</button>'+body+'</div>';
+  ov.style.display='flex';
+}
+function closeOwnerModal(){ const ov=document.getElementById('owner-modal'); if(ov) ov.style.display='none'; }
+function useOwnerName(name){
+  name=(name||'').trim(); if(!name){ toast('Enter a name first','warn'); return; }
+  const ov=document.getElementById('owner-modal'); const a=ov&&ov._addr; if(!a) return;
+  setOwnerName(a,name); applyOwnerToData(a,name);
+  toast('Owner saved — letters to this address are personalised on the next cycle','ok');
+  openOwnerModal(a, ov._data, false);
+}
+function clearOwnerName(){
+  const ov=document.getElementById('owner-modal'); const a=ov&&ov._addr; if(!a) return;
+  setOwnerName(a,''); applyOwnerToData(a,'');
+  openOwnerModal(a, ov._data, false);
+}
+// Reflect the chosen name onto matching live props + saved contacts.
+function applyOwnerToData(a,name){
+  const k=ownerKey(a);
+  try{ (props||[]).forEach(p=>{ if(ownerKey(p)===k) p.ownerName=name||undefined; }); }catch{}
+  try{
+    const cs=JSON.parse(localStorage.getItem('pmContacts')||'[]');
+    let changed=false;
+    cs.forEach(c=>{ const pa=c.prop||c; if(ownerKey(pa)===k){ pa.ownerName=name||undefined; changed=true; } });
+    if(changed) localStorage.setItem('pmContacts',JSON.stringify(cs));
+  }catch{}
+}
+
 function doPrint(content){
   const pa=document.getElementById('pa');
   pa.innerHTML=`<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:36px 54px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
@@ -1685,6 +1782,7 @@ function renderLiveResults(){
           )
           // Queue letter button
           +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'"><i class=ic-mailbox></i> Queue Letter</button>'
+          +'<button onclick="event.stopPropagation();researchOwner(props['+i+'])" style="padding:7px 13px;background:rgba(201,146,26,.1);color:#9A6C12;border:1.5px solid rgba(201,146,26,.3);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-user></i> Find owner</button>'
           // Zoopla cross-check
           +'<a href="'+p.zoUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:11px;font-weight:600;color:#7C3AED;text-decoration:none;background:rgba(124,58,237,.06)">Zoopla</a>'
           // Sold prices
@@ -1695,6 +1793,7 @@ function renderLiveResults(){
       // Letter footer
       +'<div style="flex-shrink:0;text-align:right;min-width:90px">'
         +'<div style="font-size:10px;color:var(--muted);margin-bottom:4px">Letter to:</div>'
+        +(getOwnerName(p)?'<div style="font-size:11px;font-weight:700;color:#9A6C12;line-height:1.3">'+getOwnerName(p)+'</div>':'')
         +'<div style="font-size:11px;font-weight:700;color:var(--text);line-height:1.4">'+(p.displayAddress||p.address||'')+'</div>'
         +(p.postcode?'<div style="font-size:10px;color:var(--blue);font-weight:600">'+p.postcode+'</div>':'')
       +'</div>';
@@ -5131,14 +5230,18 @@ function updateLetterPreview(){
 }
 
 function buildSLLetter(body,addr){
-  return body
+  const owner=getOwnerName(addr);
+  let out = body
     .replace(/\{\{date\}\}/g,new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}))
     .replace(/\{\{address\}\}/g,addr.fullAddress)
     .replace(/\{\{line1\}\}/g,addr.line1)
     .replace(/\{\{line2\}\}/g,addr.line2||'')
     .replace(/\{\{area\}\}/g,addr.area||'')
     .replace(/\{\{postcode\}\}/g,addr.postcode||'')
+    .replace(/\{\{name\}\}/g,owner||'Homeowner')
+    .replace(/\{\{ownerName\}\}/g,owner||'Homeowner')
     .replace(/\{\{type\}\}/g,addr.type||'');
+  return applyOwnerSalutation(out, owner);
 }
 
 function slFileUp(e){
