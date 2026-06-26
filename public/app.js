@@ -1137,6 +1137,8 @@ async function runLiveSearch(){
         const num = (orig.split(',')[0].match(/\d+[a-z]?/i) || [''])[0].toLowerCase();
         const match = num && cands.find(c => new RegExp('(^|\\D)' + num + '(\\D|$)', 'i').test(c.line1 || c.fullAddress || ''));
         if (match) {
+          // Same house found in the address data — use its complete record.
+          p.address = match.fullAddress; p.displayAddress = match.fullAddress; p.fullAddress = match.fullAddress;
           if (match.postcode) p.postcode = match.postcode;
           if (match.uprn) p.uprn = match.uprn;
         }
