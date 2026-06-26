@@ -1,2 +1,7 @@
 User-agent: *
 Disallow: /
+Allow: /valuation
+Allow: /privacy
+Allow: /terms
+
+Sitemap: https://prop-pro-theta.vercel.app/sitemap.xml
