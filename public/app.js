@@ -1131,13 +1131,18 @@ async function runLiveSearch(){
         const top = r.candidates[0];
         p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
         if (top.postcode) p.postcode = top.postcode;
-        p.addressSource = 'EPC register';
+        if (top.uprn) p.uprn = top.uprn;
+        p.addressSource = r.source || 'Royal Mail / OS Places';
+        p.addressConfirmed = !!r.confirmed;      // EPC floor-area pinpoint or single candidate
+        p._candidates = r.candidates;            // alternatives for one-tap confirm
         p._epcResolved = true;
         p._epcTop = top;
-        p._epcMeta = { sizeMatched: r.sizeMatched, listingSqft: r.listingSqft, total: r.total };
+        p._epcMeta = { sizeMatched: r.sizeMatched, total: r.total };
         matched.push(p);
       }
     });
+    const needConfirm = matched.filter(p => !p.addressConfirmed && (p._candidates||[]).length > 1).length;
+    if (needConfirm) addLog(`${needConfirm} matched via Royal Mail data — tap “Verify” on those cards to pick the exact house`);
     // Two listings must never resolve to the same house (one letter per address).
     const seenAddr = new Set();
     const deduped = matched.filter(p => { const k = (p.fullAddress||'').toLowerCase(); if(seenAddr.has(k)) return false; seenAddr.add(k); return true; });
@@ -1470,7 +1475,9 @@ async function epcLookup(p, retries=1){
     if(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('postcode', pc);
     if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
     if(p.sizeSqft>0) qs.set('size', p.sizeSqft);
-    const r = await fetch('/api/epc?'+qs.toString());
+    if(p.description) qs.set('hint', String(p.description).slice(0,300));
+    // Unified resolver: EPC pinpoint + OS Places rescue (Royal Mail full coverage).
+    const r = await fetch('/api/resolve?'+qs.toString());
     if(!r.ok) return retries>0 ? epcLookup(p, retries-1) : null;
     return await r.json();
   }catch(e){ return retries>0 ? epcLookup(p, retries-1) : null; }
@@ -1552,6 +1559,34 @@ function useEpcAddress(i,j){
   toast('Address updated — verify on the listing before posting','ok');
 }
 
+// ── Verify picker for OS-Places-rescued matches (real street addresses) ──
+function togglePick(i){
+  const box=document.getElementById('pick-'+i); if(!box) return;
+  if(box.style.display==='none'){ renderPickBox(i); box.style.display='block'; }
+  else box.style.display='none';
+}
+function renderPickBox(i){
+  const box=document.getElementById('pick-'+i); const p=props[i]; if(!box||!p) return;
+  const cands=p._candidates||[]; const chosen=p._pickChosen??0;
+  box.innerHTML='<div style="border:1px solid var(--border2);border-radius:8px;padding:9px 11px;background:#fff">'
+    +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">REAL ROYAL MAIL ADDRESSES ON THIS STREET — pick the exact house</div>'
+    + cands.slice(0,10).map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
+        +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'+(j===chosen?'✓ ':'')+c.fullAddress+'</span>'
+        +(j===chosen?'<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">USING</span>'
+           :'<button onclick="event.stopPropagation();useCandidate('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>')
+      +'</div>').join('')
+    + (cands.length>10?'<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(cands.length-10)+' more on this street</div>':'')
+    +'</div>';
+}
+function useCandidate(i,j){
+  const p=props[i]; const c=(p._candidates||[])[j]; if(!c) return;
+  p._pickChosen=j; p.address=c.fullAddress; p.displayAddress=c.fullAddress; p.fullAddress=c.fullAddress;
+  if(c.postcode) p.postcode=c.postcode; if(c.uprn) p.uprn=c.uprn;
+  const span=document.getElementById('addr-'+i); if(span) span.textContent=c.fullAddress;
+  renderPickBox(i);
+  toast('Address set — verify on the listing before posting','ok');
+}
+
 function renderLiveResults(){
   const area = document.getElementById('results-area');
   if(area) area.style.display = 'block';
@@ -1595,10 +1630,15 @@ function renderLiveResults(){
           +(isReal?'<span style="background:rgba(5,150,105,.12);color:#059669;font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">● LIVE</span>':'')
           +'<span id="addr-'+i+'" style="font-size:14px;font-weight:700;color:var(--text)">'+(p.displayAddress||p.address||'Address on Rightmove')+'</span>'
         +'</div>'
+        +'<div id="pick-'+i+'" style="display:none;margin-bottom:8px"></div>'
         // Postcode + meta
         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
           +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px"><i class=ic-send></i> '+p.postcode+'</span>':'')
-          +(p._epcTop?'<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px">✓ EPC matched'+(p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+(p._epcTop.band?' · band '+p._epcTop.band:'')+'</span>':'')
+          +(p.addressConfirmed
+             ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px"><i class=ic-check></i> Address confirmed'+(p._epcTop&&p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+'</span>'
+             : ((p._candidates&&p._candidates.length>1)
+                ? '<button onclick="event.stopPropagation();togglePick('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:2px 9px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Verify house ('+p._candidates.length+' on street)</button>'
+                : (p.addressSource?'<span style="font-size:11px;color:var(--muted)">'+p.addressSource+'</span>':'')))
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')

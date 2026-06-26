@@ -1,4 +1,4 @@
-import { EPC_BASE, fetchJson, reverseGeocode, FULL_POSTCODE, sendJson } from '../lib/helpers.js';
+import { EPC_BASE, fetchJson, reverseGeocode, FULL_POSTCODE, sendJson, guardOrigin } from '../lib/helpers.js';
 
 const SQFT_PER_M2 = 10.7639;
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -15,27 +15,15 @@ function looksLikeFlat(line1) {
   return /\b(flat|apartment|apt|unit|maisonette|studio|room)\b/i.test(l) || /^\d+[a-z]\b/i.test(l);
 }
 
-export default async function handler(req, res) {
+// Resolve a listing to candidate full addresses from the EPC register.
+// Returns a plain result object (no HTTP) so other endpoints can reuse it.
+// `{ error, status }` on failure; otherwise `{ total, candidates, pcList, ... }`.
+export async function epcResolve({ postcodeIn = '', street = '', rmType = '', listingSqft = 0, lat = NaN, lon = NaN, area = '' }) {
   const EPC_API_KEY = process.env.EPC_API_KEY || '';
   if (!EPC_API_KEY) {
-    sendJson(res, 503, {
-      error: 'No EPC_API_KEY configured. Register free at ' +
-        'https://get-energy-performance-data.communities.gov.uk and set EPC_API_KEY in the environment.',
-    });
-    return;
+    return { error: 'No EPC_API_KEY configured. Register free at https://get-energy-performance-data.communities.gov.uk', status: 503 };
   }
-
-  const u = new URL(req.url, 'http://localhost');
-  const postcodeIn = (u.searchParams.get('postcode') || '').trim().toUpperCase();
-  const street = (u.searchParams.get('street') || '').trim();
-  const rmType = (u.searchParams.get('type') || '').trim();
-  const listingSqft = parseInt(u.searchParams.get('size') || '0', 10) || 0; // listing floor area (ft²)
-  const lat = parseFloat(u.searchParams.get('lat'));
-  const lon = parseFloat(u.searchParams.get('lon'));
   const wantStreet = streetOf(street);
-  // Postcode area (e.g. "HA") — never match outside it, even if a same-named
-  // street exists elsewhere and the listing's pin was off.
-  const area = (u.searchParams.get('district') || '').toUpperCase().replace(/[0-9].*$/, '');
   const inArea = (pc) => !area || (pc || '').toUpperCase().startsWith(area);
 
   let pcList = [];
@@ -44,8 +32,7 @@ export default async function handler(req, res) {
   pcList = [...new Set(pcList)].filter(inArea).slice(0, 14);
 
   if (!pcList.length) {
-    sendJson(res, 200, { total: 0, candidates: [], note: 'Could not resolve a postcode for this listing — open it on Rightmove to read the area.' });
-    return;
+    return { total: 0, candidates: [], pcList: [], note: 'Could not resolve a postcode for this listing — open it on Rightmove to read the area.' };
   }
 
   const onStreet = (r) => wantStreet && norm([r.addressLine1, r.addressLine2, r.addressLine3].filter(Boolean).join(' ')).includes(wantStreet);
@@ -56,7 +43,7 @@ export default async function handler(req, res) {
     for (const pc of pcList) {
       const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
       const { status, json } = await fetchJson(url, EPC_API_KEY);
-      if (status === 401 || status === 403) { sendJson(res, 502, { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.' }); return; }
+      if (status === 401 || status === 403) { return { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.', status: 502 }; }
       const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
       if (!wantStreet) { rows = data; break; }
       if (data.some(onStreet)) { rows = data; break; }
@@ -89,8 +76,7 @@ export default async function handler(req, res) {
     if (wantStreet) {
       const hits = cands.filter((c) => c._hay.includes(wantStreet));
       if (!hits.length) {
-        sendJson(res, 200, { total: 0, candidates: [], note: "Couldn't confirm the exact street from the map pin. Open the listing on Rightmove to read the road." });
-        return;
+        return { total: 0, candidates: [], pcList, note: "Couldn't confirm the exact street from the map pin." };
       }
       cands = hits;
     }
@@ -130,15 +116,33 @@ export default async function handler(req, res) {
     }
 
     cands.forEach((c) => { delete c._hay; delete c.cert; });
-    sendJson(res, 200, {
+    return {
       postcode: cands[0] ? cands[0].postcode : pcList[0],
       street: street || null,
       listingSqft: listingSqft || null,
       sizeMatched,
       total: cands.length,
       candidates: cands.slice(0, 40),
-    });
+      pcList,
+    };
   } catch (e) {
-    sendJson(res, 502, { error: 'EPC lookup failed: ' + e.message });
+    return { error: 'EPC lookup failed: ' + e.message, status: 502 };
   }
+}
+
+// HTTP wrapper.
+export default async function handler(req, res) {
+  if (!guardOrigin(req, res)) return;
+  const u = new URL(req.url, 'http://localhost');
+  const r = await epcResolve({
+    postcodeIn: (u.searchParams.get('postcode') || '').trim().toUpperCase(),
+    street: (u.searchParams.get('street') || '').trim(),
+    rmType: (u.searchParams.get('type') || '').trim(),
+    listingSqft: parseInt(u.searchParams.get('size') || '0', 10) || 0,
+    lat: parseFloat(u.searchParams.get('lat')),
+    lon: parseFloat(u.searchParams.get('lon')),
+    area: (u.searchParams.get('district') || '').toUpperCase().replace(/[0-9].*$/, ''),
+  });
+  if (r.error) { sendJson(res, r.status || 502, { error: r.error }); return; }
+  sendJson(res, 200, r);
 }
