@@ -976,6 +976,21 @@ function applyTargetingNow(){
   if(window._allResolved){ props = window._allResolved.filter(p=>!isExcludedAgent(p)); renderLiveResults(); updateKPIs(); }
 }
 
+// Approximate adjacency of the HA outcodes, used for the "search radius" filter.
+const HA_ADJ = {
+  HA0:['HA9','HA1','HA2'], HA1:['HA0','HA2','HA3','HA9'], HA2:['HA1','HA0','HA5','HA4'],
+  HA3:['HA1','HA7','HA8','HA9'], HA4:['HA2','HA5','HA6'], HA5:['HA2','HA4','HA6','HA1'],
+  HA6:['HA5','HA4','HA7'], HA7:['HA3','HA8','HA6'], HA8:['HA3','HA7','HA9'], HA9:['HA0','HA1','HA3','HA8'],
+};
+function expandDistrictsByRadius(codes, radius){
+  if(!radius || radius<=0) return [...new Set(codes)];
+  let set = new Set(codes);
+  for(let step=0; step<radius; step++){
+    for(const c of [...set]) (HA_ADJ[c]||[]).forEach(n=>set.add(n));
+  }
+  return [...set];
+}
+
 async function runLiveSearch(){
   if(!selectedHA.size){ toast('Select at least one HA district in Filters','warn'); return; }
 
@@ -986,7 +1001,10 @@ async function runLiveSearch(){
   const typeF   = document.getElementById('f-type')?.value   || 'all';
   const minBeds = parseInt(document.getElementById('f-beds')?.value || '0') || 0;
   const maxPriceV = parseInt(document.getElementById('f-price')?.value || '0') || 0;
-  const districts = [...selectedHA].sort();
+  const minPriceV = parseInt(document.getElementById('f-price-min')?.value || '0') || 0;
+  const radiusV   = parseInt(document.getElementById('f-radius')?.value || '0') || 0;
+  // Radius = expand the selected HA districts to neighbouring ones (Rightmove-style).
+  const districts = expandDistrictsByRadius([...selectedHA], radiusV).sort();
   const isSale   = statusF !== 'let';
   const chanWd   = isSale ? 'for sale' : 'to rent';
 
@@ -1036,6 +1054,7 @@ async function runLiveSearch(){
       const qs = new URLSearchParams({ district: code, channel: chan });
       if (minBeds > 0)   qs.set('minBeds', String(minBeds));
       if (maxPriceV > 0) qs.set('maxPrice', String(maxPriceV));
+      if (minPriceV > 0) qs.set('minPrice', String(minPriceV));
       const r = await fetch('/api/listings?' + qs.toString());
       if (!r.ok) throw new Error('listings endpoint ' + r.status);
       const d = await r.json();
@@ -1080,6 +1099,12 @@ async function runLiveSearch(){
   if (props.length) {
     const seenS = new Set();
     props = props.filter(p => { const k = p.propertyId || p.address; if (seenS.has(k)) return false; seenS.add(k); return true; });
+    // Price range filter (keep listings with no parsed price so we don't lose them).
+    if (minPriceV > 0 || maxPriceV > 0) {
+      const beforePrice = props.length;
+      props = props.filter(p => !p.price || ((!minPriceV || p.price >= minPriceV) && (!maxPriceV || p.price <= maxPriceV)));
+      if (beforePrice !== props.length) addLog(`Price filter £${minPriceV?minPriceV.toLocaleString():'0'}–${maxPriceV?maxPriceV.toLocaleString():'∞'}: kept ${props.length} of ${beforePrice}`);
+    }
     props = props.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
 
     // ── Agent targeting: register agents, drop excluded ones before resolve ──
