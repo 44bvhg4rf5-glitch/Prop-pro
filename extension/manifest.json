@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "PropMail Pinpoint — Rightmove Full Address Finder",
+  "version": "1.0.0",
+  "description": "Finds the full address of a Rightmove listing by reverse-geocoding the map pin and matching it against the public EPC register.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://*.rightmove.co.uk/*",
+    "https://api.postcodes.io/*",
+    "https://api.get-energy-performance-data.communities.gov.uk/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "PropMail Pinpoint",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.rightmove.co.uk/properties/*",
+        "https://www.rightmove.co.uk/property-for-sale/*",
+        "https://www.rightmove.co.uk/property-to-rent/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

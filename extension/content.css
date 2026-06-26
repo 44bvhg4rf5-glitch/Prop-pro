@@ -1,0 +1,106 @@
+/* PropMail Pinpoint — injected panel. Namespaced (.ppp-*) to avoid clashing
+   with Rightmove's own styles, and high z-index so it floats above the page. */
+
+.ppp-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 340px;
+  max-width: calc(100vw - 36px);
+  background: #ffffff;
+  color: #1a1a2e;
+  border: 1px solid #e4e4ef;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(20, 16, 60, 0.22);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  z-index: 2147483646;
+  overflow: hidden;
+}
+.ppp-panel.ppp-min {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  cursor: pointer;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+}
+.ppp-panel.ppp-min .ppp-head,
+.ppp-panel.ppp-min .ppp-body { display: none; }
+.ppp-panel.ppp-min::after {
+  content: "🧲";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+}
+
+.ppp-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+  color: #fff;
+}
+.ppp-logo { font-size: 14px; }
+.ppp-logo b { font-weight: 700; }
+.ppp-logo span { opacity: 0.85; font-size: 12px; }
+.ppp-x {
+  background: rgba(255, 255, 255, 0.18);
+  border: 0; color: #fff;
+  width: 24px; height: 24px; border-radius: 6px;
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.ppp-x:hover { background: rgba(255, 255, 255, 0.32); }
+
+.ppp-body { padding: 14px; }
+
+.ppp-meta { margin-bottom: 12px; }
+.ppp-addr { font-weight: 600; margin-bottom: 6px; }
+.ppp-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ppp-tags span {
+  background: #f1edfb; color: #5b21b6;
+  border-radius: 999px; padding: 2px 9px; font-size: 12px;
+}
+.ppp-tags .ppp-pin { background: #e6f7ee; color: #0a7d44; }
+
+.ppp-go {
+  display: block; width: 100%;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+  color: #fff; border: 0; border-radius: 10px;
+  padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer;
+  margin-top: 4px;
+}
+.ppp-go:hover { filter: brightness(1.07); }
+.ppp-secondary { background: #f3f3f8; color: #4b4b66; margin-top: 10px; }
+
+.ppp-note, .ppp-sub { color: #6b6b80; font-size: 12.5px; margin-top: 10px; }
+.ppp-sub { font-size: 11.5px; color: #9a9aae; }
+.ppp-err { color: #b3261e; background: #fdeceb; border-radius: 8px; padding: 9px 11px; font-size: 13px; }
+
+.ppp-loading { display: flex; align-items: center; gap: 9px; color: #5b21b6; font-size: 13px; padding: 6px 0; }
+.ppp-spin {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #d9cef5; border-top-color: #7c3aed;
+  animation: ppp-rot 0.7s linear infinite; flex: none;
+}
+@keyframes ppp-rot { to { transform: rotate(360deg); } }
+
+.ppp-best {
+  position: relative;
+  background: linear-gradient(135deg, #f6f2ff, #efe9fc);
+  border: 1px solid #e0d4fb; border-radius: 11px;
+  padding: 12px 13px;
+}
+.ppp-best-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #7c3aed; font-weight: 700; }
+.ppp-best-addr { font-size: 15px; font-weight: 700; margin: 5px 0; color: #1a1a2e; }
+.ppp-best-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.ppp-best-meta span { font-size: 11.5px; color: #5b5b72; background: #fff; border-radius: 6px; padding: 1px 7px; }
+.ppp-conf { margin-top: 7px; font-size: 12px; color: #0a7d44; font-weight: 600; }
+.ppp-copy {
+  position: absolute; top: 11px; right: 11px;
+  background: #7c3aed; color: #fff; border: 0; border-radius: 7px;
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+
+.ppp-more { margin-top: 12px; }
+.ppp-more summary { cursor: pointer; font-size: 12.5px; color: #5b21b6; font-weight: 600; }
+.ppp-list { margin-top: 8px; max-height: 220px; overflow-y: auto; }
+.ppp-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 6px 0; border-top: 1px solid #f0f0f5; }
+.ppp-row-addr { flex: 1 1 100%; font-size: 13px; }
+.ppp-row-size, .ppp-row-band { font-size: 11px; color: #8a8a9e; }

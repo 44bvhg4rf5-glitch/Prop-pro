@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PropMail Pinpoint</title>
+  <style>
+    body { width: 300px; margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a2e; }
+    header { background: linear-gradient(135deg, #5b21b6, #7c3aed); color: #fff; padding: 14px 16px; }
+    header h1 { font-size: 15px; margin: 0; }
+    header p { font-size: 12px; margin: 4px 0 0; opacity: 0.9; }
+    main { padding: 14px 16px; }
+    .status { font-size: 13px; padding: 9px 11px; border-radius: 8px; margin-bottom: 12px; }
+    .ok { background: #e6f7ee; color: #0a7d44; }
+    .warn { background: #fff5e6; color: #9a6a00; }
+    button { display: block; width: 100%; border: 0; border-radius: 9px; padding: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .primary { background: linear-gradient(135deg, #5b21b6, #7c3aed); color: #fff; }
+    .secondary { background: #f3f3f8; color: #4b4b66; }
+    .hint { font-size: 11.5px; color: #8a8a9e; margin-top: 12px; }
+    a { color: #7c3aed; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧲 PropMail Pinpoint</h1>
+    <p>Find a Rightmove listing's full address</p>
+  </header>
+  <main>
+    <div id="status" class="status warn">Checking…</div>
+    <button id="find" class="primary">Find full address on this page</button>
+    <button id="options" class="secondary">⚙ Options &amp; API key</button>
+    <p class="hint">Open any Rightmove property page, then click “Find full address”. A panel appears bottom-right of the listing.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
