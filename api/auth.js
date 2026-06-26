@@ -4,10 +4,11 @@ import {
   authConfigured, getSession, getAccountByEmail, getAccountById, verifyPassword,
   hashPassword, saveAccount, deleteAccount, getAccounts, accountCount,
   getOffices, saveOffice, removeOffice, officeMemberCount,
-  newToken, makeSessionCookie, clearSessionCookie, resetAuth,
+  newToken, newPendingToken, readToken, makeSessionCookie, clearSessionCookie, resetAuth,
   createResetToken, consumeResetToken, resetThrottled,
 } from '../lib/auth.js';
 import { emailConfigured, sendEmail } from '../lib/email.js';
+import { genSecret, verifyTotp, otpauthURI, groupSecret, genRecoveryCodes, hashCode } from '../lib/totp.js';
 
 // Accounts & office portals. Dispatched by ?action=.
 //   me | login | logout | setup                         — sign-in flow
@@ -26,6 +27,8 @@ export default async function handler(req, res) {
     const count = authConfigured() ? await accountCount() : 0;
     const active = authConfigured() && count > 0;
     const s = await getSession(req);
+    let twoFactor = false;
+    if (s && !s.open) { const acc = await getAccountById(s.accountId); twoFactor = !!(acc && acc.totpEnabled); }
     sendJson(res, 200, {
       configured: authConfigured(),
       active,
@@ -33,7 +36,8 @@ export default async function handler(req, res) {
       authed: !!s && !s.open,
       open: !!(s && s.open),
       emailReset: emailConfigured(),
-      account: s && !s.open ? { email: s.email, name: s.name, role: s.role, tenant: s.tenant } : null,
+      twoFactor,
+      account: s && !s.open ? { id: s.accountId, email: s.email, name: s.name, role: s.role, tenant: s.tenant } : null,
     });
     return;
   }
@@ -81,8 +85,29 @@ export default async function handler(req, res) {
     const b = await readJson();
     const acc = await getAccountByEmail(b.email || '');
     if (!acc || !verifyPassword(b.password || '', acc.passwordHash)) { sendJson(res, 401, { error: 'Wrong email or password.' }); return; }
+    if (acc.totpEnabled) { sendJson(res, 200, { ok: true, twoFactor: true, pending: await newPendingToken(acc.id) }); return; }
     res.setHeader('Set-Cookie', makeSessionCookie(await newToken(acc.id)));
     sendJson(res, 200, { ok: true, account: { email: acc.email, name: acc.name, role: acc.role } });
+    return;
+  }
+
+  // Second step: a TOTP code from the authenticator, or a recovery code.
+  if (action === 'login-2fa' && method === 'POST') {
+    const b = await readJson();
+    const p = await readToken(b.pending || '');
+    if (!p || p.stage !== '2fa' || !p.sub) { sendJson(res, 401, { error: 'That took too long — please sign in again.' }); return; }
+    const acc = await getAccountById(p.sub);
+    if (!acc || !acc.totpEnabled) { sendJson(res, 401, { error: 'Please sign in again.' }); return; }
+    let ok = false, usedRecovery = false;
+    if (verifyTotp(acc.totpSecret, b.code)) ok = true;
+    else {
+      const h = hashCode(b.code);
+      const rc = (acc.recovery || []).find((r) => r.h === h && !r.used);
+      if (rc) { rc.used = true; await saveAccount(acc); ok = true; usedRecovery = true; }
+    }
+    if (!ok) { sendJson(res, 401, { error: 'That code wasn’t right — check your authenticator and try again.' }); return; }
+    res.setHeader('Set-Cookie', makeSessionCookie(await newToken(acc.id)));
+    sendJson(res, 200, { ok: true, usedRecovery, recoveryLeft: (acc.recovery || []).filter((r) => !r.used).length, account: { email: acc.email, name: acc.name, role: acc.role } });
     return;
   }
 
@@ -146,6 +171,39 @@ export default async function handler(req, res) {
     if (b.id === 'default') { sendJson(res, 400, { error: 'The head office cannot be deleted.' }); return; }
     if ((await officeMemberCount(b.id)) > 0) { sendJson(res, 400, { error: 'Remove this office’s users before deleting it.' }); return; }
     await removeOffice(b.id || '');
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  // ── Two-factor authentication (operates on the signed-in admin) ──
+  if (action === '2fa-setup' && method === 'POST') {
+    const acc = await getAccountById(sess.accountId);
+    if (!acc) { sendJson(res, 400, { error: 'Sign in again to set this up.' }); return; }
+    const secret = genSecret();
+    acc.totpSecret = secret; acc.totpEnabled = false; await saveAccount(acc); // pending until confirmed
+    sendJson(res, 200, { ok: true, secret: groupSecret(secret), raw: secret, otpauth: otpauthURI(secret, acc.email), account: acc.email });
+    return;
+  }
+  if (action === '2fa-enable' && method === 'POST') {
+    const b = await readJson();
+    const acc = await getAccountById(sess.accountId);
+    if (!acc || !acc.totpSecret) { sendJson(res, 400, { error: 'Start the set-up again.' }); return; }
+    if (!verifyTotp(acc.totpSecret, b.code)) { sendJson(res, 400, { error: 'That code wasn’t right — check the app and try again.' }); return; }
+    const codes = genRecoveryCodes();
+    acc.recovery = codes.map((c) => ({ h: hashCode(c), used: false }));
+    acc.totpEnabled = true; await saveAccount(acc);
+    sendJson(res, 200, { ok: true, recoveryCodes: codes });
+    return;
+  }
+  if (action === '2fa-disable' && method === 'POST') {
+    const b = await readJson();
+    const acc = await getAccountById(sess.accountId);
+    if (!acc || !acc.totpEnabled) { sendJson(res, 200, { ok: true }); return; }
+    const byCode = verifyTotp(acc.totpSecret, b.code);
+    const byRecovery = (acc.recovery || []).some((r) => r.h === hashCode(b.code) && !r.used);
+    const byPassword = b.password && verifyPassword(b.password, acc.passwordHash);
+    if (!byCode && !byRecovery && !byPassword) { sendJson(res, 400, { error: 'Enter a current code or your password to turn this off.' }); return; }
+    acc.totpEnabled = false; acc.totpSecret = ''; acc.recovery = []; await saveAccount(acc);
     sendJson(res, 200, { ok: true });
     return;
   }

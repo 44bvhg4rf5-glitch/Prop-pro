@@ -36,6 +36,15 @@
       <div id="auth-reset-msg" class="auth-err"></div>
       <button class="btn bp" style="width:100%;justify-content:center" onclick="authDoReset()">Save new password &amp; sign in</button>
     </div>
+    <div id="auth-mode-twofa" style="display:none">
+      <div class="auth-title">Two-step verification</div>
+      <div class="auth-sub">Enter the 6-digit code from your authenticator app.</div>
+      <input id="auth-2fa-code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" onkeydown="if(event.key==='Enter')authLogin2fa()">
+      <div id="auth-2fa-msg" class="auth-err"></div>
+      <button class="btn bp" style="width:100%;justify-content:center" onclick="authLogin2fa()">Verify</button>
+      <div style="text-align:center;margin-top:11px;font-size:11px;color:var(--muted)">Lost your phone? Enter one of your recovery codes above.</div>
+      <div style="text-align:center;margin-top:6px"><a role="button" tabindex="0" onclick="authShowLogin()" style="font-size:12px;color:var(--blue);cursor:pointer">Back to sign in</a></div>
+    </div>
     <div id="auth-mode-setup" style="display:none">
       <div class="auth-title">Set up your account</div>
       <div class="auth-sub">First-time setup — this becomes your head office and its admin login.</div>
@@ -568,6 +577,7 @@
     <div><div class="page-title">Account</div><div class="page-sub">Your office account, sign-in and (for admins) the offices on this system.</div></div>
   </div>
   <div class="card"><div id="account-info"></div></div>
+  <div class="card" id="account-2fa" style="display:none"><div id="account-2fa-body"></div></div>
   <div class="card" id="account-admin" style="display:none">
     <div class="sec-hdr">
       <div><div class="sec-title">Offices</div><div class="sec-sub">Each office has its own private leads &amp; performance — everyone in it shares it.</div></div>

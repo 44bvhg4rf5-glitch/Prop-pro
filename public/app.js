@@ -11,8 +11,8 @@ const SL_TYPE_LABEL={homes:'homes',houses:'houses',flats:'flats / maisonettes',a
 function slTypes(){ const el=document.getElementById('sl-type'); return (el&&el.value)||'homes'; }
 let intelResults=[], chatHistory=[];
 let perfState={outcomes:[],targets:{},prints:{}}, perfConfigured=false, perfLoaded=false;
-let authState={configured:false,active:false,authed:false,open:true,canSetup:false,emailReset:false,account:null};
-let authResetToken=null;
+let authState={configured:false,active:false,authed:false,open:true,canSetup:false,emailReset:false,twoFactor:false,account:null};
+let authResetToken=null, authPending=null;
 let bdQueued=0;
 let activeTpl=null, selPrinter=null;
 let adviceHistory=[], currentAdvice=null, selectedContexts=new Set(), rewrittenLetter='';
@@ -2961,7 +2961,7 @@ async function loadAuth(){
   applyAuthGate();
 }
 function showAuthMode(mode){
-  ['login', 'setup', 'forgot', 'reset'].forEach((m) => { const el = document.getElementById('auth-mode-' + m); if (el) el.style.display = m === mode ? 'block' : 'none'; });
+  ['login', 'setup', 'forgot', 'reset', 'twofa'].forEach((m) => { const el = document.getElementById('auth-mode-' + m); if (el) el.style.display = m === mode ? 'block' : 'none'; });
 }
 function authDetectReset(){ try { const t = new URL(location.href).searchParams.get('reset'); if (t) authResetToken = t; } catch (e) {} }
 function applyAuthGate(){
@@ -3008,8 +3008,21 @@ async function authLogin(){
     const r = await fetch('/api/auth?action=login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
     const d = await r.json();
     if (!r.ok){ if (err) err.textContent = d.error || 'Sign in failed.'; return; }
+    if (d.twoFactor){ authPending = d.pending; showAuthMode('twofa'); const c = document.getElementById('auth-2fa-code'); if (c){ c.value = ''; c.focus(); } return; }
     await loadAuth(); postLogin();
   } catch (e){ if (err) err.textContent = 'Connection error — try again.'; }
+}
+async function authLogin2fa(){
+  const code = (document.getElementById('auth-2fa-code') || {}).value || '';
+  const msg = document.getElementById('auth-2fa-msg'); if (msg) msg.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=login-2fa', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pending: authPending, code }) });
+    const d = await r.json();
+    if (!r.ok){ if (msg) msg.textContent = d.error || 'Incorrect code.'; return; }
+    authPending = null;
+    await loadAuth(); postLogin();
+    if (d.usedRecovery) toast('Signed in with a recovery code — ' + d.recoveryLeft + ' left', 'warn');
+  } catch (e){ if (msg) msg.textContent = 'Connection error — try again.'; }
 }
 async function authSetup(){
   const office = (document.getElementById('auth-setup-office') || {}).value || '';
@@ -3052,9 +3065,78 @@ function renderAccountPanel(){
   info.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
     + '<div><div style="font-size:15px;font-weight:700">' + esc(a.name || '') + '</div><div style="font-size:12px;color:var(--muted)">' + esc(a.email || '') + ' · ' + esc(a.role === 'admin' ? 'Admin' : 'Member') + '</div></div>'
     + '<button class="btn bs sm-btn" onclick="authLogout()">Sign out</button></div>';
+  // Two-factor card — admins only.
+  const tf = document.getElementById('account-2fa'), tfb = document.getElementById('account-2fa-body');
+  if (tf && tfb){
+    if (a.role === 'admin'){
+      tf.style.display = 'block';
+      tfb.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div>'
+        + '<div style="font-size:14px;font-weight:700">Two-factor authentication ' + (authState.twoFactor ? '<span class="perf-badge b-green">On</span>' : '<span class="perf-badge b-red">Off</span>') + '</div>'
+        + '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + (authState.twoFactor ? 'You enter a code from your authenticator app when signing in.' : 'Add a second step at sign-in using a free authenticator app (Google Authenticator, Authy).') + '</div></div>'
+        + (authState.twoFactor ? '<button class="btn bs sm-btn" onclick="open2faDisable()">Turn off</button>' : '<button class="btn bp sm-btn" onclick="open2faSetup()">Set up</button>') + '</div>';
+    } else tf.style.display = 'none';
+  }
   if (admin){
     if (a.role === 'admin'){ admin.style.display = 'block'; loadAdmin(); } else admin.style.display = 'none';
   }
+}
+async function open2faSetup(){
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><div class="perf-modal-title">Setting up…</div></div>'; ov.style.display = 'flex';
+  try {
+    const r = await fetch('/api/auth?action=2fa-setup', { method:'POST', headers:{'Content-Type':'application/json'}, body: '{}' });
+    const d = await r.json();
+    if (!r.ok){ closePerfModal(); toast(d.error || 'Could not start setup', 'err'); return; }
+    ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
+      + '<div class="perf-modal-title">Set up two-factor</div>'
+      + '<div style="font-size:12px;color:var(--text2);line-height:1.6"><strong>1.</strong> Install a free authenticator app (Google Authenticator, Authy or 1Password).<br><strong>2.</strong> Add this account — tap below on your phone, or type the key into the app.</div>'
+      + '<div style="margin:12px 0"><a href="' + esc(d.otpauth) + '" class="btn bp" style="width:100%;justify-content:center">Add to my authenticator app</a></div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Manual key:</div>'
+      + '<div style="font-family:monospace;font-size:15px;font-weight:700;letter-spacing:1px;background:var(--slate);padding:10px;border-radius:8px;text-align:center;word-break:break-all">' + esc(d.secret) + '</div>'
+      + '<label class="perf-lbl"><strong>3.</strong> Enter the 6-digit code it shows</label><input id="tf-code" inputmode="numeric" placeholder="123 456">'
+      + '<div id="tf-err" class="auth-err"></div>'
+      + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="enable2fa()">Turn on</button></div></div>';
+  } catch (e){ closePerfModal(); toast('Connection error', 'err'); }
+}
+async function enable2fa(){
+  const code = (document.getElementById('tf-code') || {}).value || '';
+  const err = document.getElementById('tf-err'); if (err) err.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=2fa-enable', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code }) });
+    const d = await r.json();
+    if (!r.ok){ if (err) err.textContent = d.error || 'Could not turn on.'; return; }
+    show2faRecovery(d.recoveryCodes || []);
+  } catch (e){ if (err) err.textContent = 'Connection error.'; }
+}
+function show2faRecovery(codes){
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="finish2fa()" aria-label="Close">×</button>'
+    + '<div class="perf-modal-title">Two-factor is on ✓</div>'
+    + '<div style="font-size:12px;color:var(--text2);line-height:1.6">Save these <strong>recovery codes</strong> somewhere safe (a note, a password manager). Each works once to get you in if you lose your phone. <strong>This is the only time they’re shown.</strong></div>'
+    + '<div style="font-family:monospace;font-size:14px;background:var(--slate);padding:12px;border-radius:8px;margin:12px 0;line-height:1.9;text-align:center">' + codes.map((c) => esc(c)).join('<br>') + '</div>'
+    + '<div class="perf-modal-actions"><button class="btn bs" onclick="copyRecovery(\'' + codes.join(' ') + '\')">Copy</button><button class="btn bp" onclick="finish2fa()">I’ve saved them</button></div></div>';
+}
+function copyRecovery(s){ try { navigator.clipboard.writeText(s); toast('Recovery codes copied', 'ok'); } catch (e) { toast('Select and copy them manually', 'warn'); } }
+async function finish2fa(){ closePerfModal(); await loadAuth(); renderAccountPanel(); }
+function open2faDisable(){
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
+    + '<div class="perf-modal-title">Turn off two-factor</div>'
+    + '<div style="font-size:12px;color:var(--text2)">Enter a current 6-digit code (or a recovery code) to confirm.</div>'
+    + '<label class="perf-lbl">Code</label><input id="tf-off-code" inputmode="numeric" placeholder="123 456">'
+    + '<div id="tf-off-err" class="auth-err"></div>'
+    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="disable2fa()">Turn off</button></div></div>';
+  ov.style.display = 'flex';
+}
+async function disable2fa(){
+  const code = (document.getElementById('tf-off-code') || {}).value || '';
+  const err = document.getElementById('tf-off-err'); if (err) err.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=2fa-disable', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code }) });
+    const d = await r.json();
+    if (!r.ok){ if (err) err.textContent = d.error || 'Could not turn off.'; return; }
+    closePerfModal(); await loadAuth(); renderAccountPanel(); toast('Two-factor turned off', 'ok');
+  } catch (e){ if (err) err.textContent = 'Connection error.'; }
 }
 async function loadAdmin(){
   const oWrap = document.getElementById('office-list'), uWrap = document.getElementById('user-list');
