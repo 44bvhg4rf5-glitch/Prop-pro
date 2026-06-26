@@ -11,6 +11,7 @@ const SL_TYPE_LABEL={homes:'homes',houses:'houses',flats:'flats / maisonettes',a
 function slTypes(){ const el=document.getElementById('sl-type'); return (el&&el.value)||'homes'; }
 let intelResults=[], chatHistory=[];
 let perfState={outcomes:[],targets:{},prints:{}}, perfConfigured=false, perfLoaded=false;
+let authState={enabled:false,authed:false,open:true,needsSetup:false,account:null};
 let bdQueued=0;
 let activeTpl=null, selPrinter=null;
 let adviceHistory=[], currentAdvice=null, selectedContexts=new Set(), rewrittenLetter='';
@@ -2574,6 +2575,7 @@ const HOME_TOOLS = [
     { id:'director', name:"Director's Vision", desc:'Strategic growth ideas for the agency', badge:'NEW', badgeColor:'b-gold', svg:'<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>' },
   ]},
   { group: 'Configuration', items: [
+    { id:'account', name:'Account', desc:'Your office login and account settings', svg:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
     { id:'templates', name:'Templates', desc:'Edit your letter templates', svg:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/>' },
     { id:'printers', name:'Printers', desc:'Manage your network printers', svg:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>' },
   ]},
@@ -2625,6 +2627,7 @@ function showPanel(n){
   document.getElementById('panel-' + n)?.classList.add('active');
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'home') renderHome();
+  if (n === 'account') renderAccountPanel();
   if (n === 'performance') initPerf();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
@@ -2945,6 +2948,121 @@ function exportPerfCSV(){
   const b = new Blob([[h.join(','), ...rows].join('\n')], { type:'text/csv' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'propmail_performance_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
   toast('Performance CSV exported', 'ok');
+}
+
+/* ═══════════════════════════════════════════
+   ACCOUNTS & OFFICE PORTALS
+   Auth is only active when the server has SESSION_SECRET + the cloud store.
+   Otherwise the gate never shows and the app behaves exactly as before.
+═══════════════════════════════════════════ */
+async function loadAuth(){
+  try { const r = await fetch('/api/auth?action=me'); if (r.ok) authState = await r.json(); } catch (e) { /* offline → stay open */ }
+  applyAuthGate();
+}
+function applyAuthGate(){
+  const gate = document.getElementById('auth-gate');
+  const locked = authState.enabled && !authState.authed && !authState.open;
+  if (gate){
+    gate.style.display = locked ? 'flex' : 'none';
+    const setup = document.getElementById('auth-mode-setup'), login = document.getElementById('auth-mode-login');
+    if (setup && login){ setup.style.display = authState.needsSetup ? 'block' : 'none'; login.style.display = authState.needsSetup ? 'none' : 'block'; }
+  }
+  renderAccountPanel();
+}
+async function authLogin(){
+  const email = (document.getElementById('auth-email') || {}).value || '';
+  const password = (document.getElementById('auth-pw') || {}).value || '';
+  const err = document.getElementById('auth-err'); if (err) err.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+    const d = await r.json();
+    if (!r.ok){ if (err) err.textContent = d.error || 'Sign in failed.'; return; }
+    await loadAuth(); postLogin();
+  } catch (e){ if (err) err.textContent = 'Connection error — try again.'; }
+}
+async function authSetup(){
+  const name = (document.getElementById('auth-setup-name') || {}).value || '';
+  const email = (document.getElementById('auth-setup-email') || {}).value || '';
+  const password = (document.getElementById('auth-setup-pw') || {}).value || '';
+  const err = document.getElementById('auth-setup-err'); if (err) err.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=setup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, email, password }) });
+    const d = await r.json();
+    if (!r.ok){ if (err) err.textContent = d.error || 'Could not create the account.'; return; }
+    await loadAuth(); postLogin();
+  } catch (e){ if (err) err.textContent = 'Connection error — try again.'; }
+}
+function postLogin(){ try { loadLeads(); loadPerf(); loadBlocklist(); } catch (e) {} showPanel('home'); toast('Signed in', 'ok'); }
+async function authLogout(){
+  try { await fetch('/api/auth?action=logout', { method:'POST' }); } catch (e) {}
+  // Clear device-cached office data so a shared device doesn't leak between offices.
+  try { localStorage.removeItem('pmPerf'); } catch (e) {}
+  perfState = { outcomes:[], targets:{}, prints:{} }; perfLoaded = false;
+  pmLeads = [];
+  await loadAuth();
+  if (authState.enabled && !authState.authed) toast('Signed out', '');
+}
+function renderAccountPanel(){
+  const info = document.getElementById('account-info'); if (!info) return;
+  const admin = document.getElementById('account-admin');
+  if (!authState.enabled){
+    info.innerHTML = '<div style="font-size:13px;color:var(--text2);line-height:1.65">Multi-office accounts are <strong>off</strong> — the app is open on this server and all data is shared.<br><br>To give each office its own login and its own private leads &amp; performance, set a <code>SESSION_SECRET</code> in your hosting environment (Vercel → Settings → Environment Variables) and make sure the cloud store is on, then reload. You’ll be asked to create your head-office account.</div>';
+    if (admin) admin.style.display = 'none';
+    return;
+  }
+  const a = authState.account || {};
+  info.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
+    + '<div><div style="font-size:15px;font-weight:700">' + esc(a.name || '') + '</div><div style="font-size:12px;color:var(--muted)">' + esc(a.email || '') + ' · ' + esc(a.role === 'admin' ? 'Admin' : 'Office') + '</div></div>'
+    + '<button class="btn bs sm-btn" onclick="authLogout()">Sign out</button></div>';
+  if (admin){
+    if (a.role === 'admin'){ admin.style.display = 'block'; loadOffices(); } else admin.style.display = 'none';
+  }
+}
+async function loadOffices(){
+  const wrap = document.getElementById('account-list'); if (!wrap) return;
+  try {
+    const r = await fetch('/api/auth?action=list'); if (!r.ok){ wrap.innerHTML = ''; return; }
+    const list = (await r.json()).accounts || [];
+    wrap.innerHTML = '<div style="overflow-x:auto"><table class="perf-table"><thead><tr><th>Office</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>'
+      + list.map(o => '<tr><td style="font-weight:600">' + esc(o.name) + (o.id === 'default' ? ' <span class="perf-badge b-gold">Head office</span>' : '') + '</td><td>' + esc(o.email) + '</td><td>' + esc(o.role === 'admin' ? 'Admin' : 'Office') + '</td>'
+        + '<td style="white-space:nowrap"><button class="bic" title="Reset password" onclick="resetOfficePw(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, '') + '\')"><i class=ic-pencil></i></button> '
+        + (o.id !== 'default' ? '<button class="bic" title="Delete" onclick="deleteOffice(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, '') + '\')"><i class=ic-trash></i></button>' : '') + '</td></tr>').join('')
+      + '</tbody></table></div>';
+  } catch (e) { /* ignore */ }
+}
+function openCreateOffice(){
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
+    + '<div class="perf-modal-title">New office account</div>'
+    + '<label class="perf-lbl">Office name</label><input id="of-name" placeholder="e.g. Harrow branch">'
+    + '<label class="perf-lbl">Login email</label><input id="of-email" type="email" placeholder="office@agency.co.uk">'
+    + '<label class="perf-lbl">Password (8+ characters)</label><input id="of-pw" type="text" placeholder="Set a password">'
+    + '<label class="perf-lbl">Role</label><select id="of-role"><option value="office">Office — its own private data</option><option value="admin">Admin — can manage all accounts</option></select>'
+    + '<div id="of-err" class="auth-err"></div>'
+    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="createOffice()">Create office</button></div></div>';
+  ov.style.display = 'flex';
+}
+async function createOffice(){
+  const g = id => (document.getElementById(id) || {}).value || '';
+  const err = document.getElementById('of-err'); if (err) err.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: g('of-name'), email: g('of-email'), password: g('of-pw'), role: g('of-role') }) });
+    const d = await r.json();
+    if (!r.ok){ if (err) err.textContent = d.error || 'Could not create the office.'; return; }
+    closePerfModal(); loadOffices(); toast('Office created', 'ok');
+  } catch (e){ if (err) err.textContent = 'Connection error.'; }
+}
+async function resetOfficePw(id, name){
+  const password = prompt('New password for ' + name + ' (at least 8 characters):'); if (!password) return;
+  try {
+    const r = await fetch('/api/auth?action=setpw', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, password }) });
+    const d = await r.json(); if (!r.ok){ toast(d.error || 'Failed', 'err'); return; }
+    toast('Password updated', 'ok');
+  } catch (e){ toast('Connection error', 'err'); }
+}
+async function deleteOffice(id, name){
+  if (!confirm('Delete office “' + name + '”? Sign-in is removed; their stored leads & performance remain in the store but become inaccessible.')) return;
+  try { const r = await fetch('/api/auth?action=delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }); if (r.ok){ loadOffices(); toast('Office deleted', 'ok'); } } catch (e) {}
 }
 
 function updateKPIs(){
@@ -3291,6 +3409,7 @@ function useIntelOwner(btn){
 (function initApp() {
   try {
     activeTpl = templates[0];
+    loadAuth();
     renderHome();
     initHAGrid();
     refreshTplSels();
