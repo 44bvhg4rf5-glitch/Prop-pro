@@ -1034,11 +1034,11 @@ function renderAgentFilter(){
   const ex=excludedSet();
   const targeted=knownAgents.filter(a=>!ex.has(a.name.toLowerCase())).length;
   if(summary) summary.textContent = knownAgents.length ? `· targeting ${targeted} of ${knownAgents.length}` : '';
-  if(!knownAgents.length){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">Run a search, or tap “Discover all”, to list the agencies across HA0–HA9.</span>'; return; }
+  if(!knownAgents.length){ box.innerHTML='<span class="agent-empty">Run a search, or tap “Discover all”, to list the agencies across HA0–HA9.</span>'; return; }
   const f=(document.getElementById('agent-filter')?.value||'').toLowerCase().trim();
   let list=knownAgents.slice().sort((a,b)=>(b.count-a.count)||a.name.localeCompare(b.name));
   if(f) list=list.filter(a=>a.name.toLowerCase().includes(f));
-  if(!list.length){ box.innerHTML='<span style="font-size:12px;color:var(--muted)">No agency matches “'+f+'”.</span>'; return; }
+  if(!list.length){ box.innerHTML='<span class="agent-empty">No agency matches “'+f+'”.</span>'; return; }
   box.innerHTML = list.map(a=>{
     const on=!ex.has(a.name.toLowerCase());
     const safe=a.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');

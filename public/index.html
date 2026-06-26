@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-pro3">
+  <link rel="stylesheet" href="styles.css?v=20260626-agency">
 </head>
 <body>
 <!-- HEADER -->
@@ -134,26 +134,24 @@
     </div>
   </div>
 
-  <!-- ── AGENT TARGETING ── -->
+  <!-- ── AGENCY TARGETING ── -->
   <div class="card" id="targeting-card" style="margin-bottom:16px">
-    <div style="margin-bottom:12px">
-      <div style="font-size:15px;font-weight:700;color:var(--text)"><i class=ic-target></i> Agent Targeting</div>
-      <div style="font-size:12px;color:var(--muted)">Pick which agencies' listings to target. Unticked agents are removed from results — and no letters go to them.</div>
+    <div class="ct"><div class="ct-icon" style="background:#FFF7E8"><i class=ic-target></i></div>Agency Targeting</div>
+    <div style="font-size:12px;color:var(--muted);margin:-9px 0 16px 40px">Choose which agencies' listings to target. Unticked agencies are excluded from results — no letters go to them.</div>
+    <div class="agent-controls">
+      <div class="fg" style="flex:1;min-width:240px"><label>Your agency (never targeted)</label><input type="text" id="own-company" placeholder="e.g. Foxtons" oninput="saveTargeting()"></div>
+      <label class="agent-check"><input type="checkbox" id="exclude-own" onchange="saveTargeting();applyTargetingNow()"> <span>Exclude my own listings</span></label>
     </div>
-    <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
-      <div class="fg" style="flex:1;min-width:220px"><label>Your agency (never targeted)</label><input type="text" id="own-company" placeholder="e.g. Foxtons" oninput="saveTargeting()"></div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);font-weight:500;padding-bottom:10px;cursor:pointer;text-transform:none;letter-spacing:normal;white-space:nowrap"><input type="checkbox" id="exclude-own" onchange="saveTargeting();applyTargetingNow()"> Exclude my own listings</label>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:11px">
-      <div style="font-size:12px;font-weight:600;color:var(--text)">Agencies in your area <span id="agent-summary" style="color:var(--muted);font-weight:500"></span></div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input id="agent-filter" oninput="renderAgentFilter()" placeholder="Filter…" style="padding:6px 11px;border:1px solid var(--border2);border-radius:8px;font-size:12px;font-family:inherit;width:130px">
-        <button class="btn bs sm-btn" style="font-size:10px;padding:4px 10px" onclick="setAllAgents(true)">All</button>
-        <button class="btn bghost sm-btn" style="font-size:10px;padding:4px 10px" onclick="setAllAgents(false)">None</button>
-        <button class="btn bs sm-btn" id="discover-agents-btn" style="font-size:10px;padding:4px 10px" onclick="scanAllAgents(this)">⟳ Discover all</button>
+    <div class="agent-toolbar">
+      <div class="agent-toolbar-title">Agencies in your area <span id="agent-summary"></span></div>
+      <div class="agent-toolbar-actions">
+        <input id="agent-filter" oninput="renderAgentFilter()" placeholder="Filter…" class="agent-filter-input">
+        <button class="btn bs sm-btn" onclick="setAllAgents(true)">All</button>
+        <button class="btn bghost sm-btn" onclick="setAllAgents(false)">None</button>
+        <button class="btn bs sm-btn" id="discover-agents-btn" onclick="scanAllAgents(this)"><i class=ic-refresh></i> Discover all</button>
       </div>
     </div>
-    <div id="agent-list" class="agent-list"><span style="font-size:12px;color:var(--muted)">Run a search, or tap “Discover all”, to list the agencies marketing properties across HA0–HA9.</span></div>
+    <div id="agent-list" class="agent-list"><span class="agent-empty">Run a search, or tap “Discover all”, to list the agencies marketing properties across HA0–HA9.</span></div>
   </div>
 
   <!-- ── PROGRESS / RESULTS ── -->
@@ -1340,6 +1338,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-pro3"></script>
+<script src="app.js?v=20260626-agency"></script>
 </body>
 </html>
