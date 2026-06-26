@@ -2803,7 +2803,10 @@ function openOutcomeModal(id){
   ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
     + '<div class="perf-modal-title">' + (id ? 'Update response' : 'Log a response from a letter') + '</div>'
     + '<input type="hidden" id="pm-id" value="' + esc(o.id || '') + '"><input type="hidden" id="pm-createdAt" value="' + esc(o.createdAt || '') + '">'
-    + '<label class="perf-lbl">Property address *</label><input id="pm-address" placeholder="12 Hindes Road, Harrow" value="' + esc(o.address || '') + '">'
+    + '<label class="perf-lbl">Property address *</label>'
+    + '<div style="position:relative"><input id="pm-address" autocomplete="off" placeholder="Start typing… e.g. 12 Hindes Road" value="' + esc(o.address || '') + '" oninput="perfSuggest(this.value)" onblur="perfSuggestBlur()">'
+    + '<div id="pm-suggest" class="suggest-box" style="display:none"></div></div>'
+    + '<div style="font-size:10.5px;color:var(--muted);margin-top:4px">Pick a suggestion to fill the exact address &amp; postcode automatically — avoids typos.</div>'
     + '<div class="perf-row2"><div><label class="perf-lbl">Postcode</label><input id="pm-postcode" placeholder="HA1 1SH" value="' + esc(o.postcode || '') + '"></div>'
     + '<div><label class="perf-lbl">From letter / template</label><input id="pm-source" placeholder="e.g. Just Sold" value="' + esc(o.source || '') + '"></div></div>'
     + '<label class="perf-lbl">What’s happened?</label><select id="pm-stage" onchange="perfStageFields()">'
@@ -2827,6 +2830,35 @@ function perfStageFields(){
   if (lvl >= 2){ const v = document.getElementById('pm-instdate'); if (v && !v.value) v.value = today; }
   if (lvl >= 3){ const v = document.getElementById('pm-agrdate'); if (v && !v.value) v.value = today; }
 }
+
+// ── Live address finder for the response form (Royal Mail / OS Places) ──
+let perfSuggestTimer = null;
+function perfSuggest(v){
+  v = (v || '').trim();
+  const box = document.getElementById('pm-suggest'); if (!box) return;
+  if (v.length < 3){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  clearTimeout(perfSuggestTimer);
+  perfSuggestTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/addresses?suggest=' + encodeURIComponent(v));
+      if (!r.ok) return;
+      const list = (await r.json()).suggestions || [];
+      if (!list.length){ box.innerHTML = '<div class="suggest-empty">No matches yet — keep typing, or enter the address by hand.</div>'; box.style.display = 'block'; return; }
+      box._items = list;
+      box.innerHTML = list.map((a, i) => '<div class="suggest-item" onmousedown="perfPick(' + i + ')">' + esc(a.fullAddress) + '</div>').join('');
+      box.style.display = 'block';
+    } catch (e) { /* ignore */ }
+  }, 220);
+}
+function perfPick(i){
+  const box = document.getElementById('pm-suggest'); if (!box) return;
+  const a = (box._items || [])[i]; if (!a) return;
+  const ad = document.getElementById('pm-address'); if (ad) ad.value = a.fullAddress;
+  const pc = document.getElementById('pm-postcode'); if (pc && a.postcode) pc.value = a.postcode;
+  box.style.display = 'none'; box.innerHTML = '';
+}
+function perfSuggestBlur(){ setTimeout(() => { const box = document.getElementById('pm-suggest'); if (box) box.style.display = 'none'; }, 150); }
+
 async function saveOutcome(){
   const g = (id) => (document.getElementById(id) || {}).value || '';
   const stage = g('pm-stage') || 'response';
