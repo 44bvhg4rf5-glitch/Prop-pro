@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-dedemo">
+  <link rel="stylesheet" href="styles.css?v=20260626-intel">
 </head>
 <body>
 <!-- HEADER -->
@@ -296,25 +296,26 @@
 <!-- ═══ AI INTEL ═══ -->
 <div class="panel" id="panel-intel">
   <div class="page-hdr">
-    <div><div class="page-title">AI Intelligence</div><div class="page-sub">Paste a Rightmove URL or address — AI resolves the property and searches owner databases</div></div>
+    <div><div class="page-title">AI Intelligence</div><div class="page-sub">Paste a Rightmove link — the address finder pinpoints the property, then Companies House &amp; planning records are searched for the owner</div></div>
   </div>
   <div class="intel-hero">
     <div style="display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;width:100%;position:relative;z-index:1">
       <div>
-        <div class="ai-badge"><div class="ai-pulse"></div>Powered by AI</div>
+        <div class="ai-badge"><div class="ai-pulse"></div>Live public records</div>
         <div style="font-family:'Playfair Display',serif;font-size:20px;margin-bottom:6px">Property Intelligence Engine</div>
-        <div style="font-size:12px;opacity:.7;line-height:1.65;margin-bottom:14px">Enter a Rightmove URL, full address, or postcode. The AI identifies the exact property then cross-references Land Registry, Companies House, VOA and public records to surface owner information.</div>
+        <div style="font-size:12px;opacity:.7;line-height:1.65;margin-bottom:14px">Paste a Rightmove property link (or type a full address / postcode). The address finder resolves the exact house from the EPC register and Royal Mail data, then Companies House and planning applications are searched for the owner. Real records only — nothing is invented.</div>
         <div style="display:flex;gap:8px;align-items:center">
           <input id="intel-url" placeholder="https://www.rightmove.co.uk/properties/... or 14 Station Road, Harrow, HA1 2SB" style="flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:9px 13px;font-size:13px;font-family:inherit;outline:none">
           <button class="btn bg sm-btn" id="intel-search-btn" onclick="runIntelSearch()" style="flex-shrink:0"><i class=ic-brain></i> Analyse</button>
         </div>
       </div>
       <div class="source-pills" style="min-width:210px">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.3);margin-bottom:7px">Data Sources</div>
-        <div class="source-pill"><span class="sp-tag sp-lr">GOV</span>HM Land Registry</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.3);margin-bottom:7px">Searched automatically</div>
+        <div class="source-pill"><span class="sp-tag sp-lr">EPC</span>EPC register + Royal Mail</div>
         <div class="source-pill"><span class="sp-tag sp-ch">CH</span>Companies House (free)</div>
-        <div class="source-pill"><span class="sp-tag sp-voa">VOA</span>Valuation Office Agency</div>
-        <div class="source-pill"><span class="sp-tag sp-plan">PLAN</span>Planning Portal</div>
+        <div class="source-pill"><span class="sp-tag sp-plan">PLAN</span>Planning applications</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.3);margin:10px 0 7px">One-tap reference</div>
+        <div class="source-pill"><span class="sp-tag sp-voa">GOV</span>Land Registry title (~£3)</div>
         <div class="source-pill"><span class="sp-tag sp-192">192</span>Electoral Roll / 192.com</div>
       </div>
     </div>
@@ -326,7 +327,7 @@
     <button class="intel-tab" id="itab-results" onclick="switchIntelTab('results')"><i class=ic-chart></i> Results</button>
   </div>
   <div id="itab-single-content">
-    <div id="intel-thinking" style="display:none" class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div><span id="intel-think-txt">AI is analysing…</span></div>
+    <div id="intel-thinking" style="display:none" class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div><span id="intel-think-txt">Working…</span></div>
     <div id="intel-result-area"></div>
   </div>
   <div id="itab-batch-content" style="display:none">
@@ -1356,6 +1357,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-dedemo"></script>
+<script src="app.js?v=20260626-intel"></script>
 </body>
 </html>
