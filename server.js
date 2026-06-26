@@ -15,6 +15,7 @@ import addresses from './api/addresses.js';
 import resolve from './api/resolve.js';
 import owner from './api/owner.js';
 import lead from './api/lead.js';
+import results from './api/results.js';
 import suppress from './api/suppress.js';
 import printnode from './api/printnode.js';
 import ai from './api/ai.js';
@@ -43,6 +44,7 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/resolve')) { resolve(req, res); return; }
   if (req.url.startsWith('/api/owner')) { owner(req, res); return; }
   if (req.url.startsWith('/api/lead')) { lead(req, res); return; }
+  if (req.url.startsWith('/api/results')) { results(req, res); return; }
   if (req.url.startsWith('/api/suppress')) { suppress(req, res); return; }
   if (req.url.startsWith('/api/printnode')) { printnode(req, res); return; }
   if (req.url.startsWith('/api/epc-monitor')) { epcMonitor(req, res); return; }

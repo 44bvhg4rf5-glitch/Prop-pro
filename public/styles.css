@@ -119,6 +119,45 @@ main::-webkit-scrollbar-thumb{background:var(--slate3);border-radius:3px}
 .home-card.featured{border-color:var(--gold-l);box-shadow:0 2px 10px rgba(201,146,26,.12)}
 .home-card.featured .home-card-ic{background:var(--gold-gl);color:var(--gold)}
 .home-card.featured:hover{border-color:var(--gold);box-shadow:0 5px 16px rgba(201,146,26,.2)}
+/* ── Performance & ROI tracker ── */
+.perf-metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.perf-metric{background:var(--slate);border:1px solid var(--border);border-radius:var(--r2);padding:13px 15px}
+.perf-metric-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.perf-metric-val{font-size:26px;font-weight:800;color:var(--text);margin:3px 0 7px;font-family:'Playfair Display',serif;line-height:1}
+.perf-bar{height:7px;background:var(--slate2);border-radius:10px;overflow:hidden}
+.perf-bar-fill{height:100%;border-radius:10px;transition:width .5s ease}
+.perf-bar-fill.tone-blue{background:var(--blue)}.perf-bar-fill.tone-gold{background:var(--gold)}.perf-bar-fill.tone-green{background:#059669}
+.perf-metric-sub{font-size:10.5px;color:var(--muted);margin-top:5px}
+.perf-funnel{display:flex;flex-direction:column;gap:9px}
+.perf-fn-row{display:flex;align-items:center;gap:12px}
+.perf-fn-label{width:88px;flex-shrink:0;font-size:12px;font-weight:600;color:var(--text2)}
+.perf-fn-track{flex:1;background:var(--slate);border-radius:7px;overflow:hidden;min-width:0}
+.perf-fn-bar{height:30px;border-radius:7px;display:flex;align-items:center;padding:0 11px;color:#fff;font-size:13px;font-weight:700;min-width:26px;transition:width .5s ease}
+.perf-fn-bar.tone-blue{background:var(--blue)}.perf-fn-bar.tone-gold{background:var(--gold)}.perf-fn-bar.tone-green{background:#059669}
+.perf-fn-conv{width:46px;flex-shrink:0;text-align:right;font-size:12px;font-weight:700;color:var(--muted)}
+.perf-fn-summary{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;padding-top:13px;border-top:1px solid var(--border);font-size:12.5px;color:var(--text2)}
+.perf-fn-summary strong{color:var(--text);font-size:14px}
+.perf-roi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-bottom:14px}
+.perf-roi-n{font-size:25px;font-weight:800;font-family:'Playfair Display',serif;color:#fff;line-height:1}
+.perf-roi-l{font-size:11px;color:rgba(255,255,255,.6);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.perf-roi-line{font-size:13px;color:rgba(255,255,255,.82);line-height:1.6;border-top:1px solid rgba(255,255,255,.14);padding-top:13px}
+.perf-roi-line strong{color:var(--gold-l)}
+.perf-table{width:100%;border-collapse:collapse;font-size:12px}
+.perf-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:7px 9px;border-bottom:1px solid var(--border)}
+.perf-table td{padding:8px 9px;border-bottom:1px solid var(--border)}
+.perf-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.perf-badge.b-blue{background:var(--blue-gl);color:var(--blue)}
+.perf-badge.b-gold{background:var(--gold-gl);color:var(--gold)}
+.perf-badge.b-green{background:rgba(5,150,105,.1);color:#059669}
+.perf-badge.b-red{background:rgba(220,38,38,.08);color:#DC2626}
+.perf-ov{display:none;position:fixed;inset:0;background:rgba(10,15,30,.55);z-index:2000;align-items:center;justify-content:center;padding:18px}
+.perf-card{background:var(--white);border-radius:var(--r);box-shadow:var(--sh2);width:100%;max-width:440px;max-height:90vh;overflow-y:auto;padding:22px 22px 20px;position:relative}
+.perf-x{position:absolute;top:12px;right:14px;border:none;background:none;font-size:24px;line-height:1;color:var(--muted);cursor:pointer}
+.perf-modal-title{font-family:'Playfair Display',serif;font-size:19px;font-weight:700;color:var(--text);margin-bottom:14px;padding-right:24px}
+.perf-lbl{display:block;font-size:11px;font-weight:600;color:var(--text2);margin:11px 0 4px}
+.perf-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.perf-cond{display:none}
+.perf-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
 .card-sm{padding:14px 16px}
 .ct{font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .ct-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
