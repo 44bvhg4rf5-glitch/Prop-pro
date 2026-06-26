@@ -92,6 +92,22 @@ main::-webkit-scrollbar-thumb{background:var(--slate3);border-radius:3px}
 
 /* ── CARD ── */
 .card{background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:20px 22px;box-shadow:var(--sh)}
+/* ── Home launcher dashboard ── */
+.home-section{margin-top:26px}
+.home-section:first-child{margin-top:0}
+.home-section-label{font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted2);margin-bottom:11px}
+.home-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:13px}
+.home-card{display:flex;align-items:flex-start;gap:13px;background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:16px 17px;box-shadow:var(--sh);cursor:pointer;transition:border-color .14s,box-shadow .14s,transform .14s;text-align:left;width:100%;font-family:inherit}
+.home-card:hover{border-color:var(--blue-l);box-shadow:0 5px 16px rgba(37,99,235,.13);transform:translateY(-2px)}
+.home-card-ic{width:42px;height:42px;flex-shrink:0;border-radius:11px;background:var(--blue-gl);color:var(--blue);display:flex;align-items:center;justify-content:center}
+.home-card-ic svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.home-card-body{min-width:0;flex:1}
+.home-card-name{font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.home-card-desc{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+.home-card-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:20px;letter-spacing:.5px}
+.home-card-badge.b-gold{background:var(--gold);color:#fff}
+.home-card-badge.b-blue{background:var(--blue);color:#fff}
+.home-card-badge.b-red{background:#DC2626;color:#fff}
 .card-sm{padding:14px 16px}
 .ct{font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .ct-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}

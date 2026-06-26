@@ -2545,11 +2545,58 @@ function cycleConfirm(){
   toast('✓ '+((c&&c.address.split(',')[0])||'Property')+' on “'+g.name+'” cycle · ref '+(c&&c.ref||''),'ok');
 }
 
+/* ── Home launcher: every tool as a clickable card, grouped like the sidebar ── */
+const HOME_TOOLS = [
+  { group: 'Property Search', items: [
+    { id:'ha', name:'HA Districts', desc:'Search live listings across HA0–HA9 in one click', svg:'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/>' },
+    { id:'premarket', name:'Pre-Market Radar', desc:'Spot homes likely to come to market soon', badge:'NEW', badgeColor:'b-gold', svg:'<path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/>' },
+    { id:'sold', name:'Sold Board', desc:'Recently sold nearby — proof for your letters', badge:'NEW', badgeColor:'b-gold', svg:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>' },
+    { id:'campaigns', name:'Campaigns', desc:'Multi-step letter sequences to your contacts', svg:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>' },
+    { id:'schedule', name:'Schedule', desc:'Plan and time your print runs', svg:'<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>' },
+    { id:'queue', name:'Print Queue', desc:'Review and print your queued letters', svg:'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>' },
+  ]},
+  { group: 'Automation', items: [
+    { id:'auto', name:'Auto Flow', desc:'4-step automated find → resolve → queue', svg:'<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>' },
+    { id:'bot', name:'Live Bot', desc:'Continuous monitoring for new listings', svg:'<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/>' },
+  ]},
+  { group: 'Intelligence', items: [
+    { id:'intel', name:'AI Intel', desc:'Paste a Rightmove link → exact address → owner', badge:'NEW', badgeColor:'b-blue', svg:'<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>' },
+    { id:'success', name:'Success Letters', desc:'Look up full addresses by postcode', svg:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>' },
+    { id:'blocked', name:'Do-Not-Mail', desc:'Your suppression / do-not-contact list', svg:'<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>' },
+    { id:'leads', name:'Valuation Leads', desc:'Enquiries from your public valuation page', svg:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>' },
+  ]},
+  { group: 'Strategy', items: [
+    { id:'investor', name:'Investor Board', desc:'Revenue KPIs and ROI scenarios', badge:'ROI', badgeColor:'b-gold', svg:'<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>' },
+    { id:'advisor', name:'AI Advisor', desc:'Campaign health analysis and tips', svg:'<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/>' },
+    { id:'director', name:"Director's Vision", desc:'Strategic growth ideas for the agency', badge:'NEW', badgeColor:'b-gold', svg:'<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>' },
+  ]},
+  { group: 'Configuration', items: [
+    { id:'templates', name:'Templates', desc:'Edit your letter templates', svg:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/>' },
+    { id:'printers', name:'Printers', desc:'Manage your network printers', svg:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>' },
+  ]},
+];
+function renderHome(){
+  const el = document.getElementById('home-grid'); if (!el) return;
+  el.innerHTML = HOME_TOOLS.map(sec =>
+    '<div class="home-section"><div class="home-section-label">' + sec.group + '</div><div class="home-grid">'
+    + sec.items.map(t =>
+        '<button class="home-card" onclick="showPanel(\'' + t.id + '\')">'
+        + '<span class="home-card-ic"><svg viewBox="0 0 24 24">' + t.svg + '</svg></span>'
+        + '<span class="home-card-body"><span class="home-card-name">' + esc(t.name)
+        + (t.badge ? ' <span class="home-card-badge ' + (t.badgeColor || 'b-blue') + '">' + esc(t.badge) + '</span>' : '')
+        + '</span><span class="home-card-desc">' + esc(t.desc) + '</span></span>'
+        + '</button>'
+      ).join('')
+    + '</div></div>'
+  ).join('');
+}
+
 function showPanel(n){
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(x => x.classList.remove('active'));
   document.getElementById('panel-' + n)?.classList.add('active');
   document.getElementById('nav-' + n)?.classList.add('active');
+  if (n === 'home') renderHome();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
   if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
@@ -2911,6 +2958,7 @@ function useIntelOwner(btn){
 (function initApp() {
   try {
     activeTpl = templates[0];
+    renderHome();
     initHAGrid();
     refreshTplSels();
     renderPrinters();
