@@ -2961,11 +2961,12 @@ async function loadAuth(){
 }
 function applyAuthGate(){
   const gate = document.getElementById('auth-gate');
-  const locked = authState.enabled && !authState.authed && !authState.open;
+  // Block the app when it's first-run setup, or when accounts are live and nobody is signed in.
+  const locked = authState.canSetup || (authState.active && !authState.authed);
   if (gate){
     gate.style.display = locked ? 'flex' : 'none';
     const setup = document.getElementById('auth-mode-setup'), login = document.getElementById('auth-mode-login');
-    if (setup && login){ setup.style.display = authState.needsSetup ? 'block' : 'none'; login.style.display = authState.needsSetup ? 'none' : 'block'; }
+    if (setup && login){ setup.style.display = authState.canSetup ? 'block' : 'none'; login.style.display = authState.canSetup ? 'none' : 'block'; }
   }
   renderAccountPanel();
 }
@@ -2981,12 +2982,13 @@ async function authLogin(){
   } catch (e){ if (err) err.textContent = 'Connection error — try again.'; }
 }
 async function authSetup(){
+  const office = (document.getElementById('auth-setup-office') || {}).value || '';
   const name = (document.getElementById('auth-setup-name') || {}).value || '';
   const email = (document.getElementById('auth-setup-email') || {}).value || '';
   const password = (document.getElementById('auth-setup-pw') || {}).value || '';
   const err = document.getElementById('auth-setup-err'); if (err) err.textContent = '';
   try {
-    const r = await fetch('/api/auth?action=setup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, email, password }) });
+    const r = await fetch('/api/auth?action=setup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ office, name, email, password }) });
     const d = await r.json();
     if (!r.ok){ if (err) err.textContent = d.error || 'Could not create the account.'; return; }
     await loadAuth(); postLogin();
@@ -3002,67 +3004,103 @@ async function authLogout(){
   await loadAuth();
   if (authState.enabled && !authState.authed) toast('Signed out', '');
 }
+let adminOffices = [];
 function renderAccountPanel(){
   const info = document.getElementById('account-info'); if (!info) return;
   const admin = document.getElementById('account-admin');
-  if (!authState.enabled){
-    info.innerHTML = '<div style="font-size:13px;color:var(--text2);line-height:1.65">Multi-office accounts are <strong>off</strong> — the app is open on this server and all data is shared.<br><br>To give each office its own login and its own private leads &amp; performance, set a <code>SESSION_SECRET</code> in your hosting environment (Vercel → Settings → Environment Variables) and make sure the cloud store is on, then reload. You’ll be asked to create your head-office account.</div>';
+  if (!authState.configured){
+    info.innerHTML = '<div style="font-size:13px;color:var(--text2);line-height:1.65">Logins need the cloud store (Redis / Vercel KV), which isn’t configured on this server, so the app is running open and shared.</div>';
     if (admin) admin.style.display = 'none';
     return;
   }
   const a = authState.account || {};
+  if (!authState.authed){
+    info.innerHTML = '<div style="font-size:13px;color:var(--text2)">You’re not signed in.</div>';
+    if (admin) admin.style.display = 'none';
+    return;
+  }
   info.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">'
-    + '<div><div style="font-size:15px;font-weight:700">' + esc(a.name || '') + '</div><div style="font-size:12px;color:var(--muted)">' + esc(a.email || '') + ' · ' + esc(a.role === 'admin' ? 'Admin' : 'Office') + '</div></div>'
+    + '<div><div style="font-size:15px;font-weight:700">' + esc(a.name || '') + '</div><div style="font-size:12px;color:var(--muted)">' + esc(a.email || '') + ' · ' + esc(a.role === 'admin' ? 'Admin' : 'Member') + '</div></div>'
     + '<button class="btn bs sm-btn" onclick="authLogout()">Sign out</button></div>';
   if (admin){
-    if (a.role === 'admin'){ admin.style.display = 'block'; loadOffices(); } else admin.style.display = 'none';
+    if (a.role === 'admin'){ admin.style.display = 'block'; loadAdmin(); } else admin.style.display = 'none';
   }
 }
-async function loadOffices(){
-  const wrap = document.getElementById('account-list'); if (!wrap) return;
+async function loadAdmin(){
+  const oWrap = document.getElementById('office-list'), uWrap = document.getElementById('user-list');
+  if (!oWrap || !uWrap) return;
   try {
-    const r = await fetch('/api/auth?action=list'); if (!r.ok){ wrap.innerHTML = ''; return; }
-    const list = (await r.json()).accounts || [];
-    wrap.innerHTML = '<div style="overflow-x:auto"><table class="perf-table"><thead><tr><th>Office</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>'
-      + list.map(o => '<tr><td style="font-weight:600">' + esc(o.name) + (o.id === 'default' ? ' <span class="perf-badge b-gold">Head office</span>' : '') + '</td><td>' + esc(o.email) + '</td><td>' + esc(o.role === 'admin' ? 'Admin' : 'Office') + '</td>'
-        + '<td style="white-space:nowrap"><button class="bic" title="Reset password" onclick="resetOfficePw(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, '') + '\')"><i class=ic-pencil></i></button> '
-        + (o.id !== 'default' ? '<button class="bic" title="Delete" onclick="deleteOffice(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, '') + '\')"><i class=ic-trash></i></button>' : '') + '</td></tr>').join('')
+    const r = await fetch('/api/auth?action=offices'); if (!r.ok){ return; }
+    const d = await r.json();
+    adminOffices = d.offices || [];
+    const officeName = (t) => (adminOffices.find(o => o.id === t) || {}).name || t;
+    oWrap.innerHTML = '<div style="overflow-x:auto"><table class="perf-table"><thead><tr><th>Office</th><th>People</th><th></th></tr></thead><tbody>'
+      + adminOffices.map(o => '<tr><td style="font-weight:600">' + esc(o.name) + (o.id === 'default' ? ' <span class="perf-badge b-gold">Head office</span>' : '') + '</td><td>' + o.members + '</td>'
+        + '<td style="white-space:nowrap">' + (o.id !== 'default' && o.members === 0 ? '<button class="bic" title="Delete office" onclick="deleteOfficeRec(\'' + o.id + '\',\'' + esc(o.name).replace(/'/g, '') + '\')"><i class=ic-trash></i></button>' : '') + '</td></tr>').join('')
+      + '</tbody></table></div>';
+    const users = d.users || [];
+    uWrap.innerHTML = '<div style="overflow-x:auto"><table class="perf-table"><thead><tr><th>Name</th><th>Email</th><th>Office</th><th>Role</th><th></th></tr></thead><tbody>'
+      + users.map(u => '<tr><td style="font-weight:600">' + esc(u.name) + '</td><td>' + esc(u.email) + '</td><td>' + esc(officeName(u.tenant)) + '</td><td>' + esc(u.role === 'admin' ? 'Admin' : 'Member') + '</td>'
+        + '<td style="white-space:nowrap"><button class="bic" title="Reset password" onclick="resetUserPw(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, '') + '\')"><i class=ic-pencil></i></button> '
+        + (u.id !== authState.account.id ? '<button class="bic" title="Remove person" onclick="deleteUser(\'' + u.id + '\',\'' + esc(u.name).replace(/'/g, '') + '\')"><i class=ic-trash></i></button>' : '') + '</td></tr>').join('')
       + '</tbody></table></div>';
   } catch (e) { /* ignore */ }
 }
 function openCreateOffice(){
   const ov = perfModalShell();
   ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
-    + '<div class="perf-modal-title">New office account</div>'
-    + '<label class="perf-lbl">Office name</label><input id="of-name" placeholder="e.g. Harrow branch">'
-    + '<label class="perf-lbl">Login email</label><input id="of-email" type="email" placeholder="office@agency.co.uk">'
-    + '<label class="perf-lbl">Password (8+ characters)</label><input id="of-pw" type="text" placeholder="Set a password">'
-    + '<label class="perf-lbl">Role</label><select id="of-role"><option value="office">Office — its own private data</option><option value="admin">Admin — can manage all accounts</option></select>'
+    + '<div class="perf-modal-title">New office</div>'
+    + '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">An office is a separate space with its own private leads &amp; performance. Add people to it next.</div>'
+    + '<label class="perf-lbl">Office name</label><input id="of-name" placeholder="e.g. Wembley branch">'
     + '<div id="of-err" class="auth-err"></div>'
-    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="createOffice()">Create office</button></div></div>';
+    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="createOfficeRec()">Create office</button></div></div>';
   ov.style.display = 'flex';
 }
-async function createOffice(){
-  const g = id => (document.getElementById(id) || {}).value || '';
+async function createOfficeRec(){
+  const name = (document.getElementById('of-name') || {}).value || '';
   const err = document.getElementById('of-err'); if (err) err.textContent = '';
   try {
-    const r = await fetch('/api/auth?action=create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: g('of-name'), email: g('of-email'), password: g('of-pw'), role: g('of-role') }) });
+    const r = await fetch('/api/auth?action=create-office', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
     const d = await r.json();
     if (!r.ok){ if (err) err.textContent = d.error || 'Could not create the office.'; return; }
-    closePerfModal(); loadOffices(); toast('Office created', 'ok');
+    closePerfModal(); loadAdmin(); toast('Office created', 'ok');
   } catch (e){ if (err) err.textContent = 'Connection error.'; }
 }
-async function resetOfficePw(id, name){
-  const password = prompt('New password for ' + name + ' (at least 8 characters):'); if (!password) return;
-  try {
-    const r = await fetch('/api/auth?action=setpw', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, password }) });
-    const d = await r.json(); if (!r.ok){ toast(d.error || 'Failed', 'err'); return; }
-    toast('Password updated', 'ok');
-  } catch (e){ toast('Connection error', 'err'); }
+async function deleteOfficeRec(id, name){
+  if (!confirm('Delete the office “' + name + '”?')) return;
+  try { const r = await fetch('/api/auth?action=delete-office', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }); const d = await r.json(); if (!r.ok){ toast(d.error || 'Failed', 'err'); return; } loadAdmin(); toast('Office deleted', 'ok'); } catch (e) {}
 }
-async function deleteOffice(id, name){
-  if (!confirm('Delete office “' + name + '”? Sign-in is removed; their stored leads & performance remain in the store but become inaccessible.')) return;
-  try { const r = await fetch('/api/auth?action=delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }); if (r.ok){ loadOffices(); toast('Office deleted', 'ok'); } } catch (e) {}
+function openCreateUser(){
+  const offs = adminOffices.length ? adminOffices : [{ id:'default', name:'Head office' }];
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>'
+    + '<div class="perf-modal-title">New person</div>'
+    + '<label class="perf-lbl">Name</label><input id="us-name" placeholder="e.g. Sarah Jones">'
+    + '<label class="perf-lbl">Login email</label><input id="us-email" type="email" placeholder="sarah@agency.co.uk">'
+    + '<label class="perf-lbl">Password (8+ characters)</label><input id="us-pw" type="text" placeholder="Set a password">'
+    + '<div class="perf-row2"><div><label class="perf-lbl">Office</label><select id="us-office">' + offs.map(o => '<option value="' + o.id + '">' + esc(o.name) + '</option>').join('') + '</select></div>'
+    + '<div><label class="perf-lbl">Role</label><select id="us-role"><option value="office">Member</option><option value="admin">Admin — can manage accounts</option></select></div></div>'
+    + '<div id="us-err" class="auth-err"></div>'
+    + '<div class="perf-modal-actions"><button class="btn bghost" onclick="closePerfModal()">Cancel</button><button class="btn bp" onclick="createUser()">Add person</button></div></div>';
+  ov.style.display = 'flex';
+}
+async function createUser(){
+  const g = id => (document.getElementById(id) || {}).value || '';
+  const err = document.getElementById('us-err'); if (err) err.textContent = '';
+  try {
+    const r = await fetch('/api/auth?action=create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: g('us-name'), email: g('us-email'), password: g('us-pw'), tenant: g('us-office'), role: g('us-role') }) });
+    const d = await r.json();
+    if (!r.ok){ if (err) err.textContent = d.error || 'Could not add the person.'; return; }
+    closePerfModal(); loadAdmin(); toast('Person added', 'ok');
+  } catch (e){ if (err) err.textContent = 'Connection error.'; }
+}
+async function resetUserPw(id, name){
+  const password = prompt('New password for ' + name + ' (at least 8 characters):'); if (!password) return;
+  try { const r = await fetch('/api/auth?action=setpw', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id, password }) }); const d = await r.json(); if (!r.ok){ toast(d.error || 'Failed', 'err'); return; } toast('Password updated', 'ok'); } catch (e){ toast('Connection error', 'err'); }
+}
+async function deleteUser(id, name){
+  if (!confirm('Remove “' + name + '”’s login? They will no longer be able to sign in.')) return;
+  try { const r = await fetch('/api/auth?action=delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) }); const d = await r.json(); if (!r.ok){ toast(d.error || 'Failed', 'err'); return; } loadAdmin(); toast('Person removed', 'ok'); } catch (e) {}
 }
 
 function updateKPIs(){

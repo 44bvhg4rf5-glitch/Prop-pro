@@ -21,10 +21,11 @@
       <button class="btn bp" style="width:100%;justify-content:center" onclick="authLogin()">Sign in</button>
     </div>
     <div id="auth-mode-setup" style="display:none">
-      <div class="auth-title">Create your office account</div>
-      <div class="auth-sub">First-time setup — this becomes the head-office admin login.</div>
-      <input id="auth-setup-name" placeholder="Office name (e.g. Harrow branch)">
-      <input id="auth-setup-email" type="email" placeholder="Admin email" autocomplete="username">
+      <div class="auth-title">Set up your account</div>
+      <div class="auth-sub">First-time setup — this becomes your head office and its admin login.</div>
+      <input id="auth-setup-office" placeholder="Office name (e.g. Harrow head office)">
+      <input id="auth-setup-name" placeholder="Your name" autocomplete="name">
+      <input id="auth-setup-email" type="email" placeholder="Your email" autocomplete="username">
       <input id="auth-setup-pw" type="password" placeholder="Password (at least 8 characters)" autocomplete="new-password" onkeydown="if(event.key==='Enter')authSetup()">
       <div id="auth-setup-err" class="auth-err"></div>
       <button class="btn bp" style="width:100%;justify-content:center" onclick="authSetup()">Create account &amp; sign in</button>
@@ -553,10 +554,15 @@
   <div class="card"><div id="account-info"></div></div>
   <div class="card" id="account-admin" style="display:none">
     <div class="sec-hdr">
-      <div><div class="sec-title">Offices</div><div class="sec-sub">Each office gets its own login and its own private leads &amp; performance.</div></div>
-      <button class="btn bp sm-btn" onclick="openCreateOffice()">+ New office</button>
+      <div><div class="sec-title">Offices</div><div class="sec-sub">Each office has its own private leads &amp; performance — everyone in it shares it.</div></div>
+      <button class="btn bs sm-btn" onclick="openCreateOffice()">+ New office</button>
     </div>
-    <div id="account-list"></div>
+    <div id="office-list"></div>
+    <div class="sec-hdr" style="margin-top:20px">
+      <div><div class="sec-title">People</div><div class="sec-sub">Individual logins — each person belongs to one office.</div></div>
+      <button class="btn bp sm-btn" onclick="openCreateUser()">+ New person</button>
+    </div>
+    <div id="user-list"></div>
   </div>
 </div>
 
