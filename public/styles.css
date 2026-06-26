@@ -1139,3 +1139,16 @@ input::placeholder,textarea::placeholder{ color:var(--muted2); }
 
 /* Pills / tags polish */
 .tag{ border-radius:20px; font-weight:600; }
+
+/* ── Owner research modal ── */
+.owner-ov{position:fixed;inset:0;background:rgba(10,15,30,.55);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;z-index:600;padding:40px 16px;overflow-y:auto}
+.owner-card{background:#fff;border-radius:16px;max-width:520px;width:100%;box-shadow:var(--sh3);position:relative;padding:0 18px 18px;animation:panelIn .2s ease}
+.owner-x{position:absolute;top:10px;right:12px;background:rgba(0,0,0,.05);border:none;width:30px;height:30px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);z-index:2}
+.owner-x:hover{background:rgba(0,0,0,.1)}
+.owner-note{background:linear-gradient(120deg,#0A0F1E,#1E2B42);border-radius:0 0 14px 14px;margin:0 -18px 14px;padding:20px 22px 18px}
+.owner-link{display:inline-block;margin-top:9px;font-size:12px;font-weight:600;color:var(--gold-l);text-decoration:none}
+.owner-link:hover{text-decoration:underline}
+.owner-sec{padding:12px 0;border-top:1px solid var(--border)}
+.owner-h{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.owner-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0}
+.owner-row + .owner-row{border-top:1px solid var(--border)}
