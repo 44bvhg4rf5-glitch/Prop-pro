@@ -1125,24 +1125,41 @@ async function runLiveSearch(){
       return r;
     });
     const matched = [];
+    let unresolved = 0;
     props.forEach((p, idx) => {
-      const r = results[idx];
-      if (r && r.candidates && r.candidates.length) {
-        const top = r.candidates[0];
+      const r = results[idx] || {};
+      const orig = p.displayAddress || p.address || '';
+      const cands = Array.isArray(r.candidates) ? r.candidates : [];
+      // We only ever show a printable FULL address (with a house number).
+      if (hasHouseNumber(orig)) {
+        // The listing already publishes the house number — that's authoritative.
+        // Never overwrite it; just enrich the postcode from a matching candidate.
+        const num = (orig.split(',')[0].match(/\d+[a-z]?/i) || [''])[0].toLowerCase();
+        const match = num && cands.find(c => new RegExp('(^|\\D)' + num + '(\\D|$)', 'i').test(c.line1 || c.fullAddress || ''));
+        if (match) {
+          if (match.postcode) p.postcode = match.postcode;
+          if (match.uprn) p.uprn = match.uprn;
+        }
+        p.addressSource = match ? r.source : 'Listing';
+        p.addressConfirmed = true;
+        matched.push(p);
+      } else if (cands.length && (r.confirmed || r.epcMatch)) {
+        // No number on the listing — use the certified/confirmed full address.
+        const top = cands[0];
         p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
         if (top.postcode) p.postcode = top.postcode;
         if (top.uprn) p.uprn = top.uprn;
-        p.addressSource = r.source || 'Royal Mail / OS Places';
-        p.addressConfirmed = !!r.confirmed;      // EPC floor-area pinpoint or single candidate
-        p._candidates = r.candidates;            // alternatives for one-tap confirm
-        p._epcResolved = true;
-        p._epcTop = top;
+        p.addressSource = r.source;
+        p.addressConfirmed = !!r.confirmed;
+        p._candidates = cands;
+        p._epcResolved = true; p._epcTop = top;
         p._epcMeta = { sizeMatched: r.sizeMatched, total: r.total };
         matched.push(p);
+      } else {
+        unresolved++; // street-level only — no exact address, so not shown
       }
     });
-    const needConfirm = matched.filter(p => !p.addressConfirmed && (p._candidates||[]).length > 1).length;
-    if (needConfirm) addLog(`${needConfirm} matched via Royal Mail data — tap “Verify” on those cards to pick the exact house`);
+    if (unresolved) addLog(`${unresolved} listing(s) hide their exact house number — open them on Rightmove to read it (not shown, as there's no full address to print).`);
     // Two listings must never resolve to the same house (one letter per address).
     const seenAddr = new Set();
     const deduped = matched.filter(p => { const k = (p.fullAddress||'').toLowerCase(); if(seenAddr.has(k)) return false; seenAddr.add(k); return true; });
@@ -1481,6 +1498,12 @@ async function epcLookup(p, retries=1){
     if(!r.ok) return retries>0 ? epcLookup(p, retries-1) : null;
     return await r.json();
   }catch(e){ return retries>0 ? epcLookup(p, retries-1) : null; }
+}
+
+// Does an address already include a house number / unit (a printable full address)?
+function hasHouseNumber(addr){
+  const seg = (addr||'').split(',')[0].trim();
+  return /\d/.test(seg) || /^(flat|apartment|apt|unit|studio|maisonette)\b/i.test(seg);
 }
 
 // ── Find the full house-number address via the public EPC register ──
