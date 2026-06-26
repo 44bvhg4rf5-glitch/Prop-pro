@@ -279,22 +279,9 @@ function updSelBar(){
    REAL-TIME TICKER
 ═══════════════════════════════════════════ */
 function startRTFeed(){
-  const _chipRt=document.getElementById('hdr-chip-rt'); if(_chipRt)_chipRt.style.display='flex';
+  // The ticker reflects REAL found properties — from searches and the Live Bot.
+  // It stays hidden until there is real data to show (no simulated feed).
   updateRTTicker();
-  // Inject a "new" property every 45 seconds to simulate live feed
-  rtTimer=setInterval(()=>{
-    if(!selectedHA.size) return;
-    const codes=[...selectedHA];
-    const code=codes[Math.floor(Math.random()*codes.length)];
-    const newProp=genHAProps(code,'all','all','0','',1,Date.now()%99999).slice(0,1)[0];
-    if(newProp){
-      newProp.isNew=true;
-      newProp.listedAt=new Date();
-      rtProps.push(newProp);
-      updateRTTicker();
-      blog(`<i class=dot-ef4444></i> Live: New listing — ${newProp.address} · ${newProp.portal}`,'ok');
-    }
-  },45000);
 }
 
 /* ═══════════════════════════════════════════
@@ -600,6 +587,33 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 /* ═══════════════════════════════════════════
    BOT
 ═══════════════════════════════════════════ */
+// Fetch REAL on-market listings for a district from the live portal feed.
+async function fetchDistrictListings(code, channel){
+  try{
+    const r = await fetch('/api/listings?'+new URLSearchParams({district:code, channel}).toString());
+    if(!r.ok) return [];
+    const d = await r.json();
+    const isSale = channel!=='rent';
+    const dist = (typeof HA_DISTRICTS!=='undefined') ? HA_DISTRICTS.find(x=>x.code===code) : null;
+    return (d.properties||[]).map(raw=>{
+      const disp = raw.displayAddress||raw.address||'';
+      const pcM = (raw.postcode&&String(raw.postcode).match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i))||disp.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+      return {
+        address:disp, displayAddress:disp,
+        postcode: pcM?pcM[0].toUpperCase():(code+' — see listing'),
+        lat:raw.lat??null, lon:raw.lon??null, sizeSqft:raw.sizeSqft??null,
+        district:(dist&&dist.name)||code, haCode:code,
+        type:raw.type||'Property', beds:raw.beds||0, price:raw.price||0,
+        priceLabel:raw.priceLabel||(raw.price?'£'+Number(raw.price).toLocaleString():''),
+        status:isSale?'For Sale':'To Let', portal:raw.source||'Rightmove',
+        agent:raw.agent||'', addedDate:raw.addedDate||'',
+        rmUrl:raw.url||'', portalUrl:raw.url||'', propertyId:String(raw.propertyId||''),
+        isLive:true, source:raw.source||'Rightmove', selected:true,
+      };
+    });
+  }catch(e){ return []; }
+}
+
 function botToggle(){botOn?botStop():botStart();}
 function botStart(){
   if(!selectedHA.size){toast('Select HA districts first','warn');return;}
@@ -636,45 +650,52 @@ async function botCycle(){
   const action=document.getElementById('b-action').value;
   const tId=document.getElementById('b-tpl').value;
   const tpl=[...templates,...uploadedTpls].find(t=>t.id===tId)||templates[0];
+  const channel = statusF==='let' ? 'rent' : 'sale';
   bdScans++;
-  blog(`── Scan #${bdScans} (${codes.length} districts)`,'inf');
+  blog(`── Scan #${bdScans} — checking ${codes.length} district${codes.length>1?'s':''} on the live portals`,'inf');
 
   for(const code of codes){
-    await sleep(300+Math.random()*200);
-    // Stable base seed for this district
-    const baseSeed=code.split('').reduce((a,c)=>a+c.charCodeAt(0)*31,7);
-    // Fresh seed injects new listings each cycle
-    const freshSeed=baseSeed+(Date.now()%50000)+bdScans*997;
-    const freshProps=genHAProps(code,statusF,'all','0','',1,freshSeed);
+    await sleep(250);
+    const listings = await fetchDistrictListings(code, channel);
+    if(!listings.length){ blog(`${code} — no listings returned (feed unavailable or none on market)`,'inf'); continue; }
 
-    const newProps=freshProps.filter(p=>{
-      const uid=`${code}-${p.address}`;
-      if(seenIds.has(uid)) return false;
-      seenIds.add(uid); return true;
-    });
+    // Genuinely new listings since we started watching.
+    let fresh = listings.filter(p=>{ const uid=p.propertyId||(code+'-'+p.address); if(seenIds.has(uid)) return false; seenIds.add(uid); return true; });
+    fresh = fresh.filter(p=>!isExcludedAgent(p));
+    if(!fresh.length){ blog(`${code} — no new listings this scan`,'inf'); continue; }
 
-    if(newProps.length>0){
-      bdFound+=newProps.length;
-      blog(`<i class=ic-sparkles></i> ${newProps.length} new in ${code}`,'ok');
-      newProps.slice(0,5).forEach(p=>{
-        blog(`  → ${(p.displayAddress||p.address||'').split(',').slice(0,2).join(',')} · ${p.portal}`,'prnt');
-        queue.push({id:Date.now()+Math.random(),prop:p,tpl,status:'pend',at:new Date(),auto:true});
-        rtProps.push({...p,isNew:true});
-        if(action==='print'){
-          const qi=queue.length-1;
-          setTimeout(()=>{
-            if(queue[qi]&&queue[qi].status==='pend'){
-              queue[qi].status='prnt';
-              doPrint(buildLetter(queue[qi].tpl.body,queue[qi].prop));
-              setTimeout(()=>{if(queue[qi]){queue[qi].status='done';bdPrinted++;updBotDash();updQStats();}},700);
-            }
-          },1200+Math.random()*400);
-        }
-      });
-      toast(`<i class=ic-bot></i> Bot: ${newProps.length} new in ${code}`,'ok');
-    } else {
-      blog(`${code} — no new listings`,'inf');
+    let actioned=0;
+    for(const p of fresh.slice(0,8)){
+      const orig=p.displayAddress||p.address||'';
+      let confirmed=false;
+      try{
+        const r=await epcLookup(p);
+        const cands=(r&&r.candidates)||[];
+        if(cands.length && (r.confirmed || r.epcMatch)){
+          const top=cands[0]; p.address=top.fullAddress; p.displayAddress=top.fullAddress; p.fullAddress=top.fullAddress;
+          if(top.postcode) p.postcode=top.postcode; if(top.uprn) p.uprn=top.uprn;
+          p.addressConfirmed=!!r.confirmed; p.addressSource=r.source; confirmed=true;
+        } else if(hasHouseNumber(orig)){ p.addressConfirmed=true; p.addressSource='Listing'; confirmed=true; }
+      }catch(e){ if(hasHouseNumber(orig)) confirmed=true; }
+
+      if(!confirmed){ blog(`  • ${orig.split(',').slice(0,2).join(',')} — found, exact address not confirmed (review in search)`,'inf'); continue; }
+
+      bdFound++; actioned++;
+      blog(`<i class=ic-sparkles></i> New in ${code}: ${(p.displayAddress||p.address).split(',').slice(0,2).join(',')} · ${p.portal}`,'ok');
+      rtProps.push({...p,isNew:true});
+      queue.push({id:Date.now()+Math.random(),prop:p,tpl,status:'pend',at:new Date(),auto:true});
+      if(action==='print'){
+        const qi=queue.length-1;
+        setTimeout(()=>{
+          if(queue[qi]&&queue[qi].status==='pend'){
+            queue[qi].status='prnt';
+            doPrint(buildLetter(queue[qi].tpl.body,queue[qi].prop));
+            setTimeout(()=>{if(queue[qi]){queue[qi].status='done';bdPrinted++;updBotDash();updQStats();}},700);
+          }
+        },1200);
+      }
     }
+    if(actioned) toast(`<i class=ic-bot></i> Bot: ${actioned} new in ${code}`,'ok');
   }
   updQBadge(); updQStats(); updBotDash(); updateRTTicker();
   blog(`── Scan #${bdScans} done`,'inf');
@@ -2793,11 +2814,13 @@ function initHAGrid(){
 }
 
 function updateRTTicker(){
-  const inner = document.getElementById('rt-inner'); if (!inner) return;
-  const pool = [...props, ...rtProps].slice(-80); if (!pool.length) return;
-  const items = pool.map(p => '<span class="ticker-item">' + p.haCode + ' · ' + p.address.split(',')[0] + ' · <span class="t-price">' + (p.status === 'To Let' ? '£' + p.price.toLocaleString() + '/pcm' : '£' + p.price.toLocaleString()) + '</span>' + (p.isNew ? ' <span class="t-new">NEW</span>' : '') + '</span><span style="color:rgba(255,255,255,.2)"> · </span>').join('');
-  inner.innerHTML = items + items;
-  const chip = document.getElementById('hdr-chip-rt'); if (chip) chip.style.display = 'flex';
+  const inner = document.getElementById('rt-inner');
+  const chip = document.getElementById('hdr-chip-rt');
+  const pool = [...props, ...rtProps].filter(p => p && p.isLive).slice(-80);
+  if (!pool.length) { if (inner) inner.innerHTML = ''; if (chip) chip.style.display = 'none'; return; }
+  const items = pool.map(p => '<span class="ticker-item">' + p.haCode + ' · ' + String(p.address || '').split(',')[0] + (p.price ? ' · <span class="t-price">' + (p.status === 'To Let' ? '£' + p.price.toLocaleString() + '/pcm' : '£' + p.price.toLocaleString()) + '</span>' : '') + (p.isNew ? ' <span class="t-new">NEW</span>' : '') + '</span><span style="color:rgba(255,255,255,.2)"> · </span>').join('');
+  if (inner) inner.innerHTML = items + items;
+  if (chip) chip.style.display = 'flex';
 }
 
 function renderLetterChoices(){
@@ -2863,13 +2886,6 @@ function renderIntelResult(result, container){
     blog('PropMail Pro ready — click <i class=ic-search></i> Find Live Properties to start.', 'inf');
     loadBlocklist();
     loadLeads();
-    setTimeout(() => {
-      try {
-        const s1 = genHAProps('HA1', 'all', 'all', '0', '', 1, 12345).slice(0, 8);
-        const s2 = genHAProps('HA5', 'all', 'all', '0', '', 1, 54321).slice(0, 8);
-        rtProps = [...s1, ...s2]; updateRTTicker();
-      } catch(e) { console.warn('RT ticker init:', e.message); }
-    }, 400);
   } catch(e) {
     console.error('PropMail init error:', e);
     const errDiv = document.createElement('div');
