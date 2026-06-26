@@ -89,7 +89,12 @@ async function generate(tenant) {
     timeoutMs: 55000,
   });
 
-  if (r.error) return { ok: false, error: r.error === 'no_key' ? 'AI key not configured' : 'AI error: ' + r.error };
+  if (r.error) {
+    const e = r.error === 'no_key' ? 'AI key not configured'
+      : r.error === 'quota' ? 'Your AI provider returned “quota exceeded”. On Google Gemini this usually means the free tier isn’t active on that key — recreate it at aistudio.google.com/apikey, or switch to a Groq key (free, no billing).'
+      : 'AI error: ' + r.error;
+    return { ok: false, error: e };
+  }
   const parsed = extractJson(r.text);
   if (!parsed || !parsed.headline) return { ok: false, error: 'Could not parse a report' };
 
