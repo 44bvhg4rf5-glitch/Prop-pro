@@ -2570,6 +2570,7 @@ const HOME_TOOLS = [
     { id:'leads', name:'Valuation Leads', desc:'Enquiries from your public valuation page', svg:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>' },
   ]},
   { group: 'Strategy', items: [
+    { id:'marketing', name:'Marketing AI', desc:'A daily strategist that studies your data and the market', badge:'NEW', badgeColor:'b-blue', svg:'<path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0-6 0"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>' },
     { id:'performance', name:'Performance', desc:'Letters → valuations → instructions → fees, vs target', badge:'ROI', badgeColor:'b-gold', svg:'<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>' },
     { id:'investor', name:'Investor Board', desc:'Revenue KPIs and ROI scenarios', badge:'ROI', badgeColor:'b-gold', svg:'<path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/>' },
     { id:'advisor', name:'AI Advisor', desc:'Campaign health analysis and tips', svg:'<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/>' },
@@ -2629,6 +2630,7 @@ function showPanel(n){
   document.getElementById('nav-' + n)?.classList.add('active');
   if (n === 'home') renderHome();
   if (n === 'account') renderAccountPanel();
+  if (n === 'marketing') loadMarketing();
   if (n === 'performance') initPerf();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
@@ -2949,6 +2951,91 @@ function exportPerfCSV(){
   const b = new Blob([[h.join(','), ...rows].join('\n')], { type:'text/csv' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'propmail_performance_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
   toast('Performance CSV exported', 'ok');
+}
+
+/* ═══════════════════════════════════════════
+   MARKETING AI — daily autonomous strategist
+═══════════════════════════════════════════ */
+let mkReports = [], mkState = { configured:false, emailConfigured:false };
+async function loadMarketing(){
+  try {
+    const r = await fetch('/api/marketing');
+    if (!r.ok){ renderMarketing(); return; }
+    const d = await r.json();
+    mkState = d; mkReports = d.reports || [];
+    const cb = document.getElementById('mk-email'); if (cb) cb.checked = !!(d.settings && d.settings.email);
+  } catch (e) { /* ignore */ }
+  renderMarketing();
+}
+async function saveMarketingSettings(){
+  const email = !!(document.getElementById('mk-email') || {}).checked;
+  try { await fetch('/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'settings', email }) }); toast(email ? 'Daily email on' : 'Daily email off', 'ok'); } catch (e) {}
+}
+async function generateMarketing(){
+  const btn = document.getElementById('mk-gen-btn'); const st = document.getElementById('mk-status');
+  if (btn) btn.disabled = true;
+  if (st){ st.style.display = 'block'; st.innerHTML = '<div class="card" style="display:flex;align-items:center;gap:10px"><div class="ai-dots"><span></span><span></span><span></span></div><span style="font-size:13px;color:var(--muted)">Your strategist is studying the numbers and the market… this takes up to a minute.</span></div>'; }
+  try {
+    const r = await fetch('/api/marketing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'generate' }) });
+    const d = await r.json();
+    if (!r.ok || !d.ok){ if (st) st.innerHTML = '<div class="status-bar error"><i class=ic-x></i> ' + esc((d && d.error) || 'Could not generate the report') + (d && d.error === 'AI key not configured' ? ' — add the AI key (ANTHROPIC_API_KEY) in Vercel.' : '') + '</div>'; }
+    else { if (st) st.style.display = 'none'; await loadMarketing(); toast('New report ready', 'ok'); }
+  } catch (e){ if (st) st.innerHTML = '<div class="status-bar error"><i class=ic-x></i> Connection error</div>'; }
+  if (btn) btn.disabled = false;
+}
+function mkChip(v, kind){
+  const t = String(v || '').toLowerCase();
+  const cls = t === 'high' ? 'b-green' : t === 'medium' ? 'b-gold' : t === 'low' ? 'b-blue' : 'b-blue';
+  return '<span class="perf-badge ' + cls + '">' + esc((kind || '') + ' ' + (v || '')) + '</span>';
+}
+function renderMarketingReport(rp){
+  if (!rp) return '';
+  const list = (arr, fn) => (arr || []).map(fn).join('');
+  return '<div class="card mk-report">'
+    + '<div class="mk-date">' + esc(rp.date || '') + '</div>'
+    + '<div class="mk-headline">' + esc(rp.headline || '') + '</div>'
+    + (rp.summary ? '<div class="mk-summary">' + esc(rp.summary) + '</div>' : '')
+    + (rp.performanceRead ? '<div class="mk-sec"><div class="mk-h">Performance read</div><div class="mk-text">' + esc(rp.performanceRead) + '</div></div>' : '')
+    + (rp.priorities && rp.priorities.length ? '<div class="mk-sec"><div class="mk-h">Today’s priorities</div>'
+      + list(rp.priorities, (p, i) => '<div class="mk-pri"><div class="mk-pri-top"><span class="mk-pri-n">' + (i + 1) + '</span><span class="mk-pri-title">' + esc(p.title || '') + '</span>'
+        + mkChip(p.impact, 'impact') + mkChip(p.effort, 'effort') + '</div>'
+        + (p.why ? '<div class="mk-text"><strong>Why:</strong> ' + esc(p.why) + '</div>' : '')
+        + (p.how ? '<div class="mk-text"><strong>How:</strong> ' + esc(p.how) + '</div>' : '')
+        + (p.expected ? '<div class="mk-text" style="color:var(--green)"><strong>Expected:</strong> ' + esc(p.expected) + '</div>' : '') + '</div>') + '</div>' : '')
+    + (rp.campaignIdeas && rp.campaignIdeas.length ? '<div class="mk-sec"><div class="mk-h">Campaign ideas</div>'
+      + list(rp.campaignIdeas, (c) => '<div class="mk-idea"><strong>' + esc(c.title || '') + '</strong> <span class="perf-badge b-blue">' + esc(c.channel || '') + '</span><div class="mk-text">' + esc(c.angle || '') + '</div></div>') + '</div>' : '')
+    + (rp.marketIntel && rp.marketIntel.length ? '<div class="mk-sec"><div class="mk-h">Market intelligence</div><ul class="mk-ul">' + list(rp.marketIntel, (m) => '<li>' + esc(m) + '</li>') + '</ul></div>' : '')
+    + (rp.experiment && rp.experiment.idea ? '<div class="mk-sec"><div class="mk-h">Experiment to run</div><div class="mk-text"><strong>' + esc(rp.experiment.idea) + '</strong><br>Measure: ' + esc(rp.experiment.metric || '') + ' · Target: ' + esc(rp.experiment.target || '') + '</div></div>' : '')
+    + (rp.metricToWatch ? '<div class="mk-sec"><div class="mk-h">Metric to watch</div><div class="mk-text">' + esc(rp.metricToWatch) + '</div></div>' : '')
+    + (rp.watchOuts && rp.watchOuts.length ? '<div class="mk-sec"><div class="mk-h">Watch-outs</div><ul class="mk-ul">' + list(rp.watchOuts, (w) => '<li>' + esc(w) + '</li>') + '</ul></div>' : '')
+    + '</div>';
+}
+function renderMarketing(){
+  const latest = document.getElementById('mk-latest'); if (!latest) return;
+  if (!mkState.configured){
+    latest.innerHTML = '<div class="card"><div style="font-size:13px;color:var(--text2);line-height:1.65">The Marketing AI needs the AI key to write reports. Set <code>ANTHROPIC_API_KEY</code> in Vercel → Settings → Environment Variables, then click “Generate today’s report”.</div></div>';
+    return;
+  }
+  if (!mkReports.length){
+    latest.innerHTML = '<div class="card" style="text-align:center;padding:34px 20px"><div style="font-size:15px;font-weight:700;margin-bottom:6px">No reports yet</div><div style="font-size:13px;color:var(--muted);max-width:460px;margin:0 auto 16px">Click “Generate today’s report” for your first strategy. After that it writes one automatically every morning.</div></div>';
+    return;
+  }
+  latest.innerHTML = renderMarketingReport(mkReports[0]);
+  const hist = mkReports.slice(1);
+  const card = document.getElementById('mk-history-card'), wrap = document.getElementById('mk-history'), sub = document.getElementById('mk-history-sub');
+  if (card && wrap){
+    if (hist.length){
+      card.style.display = 'block';
+      if (sub) sub.textContent = hist.length + ' earlier report' + (hist.length === 1 ? '' : 's');
+      wrap.innerHTML = hist.map((r) => '<div class="mk-hist-row" onclick="openMarketingReport(\'' + r.id + '\')"><div><div style="font-weight:600;font-size:12px">' + esc(r.date) + '</div><div style="font-size:11px;color:var(--muted)">' + esc((r.headline || '').slice(0, 90)) + '</div></div><span style="color:var(--blue);font-size:11px">View</span></div>').join('');
+    } else card.style.display = 'none';
+  }
+}
+function openMarketingReport(id){
+  const rp = mkReports.find((r) => r.id === id); if (!rp) return;
+  const ov = perfModalShell();
+  ov.innerHTML = '<div class="perf-card" style="max-width:560px"><button class="perf-x" onclick="closePerfModal()" aria-label="Close">×</button>' + renderMarketingReport(rp) + '</div>';
+  ov.style.display = 'flex';
 }
 
 /* ═══════════════════════════════════════════
