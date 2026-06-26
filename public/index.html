@@ -5,9 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-perf3">
+  <link rel="stylesheet" href="styles.css?v=20260626-accounts">
 </head>
 <body>
+<!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
+<div id="auth-gate" style="display:none">
+  <div class="auth-card">
+    <div class="auth-brand">Prop<span>Mail</span> Pro</div>
+    <div id="auth-mode-login">
+      <div class="auth-title">Sign in</div>
+      <div class="auth-sub">Enter your office login to continue.</div>
+      <input id="auth-email" type="email" placeholder="Email" autocomplete="username">
+      <input id="auth-pw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')authLogin()">
+      <div id="auth-err" class="auth-err"></div>
+      <button class="btn bp" style="width:100%;justify-content:center" onclick="authLogin()">Sign in</button>
+    </div>
+    <div id="auth-mode-setup" style="display:none">
+      <div class="auth-title">Create your office account</div>
+      <div class="auth-sub">First-time setup — this becomes the head-office admin login.</div>
+      <input id="auth-setup-name" placeholder="Office name (e.g. Harrow branch)">
+      <input id="auth-setup-email" type="email" placeholder="Admin email" autocomplete="username">
+      <input id="auth-setup-pw" type="password" placeholder="Password (at least 8 characters)" autocomplete="new-password" onkeydown="if(event.key==='Enter')authSetup()">
+      <div id="auth-setup-err" class="auth-err"></div>
+      <button class="btn bp" style="width:100%;justify-content:center" onclick="authSetup()">Create account &amp; sign in</button>
+    </div>
+  </div>
+</div>
+
 <!-- HEADER -->
 <header class="hdr">
   <div class="hdr-brand">
@@ -73,6 +97,7 @@
   <div class="nav-sep"></div>
   <div class="nav-group">
     <div class="nl">Config</div>
+    <button class="ni" id="nav-account" onclick="showPanel('account')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Account</span></button>
     <button class="ni" id="nav-templates" onclick="showPanel('templates')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8"/></svg></span><span>Templates</span></button>
     <button class="ni" id="nav-printers" onclick="showPanel('printers')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span>Printers</span></button>
   </div>
@@ -517,6 +542,21 @@
   <div class="card">
     <div class="sec-hdr"><div><div class="sec-title">Recent enquiries</div><div class="sec-sub" id="leads-count-sub">No leads yet</div></div></div>
     <div id="leads-list"></div>
+  </div>
+</div>
+
+<!-- ═══ ACCOUNT ═══ -->
+<div class="panel" id="panel-account">
+  <div class="page-hdr">
+    <div><div class="page-title">Account</div><div class="page-sub">Your office account, sign-in and (for admins) the offices on this system.</div></div>
+  </div>
+  <div class="card"><div id="account-info"></div></div>
+  <div class="card" id="account-admin" style="display:none">
+    <div class="sec-hdr">
+      <div><div class="sec-title">Offices</div><div class="sec-sub">Each office gets its own login and its own private leads &amp; performance.</div></div>
+      <button class="btn bp sm-btn" onclick="openCreateOffice()">+ New office</button>
+    </div>
+    <div id="account-list"></div>
   </div>
 </div>
 
@@ -1418,6 +1458,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-perf3"></script>
+<script src="app.js?v=20260626-accounts"></script>
 </body>
 </html>
