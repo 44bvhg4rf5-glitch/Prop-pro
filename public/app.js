@@ -1456,6 +1456,11 @@ async function runLiveSearch(){
             p.addressSource = r.source || 'EPC register'; p.addressConfirmed = false; p.addressFound = true; p.addressLikely = true;
           }
         }
+        // Building / street block: real mailable owner addresses for this listing.
+        if (r && r.buildingResolved && Array.isArray(r.units) && r.units.length) {
+          p.block = { level: r.blockLevel, name: (r.building && r.building.name) || '', address: (r.building && r.building.address) || '', units: r.units };
+          p.addressFound = true;
+        }
         done++;
         if (p.addressFound) foundN++;
         setStatus('Finding exact addresses…', `Found ${foundN} full address${foundN===1?'':'es'} so far…`, 5 + Math.round(done * (90 / toResolve.length)), foundN);
@@ -1466,8 +1471,10 @@ async function runLiveSearch(){
     if (window.addrFilter === undefined) window.addrFilter = 'found';
     renderLiveResults();
     const foundTotal = props.filter(p => p.addressFound).length;
-    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings now show a full address (${props.filter(p=>p.addressConfirmed).length} confirmed, ${props.filter(p=>p.addressLikely).length} to verify)`, 'ok');
-    toast(`<i class=ic-check></i> ${foundTotal} full addresses found`, 'ok');
+    const blockN = props.filter(p => p.block).length;
+    const ownerTotal = (() => { const s = new Set(); props.forEach(p => { if(p.block) p.block.units.forEach(u => s.add(u.toLowerCase())); else if(p.addressFound && p.fullAddress) s.add(p.fullAddress.toLowerCase()); }); return s.size; })();
+    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings resolved (${props.filter(p=>p.addressConfirmed).length} exact · ${blockN} building/street) → ${ownerTotal} unique real owner addresses to mail`, 'ok');
+    toast(`<i class=ic-check></i> ${foundTotal}/${found} resolved · ${ownerTotal} mailable owner addresses`, 'ok');
     updateKPIs();
     return;
   }
@@ -2091,7 +2098,9 @@ function renderLiveResults(){
              ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px"><i class=ic-check></i> Address confirmed</span>'
              : (p.addressLikely
                 ? '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Likely — tap to verify</button>'
-                : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>'))
+                : (p.block
+                   ? '<span style="font-size:11px;font-weight:700;color:#6D28D9;background:rgba(124,58,237,.1);padding:2px 9px;border-radius:4px"><i class=ic-home></i> '+(p.block.level==='building'?'Building':'Street')+': '+p.block.units.length+' owner address'+(p.block.units.length===1?'':'es')+'</span>'
+                   : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>')))
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')
@@ -2111,8 +2120,10 @@ function renderLiveResults(){
             ?'<a href="'+p.rmUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;transition:opacity .15s" onmouseover="this.style.opacity=\'.82\'" onmouseout="this.style.opacity=\'1\'"><i class=ic-home></i> Verify on '+(p.portal||'Rightmove')+' →</a>'
             :'<a href="'+p.rmAreaUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#004F9A;color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none"><i class=ic-search></i> Browse '+p.haCode+' on Rightmove</a>'
           )
-          // Queue letter button
+          // Queue letter button (single confirmed address)
           +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'"><i class=ic-mailbox></i> Queue Letter</button>'
+          // Queue every real owner in the block (building/street)
+          +(p.block?'<button onclick="event.stopPropagation();queueBlock('+i+')" style="padding:7px 13px;background:rgba(124,58,237,.12);color:#6D28D9;border:1.5px solid rgba(124,58,237,.3);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue all '+p.block.units.length+' owners</button>':'')
           +'<button onclick="event.stopPropagation();researchOwner(props['+i+'])" style="padding:7px 13px;background:rgba(201,146,26,.1);color:#9A6C12;border:1.5px solid rgba(201,146,26,.3);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-user></i> Find owner</button>'
           // Zoopla cross-check
           +'<a href="'+p.zoUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:11px;font-weight:600;color:#7C3AED;text-decoration:none;background:rgba(124,58,237,.06)">Zoopla</a>'
@@ -2158,6 +2169,27 @@ function quickQueueOne(i){
   logContact(p, tpl, p.source||'Live search');
   updQBadge(); updQStats(); updateKPIs();
   toast(`<i class=ic-mailbox></i> Letter queued for ${p.displayAddress||p.address}`, 'ok');
+}
+
+// ── Queue a letter to every real owner address in a building / street block ──
+function queueBlock(i){
+  const p = props[i]; if(!p || !p.block || !p.block.units.length) return;
+  const tplEl = document.getElementById('f-tpl');
+  const tpl   = [...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro')) || templates[0];
+  // De-dup against addresses already queued so overlapping streets don't repeat.
+  const have = new Set(queue.map(q => (q.prop && (q.prop.fullAddress||q.prop.address)||'').toLowerCase()));
+  let added = 0;
+  p.block.units.forEach(addr => {
+    const k = addr.toLowerCase();
+    if(have.has(k)) return; have.add(k);
+    const pcM = addr.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+    const unit = { ...p, selected:false, address:addr, displayAddress:addr, fullAddress:addr,
+      postcode: pcM?pcM[0].toUpperCase():p.postcode, addressConfirmed:true, addressSource:'Register ('+(p.block.level)+')', block:null, _candidates:null };
+    queue.push({id:Date.now()+Math.random(), prop:unit, tpl, status:'pend', at:new Date(), auto:false});
+    added++;
+  });
+  updQBadge(); updQStats(); updateKPIs();
+  toast(`<i class=ic-mailbox></i> ${added} owner letter${added===1?'':'s'} queued for ${p.block.name}`+(added<p.block.units.length?` (${p.block.units.length-added} already in queue)`:''), 'ok');
 }
 
 // ── Queue all selected with one click ──
