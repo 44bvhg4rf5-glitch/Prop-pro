@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import rightmove from './api/rightmove.js';
 import listings from './api/listings.js';
 import property from './api/property.js';
+import location from './api/location.js';
 import epc from './api/epc.js';
 import epcMonitor from './api/epc-monitor.js';
 import landregistry from './api/landregistry.js';
@@ -40,6 +41,7 @@ const server = http.createServer((req, res) => {
   // ── API endpoints (shared with api/*.js) ──
   if (req.url.startsWith('/api/listings'))  { listings(req, res); return; }
   if (req.url.startsWith('/api/property'))  { property(req, res); return; }
+  if (req.url.startsWith('/api/location'))  { location(req, res); return; }
   if (req.url.startsWith('/api/rightmove')) { rightmove(req, res); return; }
   if (req.url.startsWith('/api/landregistry')) { landregistry(req, res); return; }
   if (req.url.startsWith('/api/addresses')) { addresses(req, res); return; }
