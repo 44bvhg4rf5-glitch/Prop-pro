@@ -67,6 +67,18 @@ async function osStreetAddresses(OS, pcList, wantStreet, area) {
   return [...seen.values()].map((a) => { delete a._thoro; delete a._commercial; return a; })
     .sort((x, y) => x.fullAddress.localeCompare(y.fullAddress, undefined, { numeric: true }));
 }
+// Every real residential address on an exact postcode (no street filter) — used
+// when we have the listing's confident full postcode but the displayed street
+// name is approximate, so the property is guaranteed to be in this list.
+async function osPostcodeAll(OS, postcode) {
+  const url = `https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`;
+  const { status, json } = await osGet(url);
+  if (status !== 200 || !json || !Array.isArray(json.results)) return [];
+  return json.results.map((r) => r.DPA).filter(Boolean).map(mapDpa)
+    .filter((a) => !a._commercial && a.fullAddress)
+    .map((a) => { delete a._thoro; delete a._commercial; return a; })
+    .sort((x, y) => x.fullAddress.localeCompare(y.fullAddress, undefined, { numeric: true }));
+}
 
 export default async function handler(req, res) {
   if (!guardOrigin(req, res)) return;
@@ -127,6 +139,12 @@ export default async function handler(req, res) {
     // A single match is the exact address; with the enriched full postcode we
     // also surface multiple real addresses on the street for a one-tap confirm.
     if (osCands.length) { source = 'Royal Mail / OS Places'; candidates = osCands; confirmed = osCands.length === 1; }
+  }
+  // Enriched full postcode but nothing matched the (approximate) street → return
+  // every real address on the exact postcode so the right one is always present.
+  if (!candidates.length && enriched && OS && FULL_POSTCODE.test(postcodeIn)) {
+    const all = await osPostcodeAll(OS, postcodeIn.replace(/\s+/, ' '));
+    if (all.length) { source = 'Royal Mail / OS Places'; candidates = all; confirmed = all.length === 1; }
   }
 
   sendJson(res, 200, {
