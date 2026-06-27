@@ -291,6 +291,24 @@ export default async function handler(req, res) {
   } else if (candidates.length === 1) {
     evidence.reasons = ['The only matching address on this postcode'];
   }
+  // 4. Building-level resolution for flats. The listing names a block but hides
+  // the unit — we can't know the exact flat, but we CAN list every real flat in
+  // that building from the register. All genuine, mailable owner addresses.
+  let buildingResolved = false, building = null, units = [];
+  if (isFlat && candidates.length) {
+    const bn = buildingNameOf(streetIn) || buildingNameOf(hint);
+    if (bn) {
+      const nb = norm(bn);
+      const u = candidates.filter((c) => norm(c.fullAddress).includes(nb));
+      if (u.length) {
+        buildingResolved = true;
+        units = u.map((c) => c.fullAddress);
+        const first = u[0].fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
+        building = { name: tcAddr(bn), address: first, unitCount: u.length };
+      }
+    }
+  }
+
   // Expose the distance per candidate (handy for the UI) and strip internals.
   const out = candidates.slice(0, 60).map((c) => {
     const o = { ...c }; if (c._distM != null) o.distM = c._distM;
@@ -302,9 +320,22 @@ export default async function handler(req, res) {
     epcMatch: source === 'EPC register',
     sizeMatched: !!(epc && epc.sizeMatched),
     confidence: evidence.confidence, reasons: evidence.reasons, pinMatched: evidence.pinMatched,
+    buildingResolved, building, units: units.slice(0, 300), unitCount: units.length,
     enriched, postcode: postcodeIn || null,
     total: candidates.length, candidates: out,
     note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
     ...(u.searchParams.get('osdebug') ? { resolveDebug: resolveDbg } : {}),
   });
+}
+
+// Pull a named building out of a listing's address ("Apex House, Harrow" →
+// "Apex House"; "Lyon Road, Harrow" → "" because that's a street, not a block).
+const ROAD_WORD = /\b(road|street|avenue|lane|close|drive|way|gardens?|grove|crescent|place|terrace|hill|park|rise|walk|row|green|square|vale|parade|broadway)\b/i;
+const BLD_WORD = /\b(house|court|lodge|apartments?|point|mansions?|heights|towers?|building|lofts?|wharf|hall|manor|residence|development|villas?|mews|chase|gate|quarter|works|mill)\b/i;
+function buildingNameOf(display) {
+  let seg = (display || '').split(',')[0].trim().replace(/^\s*(flat|apartment|apt|unit|room|studio)\s+[\w-]+\s*/i, '').trim();
+  if (!seg || seg.length < 3) return '';
+  const last = seg.split(/\s+/).slice(-1)[0];
+  if (ROAD_WORD.test(last) && !BLD_WORD.test(seg)) return ''; // it's a street, not a building
+  return seg;
 }
