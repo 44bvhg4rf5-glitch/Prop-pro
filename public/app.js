@@ -1438,8 +1438,11 @@ async function runLiveSearch(){
       document.getElementById('search-status').style.display = 'block';
       let done = 0, foundN = confirmedCount;
       setStatus('Finding exact addresses…', `Looking up ${toResolve.length} street-only listing${toResolve.length>1?'s':''} in the public registers…`, 5, '…');
-      await mapLimit(toResolve, 6, async (p) => {
-        const r = await epcLookup(p, 1, { fast: true });
+      await mapLimit(toResolve, 5, async (p) => {
+        // Full resolve (uses the listing page's exact postcode — cached server-
+        // side, so a search fetches each page only once). This is what lets
+        // named blocks like "Apex House" resolve to their real flats.
+        const r = await epcLookup(p, 1);
         const cands = (r && Array.isArray(r.candidates)) ? r.candidates : [];
         if (cands.length) {
           p._candidates = cands;

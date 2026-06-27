@@ -216,7 +216,12 @@ export default async function handler(req, res) {
   const url = (u.searchParams.get('url') || '').trim();
   let enriched = false;
   if (url && !FULL_POSTCODE.test(postcodeIn)) {
-    const p = await rightmoveProperty(url).catch(() => null);
+    // Cache the property-page data (full postcode, pin, size) by URL — listing
+    // pages rarely change, so a whole search only fetches each page once ever,
+    // keeping the bulk resolve fast and gentle on Rightmove.
+    const ckey = 'rm:' + url;
+    let p = storeConfigured() ? await getJSON(ckey, null) : null;
+    if (!p) { p = await rightmoveProperty(url).catch(() => null); if (p && storeConfigured()) await setJSON(ckey, p).catch(() => {}); }
     if (p) {
       if (FULL_POSTCODE.test(p.postcode)) { postcodeIn = p.postcode.toUpperCase(); enriched = true; }
       if (Number.isNaN(lat) && p.lat != null) lat = p.lat;
