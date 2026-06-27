@@ -294,19 +294,24 @@ export default async function handler(req, res) {
   // 4. Building-level resolution for flats. The listing names a block but hides
   // the unit — we can't know the exact flat, but we CAN list every real flat in
   // that building from the register. All genuine, mailable owner addresses.
-  let buildingResolved = false, building = null, units = [];
+  let buildingResolved = false, building = null, units = [], blockLevel = null;
   if (isFlat && candidates.length) {
     const bn = buildingNameOf(streetIn) || buildingNameOf(hint);
-    if (bn) {
-      const nb = norm(bn);
-      const u = candidates.filter((c) => norm(c.fullAddress).includes(nb));
-      if (u.length) {
-        buildingResolved = true;
-        units = u.map((c) => c.fullAddress);
-        const first = u[0].fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
-        building = { name: tcAddr(bn), address: first, unitCount: u.length };
-      }
+    let u = [];
+    if (bn) u = candidates.filter((c) => norm(c.fullAddress).includes(norm(bn)));
+    if (u.length) {
+      // Named block — the tight, premium result ("Apex House" → its flats).
+      blockLevel = 'building';
+      const first = u[0].fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
+      building = { name: tcAddr(bn), address: first, unitCount: u.length };
+    } else if (wantStreet) {
+      // No named block, but the listing's street is known — return every real
+      // flat on that street/postcode. Looser, but all genuine mailable owners.
+      u = candidates;
+      blockLevel = 'street';
+      building = { name: tcAddr(wantStreet), address: (postcodeIn || (candidates[0] && candidates[0].postcode) || ''), unitCount: u.length };
     }
+    if (u.length) { buildingResolved = true; units = u.map((c) => c.fullAddress); }
   }
 
   // Expose the distance per candidate (handy for the UI) and strip internals.
@@ -320,7 +325,7 @@ export default async function handler(req, res) {
     epcMatch: source === 'EPC register',
     sizeMatched: !!(epc && epc.sizeMatched),
     confidence: evidence.confidence, reasons: evidence.reasons, pinMatched: evidence.pinMatched,
-    buildingResolved, building, units: units.slice(0, 300), unitCount: units.length,
+    buildingResolved, building, blockLevel, units: units.slice(0, 300), unitCount: units.length,
     enriched, postcode: postcodeIn || null,
     total: candidates.length, candidates: out,
     note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
