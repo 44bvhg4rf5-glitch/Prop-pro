@@ -1,8 +1,14 @@
 import { sendJson } from '../lib/helpers.js';
-import { llmConfigured, provider, availableProviders, providerOrder } from '../lib/llm.js';
+import { llmConfigured, provider, availableProviders, providerOrder, pingProvider } from '../lib/llm.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   const providers = availableProviders();
+  // ?ping=1 → live health-check each configured AI key (and test Gemini search).
+  if (new URL(req.url, 'http://localhost').searchParams.get('ping')) {
+    const pings = await Promise.all(providers.map((p) => pingProvider(p, { search: p === 'gemini' || p === 'anthropic' })));
+    sendJson(res, 200, { providers, pings });
+    return;
+  }
   sendJson(res, 200, {
     aiEnabled: llmConfigured(),
     aiProvider: provider() || null,          // who handles a normal call
