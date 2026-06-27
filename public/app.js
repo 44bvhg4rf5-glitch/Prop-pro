@@ -32,6 +32,7 @@ const HA_DISTRICTS = [
 ];
 
 let selectedHA = new Set(['HA1','HA2','HA3','HA4','HA5','HA6','HA7','HA9']);
+let locMeta = {}; // key (identifier) → {identifier,label} for any-UK-postcode areas added via search
 let props=[];
 let queue=[];
 let curPage=0;
@@ -241,8 +242,9 @@ function genHAProps(haCode, statusF, typeF, minBeds, maxPrice, radius, seed){
 /* ═══════════════════════════════════════════
    HA DISTRICT UI
 ═══════════════════════════════════════════ */
-function selAllHA(){ HA_DISTRICTS.forEach(d=>{selectedHA.add(d.code);document.getElementById('ha-'+d.code)?.classList.add('sel');}); }
-function clrAllHA(){ HA_DISTRICTS.forEach(d=>{selectedHA.delete(d.code);document.getElementById('ha-'+d.code)?.classList.remove('sel');}); }
+function selAllHA(){ HA_DISTRICTS.forEach(d=>{selectedHA.add(d.code);document.getElementById('ha-'+d.code)?.classList.add('sel');}); if(typeof updateAreaCount==='function'){updateAreaCount();renderLocChips();} }
+function clrAllHA(){ HA_DISTRICTS.forEach(d=>{selectedHA.delete(d.code);document.getElementById('ha-'+d.code)?.classList.remove('sel');}); if(typeof updateAreaCount==='function'){updateAreaCount();renderLocChips();} }
+function clrAllAreas(){ [...selectedHA].forEach(k=>{ document.getElementById('ha-'+k)?.classList.remove('sel'); }); selectedHA.clear(); locMeta={}; if(typeof updateAreaCount==='function'){updateAreaCount();renderLocChips();} }
 
 /* ═══════════════════════════════════════════
    SEARCH
@@ -631,11 +633,16 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 // Fetch REAL on-market listings for a district from the live portal feed.
 async function fetchDistrictListings(code, channel){
   try{
-    const r = await fetch('/api/listings?'+new URLSearchParams({district:code, channel}).toString());
+    // Arbitrary location (any UK postcode/area) when we have a resolved identifier;
+    // otherwise the legacy HA-district path.
+    const meta = (typeof locMeta!=='undefined') ? locMeta[code] : null;
+    const params = meta ? { location: meta.identifier, label: meta.label, channel } : { district: code, channel };
+    const r = await fetch('/api/listings?'+new URLSearchParams(params).toString());
     if(!r.ok) return [];
     const d = await r.json();
     const isSale = channel!=='rent';
     const dist = (typeof HA_DISTRICTS!=='undefined') ? HA_DISTRICTS.find(x=>x.code===code) : null;
+    const areaName = meta ? meta.label : ((dist&&dist.name)||code);
     return (d.properties||[]).map(raw=>{
       const disp = raw.displayAddress||raw.address||'';
       const pcM = (raw.postcode&&String(raw.postcode).match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i))||disp.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
@@ -643,7 +650,7 @@ async function fetchDistrictListings(code, channel){
         address:disp, displayAddress:disp,
         postcode: pcM?pcM[0].toUpperCase():(code+' — see listing'),
         lat:raw.lat??null, lon:raw.lon??null, sizeSqft:raw.sizeSqft??null,
-        district:(dist&&dist.name)||code, haCode:code,
+        district:areaName, haCode:code,
         type:raw.type||'Property', beds:raw.beds||0, price:raw.price||0,
         priceLabel:raw.priceLabel||(raw.price?'£'+Number(raw.price).toLocaleString():''),
         status:isSale?'For Sale':'To Let', portal:raw.source||'Rightmove',
@@ -1305,7 +1312,8 @@ async function runLiveSearch(){
       const code = districts[di];
       setStatus('Finding live properties…', `Searching Rightmove + OnTheMarket · ${code}…`,
                 15 + Math.round(di * (45 / districts.length)), props.length || '…');
-      const qs = new URLSearchParams({ district: code, channel: chan });
+      const meta = locMeta[code];
+      const qs = new URLSearchParams(meta ? { location: meta.identifier, label: meta.label, channel: chan } : { district: code, channel: chan });
       if (minBeds > 0)   qs.set('minBeds', String(minBeds));
       if (maxPriceV > 0) qs.set('maxPrice', String(maxPriceV));
       if (minPriceV > 0) qs.set('minPrice', String(minPriceV));
@@ -1313,6 +1321,7 @@ async function runLiveSearch(){
       if (!r.ok) throw new Error('listings endpoint ' + r.status);
       const d = await r.json();
       const dist2  = HA_DISTRICTS.find(x => x.code === code);
+      const areaName = meta ? meta.label : (dist2?.name || code);
       const rmId2  = RM_IDS[code];
       const rmCh2  = isSale ? 'property-for-sale' : 'property-to-rent';
       const zoCh2  = isSale ? 'for-sale' : 'to-rent';
@@ -1324,10 +1333,10 @@ async function runLiveSearch(){
         props.push({
           id: `rm-srv-${props.length}`,
           address: disp2, displayAddress: disp2,
-          postcode: pcM2 ? pcM2[0].toUpperCase() : (code + ' — see listing'),
+          postcode: pcM2 ? pcM2[0].toUpperCase() : (areaName + ' — see listing'),
           lat: raw.lat ?? null, lon: raw.lon ?? null,
           sizeSqft: raw.sizeSqft ?? null, hasFloorplan: !!raw.hasFloorplan,
-          district: dist2?.name || code, haCode: code,
+          district: areaName, haCode: code,
           type: raw.type || 'Property', beds: raw.beds || 0,
           price: raw.price || 0,
           priceLabel: raw.priceLabel || (raw.price ? '£' + Number(raw.price).toLocaleString() : ''),
@@ -1744,7 +1753,10 @@ async function mapLimit(items, limit, worker){
 async function epcLookup(p, retries=1){
   try{
     const pc = (p.postcode||'').replace(/—.*/,'').trim();
-    const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'', district: p.haCode||'' });
+    // Only pass a real postcode-district as the area filter — never a location
+    // identifier (e.g. REGION^904) from a UK-wide search, which would over-filter.
+    const districtArg = /^[A-Z]{1,2}\d[\dA-Z]?$/i.test(p.haCode||'') ? p.haCode : '';
+    const qs = new URLSearchParams({ street: p.displayAddress||p.address||'', type: p.type||'', district: districtArg });
     if(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('postcode', pc);
     if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
     if(p.sizeSqft>0) qs.set('size', p.sizeSqft);
@@ -3624,11 +3636,50 @@ function initHAGrid(){
     const el = document.createElement('div');
     el.className = 'ha-btn' + (selectedHA.has(d.code) ? ' sel' : ''); el.id = 'ha-' + d.code;
     el.innerHTML = '<div class="ha-code">' + d.code + '</div><div class="ha-name">' + d.name + '</div>';
-    el.onclick = () => { selectedHA.has(d.code) ? selectedHA.delete(d.code) : selectedHA.add(d.code); el.classList.toggle('sel', selectedHA.has(d.code)); const sc = document.getElementById('ha-sel-count'); if (sc) sc.textContent = selectedHA.size + ' selected'; };
+    el.onclick = () => { selectedHA.has(d.code) ? selectedHA.delete(d.code) : selectedHA.add(d.code); el.classList.toggle('sel', selectedHA.has(d.code)); updateAreaCount(); renderLocChips(); };
     g.appendChild(el);
   });
-  const sc = document.getElementById('ha-sel-count'); if (sc) sc.textContent = selectedHA.size + ' selected';
+  updateAreaCount(); renderLocChips();
 }
+function updateAreaCount(){ const sc=document.getElementById('ha-sel-count'); if(sc) sc.textContent=selectedHA.size+' selected'; }
+function renderLocChips(){
+  const wrap=document.getElementById('loc-chips'); if(!wrap) return;
+  const keys=[...selectedHA];
+  wrap.innerHTML = keys.length ? keys.map(k=>{ const meta=locMeta[k]; const label=meta?meta.label:k;
+    return '<span class="loc-chip">'+esc(label)+'<button onclick="locRemove(\''+encodeURIComponent(k)+'\')" aria-label="remove">×</button></span>'; }).join('')
+    : '<span style="font-size:11px;color:var(--muted)">No areas yet — search any postcode/area above, or tap an HA district below.</span>';
+}
+function locRemove(encKey){
+  const k=decodeURIComponent(encKey);
+  selectedHA.delete(k); if(locMeta[k]) delete locMeta[k];
+  const btn=document.getElementById('ha-'+k); if(btn) btn.classList.remove('sel');
+  updateAreaCount(); renderLocChips();
+}
+let locTimer=null;
+function locSearchInput(v){
+  v=(v||'').trim(); const box=document.getElementById('loc-suggest'); if(!box) return;
+  if(v.length<2){ box.style.display='none'; box.innerHTML=''; return; }
+  clearTimeout(locTimer);
+  locTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch('/api/location?q='+encodeURIComponent(v)); if(!r.ok) return;
+      const list=(await r.json()).matches||[];
+      if(!list.length){ box.innerHTML='<div class="suggest-empty">No matches — try a postcode, town or area.</div>'; box.style.display='block'; return; }
+      box._items=list;
+      box.innerHTML=list.map((m,i)=>'<div class="suggest-item" onmousedown="locPick('+i+')">'+esc(m.label)+' <span style="color:var(--muted);font-size:11px">'+esc((m.type||'').toLowerCase())+'</span></div>').join('');
+      box.style.display='block';
+    }catch(e){}
+  },220);
+}
+function locPick(i){
+  const box=document.getElementById('loc-suggest'); if(!box) return;
+  const m=(box._items||[])[i]; if(!m) return;
+  selectedHA.add(m.identifier); locMeta[m.identifier]={identifier:m.identifier,label:m.label};
+  box.style.display='none'; box.innerHTML='';
+  const inp=document.getElementById('loc-search'); if(inp) inp.value='';
+  updateAreaCount(); renderLocChips(); toast('Added '+m.label,'ok');
+}
+function locSuggestBlur(){ setTimeout(()=>{ const box=document.getElementById('loc-suggest'); if(box) box.style.display='none'; },150); }
 
 function updateRTTicker(){
   const inner = document.getElementById('rt-inner');

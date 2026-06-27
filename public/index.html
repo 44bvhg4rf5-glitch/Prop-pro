@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-letterhead">
+  <link rel="stylesheet" href="styles.css?v=20260626-uksearch">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -167,7 +167,7 @@
     <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding-left:6px">
       <div style="flex:1;min-width:220px">
         <div style="font-family:'Playfair Display',serif;font-size:21px;color:var(--text);margin-bottom:6px">Automated Property Finder</div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.6">Searches <strong>Rightmove + OnTheMarket</strong> for live listings across your selected HA districts, finds each property's full address from the EPC register, and gets it ready to print and post — one click.</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6">Searches <strong>Rightmove + OnTheMarket</strong> for live listings across your selected areas — <strong>any UK postcode, town or area</strong> — finds each property's full address from the EPC register, and gets it ready to print and post — one click.</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;align-items:center;flex-shrink:0">
         <button id="main-search-btn" onclick="runLiveSearch()" style="padding:14px 34px;background:linear-gradient(135deg,#3470FF,#2150E3);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 6px 22px rgba(37,99,235,.34);transition:all .15s;white-space:nowrap">
@@ -190,11 +190,17 @@
       <div class="fg"><label>Letter template</label><select id="f-tpl"></select></div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Area — select HA districts</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Search any UK postcode, town or area</div>
+      <div style="position:relative;max-width:480px">
+        <input id="loc-search" autocomplete="off" placeholder="e.g. SW1A, Manchester, Leeds City Centre, BS8…" oninput="locSearchInput(this.value)" onblur="locSuggestBlur()" style="width:100%">
+        <div id="loc-suggest" class="suggest-box" style="display:none"></div>
+      </div>
+      <div id="loc-chips" class="loc-chips" style="margin-top:10px"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin:16px 0 8px">…or tap the Harrow (HA) quick-picks</div>
       <div class="ha-grid" id="ha-grid"></div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn bs sm-btn" onclick="selAllHA()">All</button>
-        <button class="btn bghost sm-btn" onclick="clrAllHA()">None</button>
+        <button class="btn bs sm-btn" onclick="selAllHA()">All HA</button>
+        <button class="btn bghost sm-btn" onclick="clrAllAreas()">Clear all</button>
         <span style="font-size:11px;color:var(--muted);align-self:center" id="ha-sel-count">8 selected</span>
       </div>
     </div>
@@ -1554,6 +1560,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-letterhead"></script>
+<script src="app.js?v=20260626-uksearch"></script>
 </body>
 </html>
