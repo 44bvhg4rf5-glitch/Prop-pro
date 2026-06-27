@@ -1849,20 +1849,37 @@ async function confirmAddress(i){
   const cands=(r&&Array.isArray(r.candidates))?r.candidates:[];
   p._candidates=cands;
   p._resolveNote=(r&&r.note)||'';
+  p._resolveConf=(r&&r.confidence)||'low';
+  p._resolveReasons=(r&&Array.isArray(r.reasons))?r.reasons:[];
+  p._resolvePinMatched=!!(r&&r.pinMatched);
   renderConfirmBox(i);
 }
 function renderConfirmBox(i){
   const box=document.getElementById('pick-'+i); const p=props[i]; if(!box||!p) return;
   const cands=p._candidates||[]; const chosen=p._pickChosen;
+  const conf=p._resolveConf||'low'; const reasons=p._resolveReasons||[];
   const rmLink=p.rmUrl||p.portalUrl||'';
   const verifyLink=rmLink?'<a href="'+rmLink+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);font-weight:700;text-decoration:none">open the listing on Rightmove ↗</a>':'the listing';
+  // Confidence banner — explains WHY the top match is the likely house.
+  const confMeta={high:{c:'var(--green)',bg:'rgba(5,150,105,.1)',t:'STRONG MATCH'},medium:{c:'#92400E',bg:'#FFFBEB',t:'LIKELY MATCH'},low:{c:'var(--muted)',bg:'rgba(0,0,0,.04)',t:'NEEDS A CHECK'}}[conf]||{};
+  const banner=cands.length>1
+    ? '<div style="background:'+confMeta.bg+';border-radius:7px;padding:8px 10px;margin-bottom:9px">'
+      +'<div style="font-size:10px;font-weight:800;letter-spacing:.5px;color:'+confMeta.c+'">'+confMeta.t+(p._resolvePinMatched?' · MAP-PIN CHECKED':'')+'</div>'
+      +(reasons.length?'<div style="font-size:11px;color:var(--text);margin-top:3px;line-height:1.45">'+reasons.map(esc).join(' · ')+'</div>':'')
+      +'<div style="font-size:10px;color:var(--muted);margin-top:3px">Always cross-check against '+verifyLink+' before posting.</div>'
+      +'</div>'
+    : '';
   const list=cands.length
-    ? '<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">REAL ADDRESSES ON THIS STREET — tap the exact house (cross-check against the listing first)</div>'
-      + cands.slice(0,12).map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
-          +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'+(j===chosen?'✓ ':'')+c.fullAddress+(c.sizeSqft?' <span style="color:var(--muted);font-weight:400">· '+Number(c.sizeSqft).toLocaleString()+' sq ft</span>':'')+'</span>'
+    ? banner
+      + '<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">'+(cands.length>1?'TAP THE EXACT HOUSE — best match first':'REAL ADDRESS FOUND')+'</div>'
+      + cands.slice(0,12).map((c,j)=>{
+          const isRec=j===0&&cands.length>1&&conf!=='low';
+          const meta=[c.sizeSqft?Number(c.sizeSqft).toLocaleString()+' sq ft':'',c.distM!=null?c.distM+' m from pin':''].filter(Boolean).join(' · ');
+          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
+          +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'+(j===chosen?'✓ ':'')+(isRec?'<span style="background:rgba(5,150,105,.12);color:var(--green);font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-right:5px">BEST</span>':'')+esc(c.fullAddress)+(meta?' <span style="color:var(--muted);font-weight:400">· '+meta+'</span>':'')+'</span>'
           +(j===chosen?'<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">CONFIRMED</span>'
-             :'<button onclick="event.stopPropagation();useCandidate('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">This one</button>')
-        +'</div>').join('')
+             :'<button onclick="event.stopPropagation();useCandidate('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:'+(isRec?'var(--green)':'var(--blue)')+';color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+(isRec?'Use this':'This one')+'</button>');
+        }).map(s=>s+'</div>').join('')
       + (cands.length>12?'<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(cands.length-12)+' more on this street</div>':'')
     : '<div style="font-size:11px;color:var(--muted);margin-bottom:7px">No exact match in the public registers for this street. '+verifyLink+' to read the house number, then enter it below.</div>';
   box.innerHTML='<div style="border:1px solid var(--border2);border-radius:8px;padding:10px 12px;background:#fff">'

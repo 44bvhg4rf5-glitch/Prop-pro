@@ -36,6 +36,73 @@ function osGet(url) {
     }).on('error', () => resolve({ status: 502, json: null }));
   });
 }
+// Distance in metres between two lat/lon points (haversine).
+function distM(a, b) {
+  if (!a || !b || a.lat == null || b.lat == null) return null;
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toR, dLon = (b.lon - a.lon) * toR;
+  const la1 = a.lat * toR, la2 = b.lat * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+// UPRN → exact lat/lon via OS Places. Gives each candidate a real coordinate so
+// we can rank by how close it is to the listing's own map pin — an independent
+// signal from floor area, so when both agree we can be confident.
+async function osUprnCoords(OS, uprns) {
+  const out = new Map();
+  await Promise.all([...new Set(uprns.filter(Boolean).map(String))].slice(0, 18).map(async (uprn) => {
+    const url = `https://api.os.uk/search/places/v1/uprn?uprn=${encodeURIComponent(uprn)}&dataset=DPA&output_srs=EPSG:4326&key=${encodeURIComponent(OS)}`;
+    const { status, json } = await osGet(url);
+    const dpa = status === 200 && json && Array.isArray(json.results) && json.results[0] && json.results[0].DPA;
+    if (dpa) {
+      const lat = parseFloat(dpa.LAT), lon = parseFloat(dpa.LNG);
+      if (!Number.isNaN(lat) && !Number.isNaN(lon)) out.set(uprn, { lat, lon });
+    }
+  }));
+  return out;
+}
+const fmtN = (n) => Number(n).toLocaleString();
+// Combine independent signals (floor area + distance to the map pin) into a
+// best pick, a confidence level and a plain-English explanation, so the user
+// can trust or quickly verify the result instead of guessing.
+function scoreEvidence(cands, { listingSqft, pin, isFlat }) {
+  const haveSize = listingSqft > 0 && cands.some((c) => c.sizeSqft);
+  const havePin = pin && cands.some((c) => c._distM != null);
+  cands.forEach((c) => {
+    let score = 0, wsum = 0;
+    if (haveSize && c.sizeSqft) {
+      const rel = Math.abs(c.sizeSqft - listingSqft) / Math.max(listingSqft, 1);
+      score += Math.max(0, 1 - rel / 0.4) * 0.6; wsum += 0.6;   // full credit within ~0% off, none past 40%
+    }
+    if (havePin && c._distM != null) {
+      score += Math.max(0, 1 - c._distM / 120) * 0.4; wsum += 0.4; // within 120m of the pin
+    }
+    c._score = wsum ? score / wsum : 0;
+  });
+  // Order: best evidence first; fall back to the existing (size/cert) order.
+  if (haveSize || havePin) cands.sort((a, b) => (b._score || 0) - (a._score || 0));
+
+  const top = cands[0], second = cands[1];
+  const reasons = [];
+  let confidence = 'low';
+  if (top) {
+    if (haveSize && top.sizeSqft) reasons.push(`Floor area ${fmtN(top.sizeSqft)} sq ft vs listing ${fmtN(listingSqft)} (closest of ${cands.length})`);
+    if (havePin && top._distM != null) reasons.push(`${top._distM} m from the listing's map pin (nearest of ${cands.length})`);
+    if (cands.length === 1) { reasons.push('The only address of this type on this postcode'); confidence = 'high'; }
+    else {
+      const gap = (top._score || 0) - (second ? (second._score || 0) : 0);
+      const sizeClose = haveSize && top.sizeSqft && Math.abs(top.sizeSqft - listingSqft) / Math.max(listingSqft, 1) <= 0.12;
+      const pinClose = havePin && top._distM != null && top._distM <= 40;
+      const signals = (sizeClose ? 1 : 0) + (pinClose ? 1 : 0);
+      // House + two independent signals agreeing on a clear winner = high.
+      if (!isFlat && signals >= 2 && gap >= 0.18) confidence = 'high';
+      else if (!isFlat && signals >= 1 && gap >= 0.2) confidence = 'medium';
+      else if (signals >= 1) confidence = 'medium';
+      else confidence = 'low';
+    }
+  }
+  return { confidence, reasons, pinMatched: havePin };
+}
 function mapDpa(d) {
   const cls = (d.CLASSIFICATION_CODE || '').toUpperCase();
   const line1 = tcAddr([d.SUB_BUILDING_NAME, d.BUILDING_NAME, d.BUILDING_NUMBER, d.THOROUGHFARE_NAME].filter(Boolean).join(' ').trim());
@@ -172,12 +239,35 @@ export default async function handler(req, res) {
     if (all.length) { source = all[0].uprn && OS ? 'Royal Mail / OS Places' : 'EPC register'; candidates = all; confirmed = all.length === 1; }
   }
 
+  // 3. Second independent signal: rank the candidates by how close each one's
+  // real coordinate (via its UPRN) is to the listing's own map pin. Floor area
+  // and map-pin distance are independent — when they agree on the same house we
+  // can be confident; when they disagree we lower confidence and ask the user.
+  const pin = (!Number.isNaN(lat) && !Number.isNaN(lon)) ? { lat, lon } : null;
+  const isFlat = /flat|apartment|maisonette|studio/i.test(rmType) || candidates.some((c) => /\bflat|apartment\b/i.test(c.line1 || ''));
+  let evidence = { confidence: candidates.length === 1 ? 'high' : 'low', reasons: [], pinMatched: false };
+  if (candidates.length > 1) {
+    if (OS && pin && !isFlat) {
+      const coords = await osUprnCoords(OS, candidates.map((c) => c.uprn));
+      candidates.forEach((c) => { const co = coords.get(String(c.uprn)); c._distM = co ? distM(pin, co) : null; });
+    }
+    evidence = scoreEvidence(candidates, { listingSqft, pin, isFlat });
+  } else if (candidates.length === 1) {
+    evidence.reasons = ['The only matching address on this postcode'];
+  }
+  // Expose the distance per candidate (handy for the UI) and strip internals.
+  const out = candidates.slice(0, 60).map((c) => {
+    const o = { ...c }; if (c._distM != null) o.distM = c._distM;
+    delete o._distM; delete o._score; return o;
+  });
+
   sendJson(res, 200, {
     confirmed, source: source || null, street: wantStreet || null,
     epcMatch: source === 'EPC register',
     sizeMatched: !!(epc && epc.sizeMatched),
+    confidence: evidence.confidence, reasons: evidence.reasons, pinMatched: evidence.pinMatched,
     enriched, postcode: postcodeIn || null,
-    total: candidates.length, candidates: candidates.slice(0, 60),
+    total: candidates.length, candidates: out,
     note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
   });
 }
