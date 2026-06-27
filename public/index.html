@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-uksearch">
+  <link rel="stylesheet" href="styles.css?v=20260627-coverage">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -188,6 +188,10 @@
       <div class="fg"><label>Property type</label><select id="f-type"><option value="all">Any</option><option>Detached House</option><option>Semi-Detached</option><option>Terraced</option><option>Flat</option><option>Bungalow</option></select></div>
       <div class="fg"><label>Search radius</label><select id="f-radius"><option value="0">Selected districts only</option><option value="1">+ Neighbouring (~1.5 mi)</option><option value="2">Wider area (~3 mi)</option></select></div>
       <div class="fg"><label>Letter template</label><select id="f-tpl"></select></div>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px">
+      <label class="agent-check"><input type="checkbox" id="f-deep"> <span>Thorough search — pull many more listings per area (slower)</span></label>
+      <label class="agent-check"><input type="checkbox" id="f-sstc"> <span>Include Sold STC / under-offer (catch fall-throughs)</span></label>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:14px">
       <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Search any UK postcode, town or area</div>
@@ -1560,6 +1564,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-uksearch"></script>
+<script src="app.js?v=20260627-coverage"></script>
 </body>
 </html>

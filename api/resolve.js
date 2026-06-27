@@ -1,6 +1,9 @@
 import https from 'https';
 import { FULL_POSTCODE, reverseGeocode, sendJson, guardOrigin } from '../lib/helpers.js';
 import { epcResolve } from './epc.js';
+import { rightmoveProperty } from '../lib/sources.js';
+
+export const config = { maxDuration: 20 };
 
 // Resolve a live listing to a confirmed full address. Strategy:
 //   1. EPC pinpoint — when the home has a certificate, floor-area matching nails
@@ -69,14 +72,30 @@ export default async function handler(req, res) {
   if (!guardOrigin(req, res)) return;
   const u = new URL(req.url, 'http://localhost');
   const OS = process.env.OS_PLACES_KEY || '';
-  const postcodeIn = (u.searchParams.get('postcode') || '').trim().toUpperCase();
-  const streetIn = (u.searchParams.get('street') || '').trim();
+  let postcodeIn = (u.searchParams.get('postcode') || '').trim().toUpperCase();
+  let streetIn = (u.searchParams.get('street') || '').trim();
   const hint = (u.searchParams.get('hint') || '').trim();
-  const rmType = (u.searchParams.get('type') || '').trim();
-  const listingSqft = parseInt(u.searchParams.get('size') || '0', 10) || 0;
-  const lat = parseFloat(u.searchParams.get('lat'));
-  const lon = parseFloat(u.searchParams.get('lon'));
+  let rmType = (u.searchParams.get('type') || '').trim();
+  let listingSqft = parseInt(u.searchParams.get('size') || '0', 10) || 0;
+  let lat = parseFloat(u.searchParams.get('lat'));
+  let lon = parseFloat(u.searchParams.get('lon'));
   const area = (u.searchParams.get('district') || '').toUpperCase().replace(/[0-9].*$/, '');
+
+  // Accuracy boost: when we only have an outcode, fetch the listing's own page to
+  // pull the FULL postcode, exact pin and floor area — far more to resolve with.
+  const url = (u.searchParams.get('url') || '').trim();
+  let enriched = false;
+  if (url && !FULL_POSTCODE.test(postcodeIn)) {
+    const p = await rightmoveProperty(url).catch(() => null);
+    if (p) {
+      if (FULL_POSTCODE.test(p.postcode)) { postcodeIn = p.postcode.toUpperCase(); enriched = true; }
+      if (Number.isNaN(lat) && p.lat != null) lat = p.lat;
+      if (Number.isNaN(lon) && p.lon != null) lon = p.lon;
+      if (!listingSqft && p.sizeSqft) listingSqft = p.sizeSqft;
+      if (!streetIn && p.displayAddress) streetIn = p.displayAddress;
+      if (!rmType && p.type) rmType = p.type;
+    }
+  }
 
   const wantStreet = streetOf(streetIn) || extractStreet(streetIn) || extractStreet(hint);
 
@@ -105,13 +124,16 @@ export default async function handler(req, res) {
     candidates = epcCands;
   } else if (OS && pcList.length && wantStreet) {
     const osCands = await osStreetAddresses(OS, pcList, wantStreet, area);
-    if (osCands.length === 1) { source = 'Royal Mail / OS Places'; candidates = osCands; confirmed = true; }
+    // A single match is the exact address; with the enriched full postcode we
+    // also surface multiple real addresses on the street for a one-tap confirm.
+    if (osCands.length) { source = 'Royal Mail / OS Places'; candidates = osCands; confirmed = osCands.length === 1; }
   }
 
   sendJson(res, 200, {
     confirmed, source: source || null, street: wantStreet || null,
     epcMatch: source === 'EPC register',
     sizeMatched: !!(epc && epc.sizeMatched),
+    enriched, postcode: postcodeIn || null,
     total: candidates.length, candidates: candidates.slice(0, 60),
     note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
   });

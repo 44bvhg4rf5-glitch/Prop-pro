@@ -637,6 +637,8 @@ async function fetchDistrictListings(code, channel){
     // otherwise the legacy HA-district path.
     const meta = (typeof locMeta!=='undefined') ? locMeta[code] : null;
     const params = meta ? { location: meta.identifier, label: meta.label, channel } : { district: code, channel };
+    if(document.getElementById('f-deep')?.checked) params.pages='8';
+    if(document.getElementById('f-sstc')?.checked) params.includeSSTC='1';
     const r = await fetch('/api/listings?'+new URLSearchParams(params).toString());
     if(!r.ok) return [];
     const d = await r.json();
@@ -1317,6 +1319,8 @@ async function runLiveSearch(){
       if (minBeds > 0)   qs.set('minBeds', String(minBeds));
       if (maxPriceV > 0) qs.set('maxPrice', String(maxPriceV));
       if (minPriceV > 0) qs.set('minPrice', String(minPriceV));
+      if (document.getElementById('f-deep')?.checked) qs.set('pages', '12');
+      if (document.getElementById('f-sstc')?.checked) qs.set('includeSSTC', '1');
       const r = await fetch('/api/listings?' + qs.toString());
       if (!r.ok) throw new Error('listings endpoint ' + r.status);
       const d = await r.json();
@@ -1761,6 +1765,10 @@ async function epcLookup(p, retries=1){
     if(p.lat!=null && p.lon!=null){ qs.set('lat', p.lat); qs.set('lon', p.lon); }
     if(p.sizeSqft>0) qs.set('size', p.sizeSqft);
     if(p.description) qs.set('hint', String(p.description).slice(0,300));
+    // Pass the Rightmove listing URL so the resolver can fetch the full postcode
+    // from the property page when we only have the outcode — big accuracy boost.
+    const rmu = p.rmUrl||p.portalUrl||p.url||'';
+    if(/rightmove\.co\.uk/i.test(rmu) && !/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('url', rmu);
     // Unified resolver: EPC pinpoint + OS Places rescue (Royal Mail full coverage).
     const r = await fetch('/api/resolve?'+qs.toString());
     if(!r.ok) return retries>0 ? epcLookup(p, retries-1) : null;
