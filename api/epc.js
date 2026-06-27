@@ -1,7 +1,25 @@
 import { EPC_BASE, fetchJson, reverseGeocode, FULL_POSTCODE, sendJson, guardOrigin } from '../lib/helpers.js';
+import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 
 const SQFT_PER_M2 = 10.7639;
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// EPC register lookup for one postcode, CACHED in KV. Every flat in a block (and
+// every home on a street) shares a postcode, so a whole search hits the register
+// once per postcode instead of once per listing — far fewer calls, no rate-limit
+// failures, and instant on repeat searches. Retries once on a 429.
+async function epcByPostcode(pc, KEY) {
+  const ck = 'epc:' + pc.toUpperCase().replace(/\s+/g, '');
+  if (storeConfigured()) { const c = await getJSON(ck, null); if (c) return { data: c }; }
+  const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
+  let { status, json } = await fetchJson(url, KEY);
+  if (status === 429) { await sleep(700); ({ status, json } = await fetchJson(url, KEY)); }
+  if (status === 401 || status === 403) return { error: status };
+  const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
+  if (storeConfigured() && data.length) await setJSON(ck, data).catch(() => {});
+  return { data };
+}
 
 // The road name from a Rightmove address ("12 Hindes Road, Harrow, HA1" → "hindes road").
 function streetOf(s) {
@@ -41,10 +59,8 @@ export async function epcResolve({ postcodeIn = '', street = '', rmType = '', li
     // Use the nearest postcode that actually contains the listing's street.
     let rows = [];
     for (const pc of pcList) {
-      const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
-      const { status, json } = await fetchJson(url, EPC_API_KEY);
-      if (status === 401 || status === 403) { return { error: 'EPC register rejected the key (HTTP ' + status + '). Check EPC_API_KEY.', status: 502 }; }
-      const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
+      const { data, error } = await epcByPostcode(pc, EPC_API_KEY);
+      if (error === 401 || error === 403) { return { error: 'EPC register rejected the key (HTTP ' + error + '). Check EPC_API_KEY.', status: 502 }; }
       if (!wantStreet) { rows = data; break; }
       if (data.some(onStreet)) { rows = data; break; }
     }

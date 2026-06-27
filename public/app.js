@@ -2112,7 +2112,7 @@ function renderLiveResults(){
         // Address line — THE key data
         +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">'
           +(isReal?'<span style="background:rgba(5,150,105,.12);color:#059669;font-size:9px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">● LIVE</span>':'')
-          +'<span id="addr-'+i+'" style="font-size:14px;font-weight:700;color:var(--text)">'+(p.displayAddress||p.address||'Address on Rightmove')+'</span>'
+          +'<span id="addr-'+i+'" style="font-size:14px;font-weight:700;color:var(--text)">'+esc((p.addressConfirmed||p.addressLikely)?(p.fullAddress||p.displayAddress):(p.block?p.block.address:(p.displayAddress||p.address||'Address on Rightmove')))+'</span>'
         +'</div>'
         +'<div id="pick-'+i+'" style="display:none;margin-bottom:8px"></div>'
         // Postcode + meta

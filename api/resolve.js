@@ -316,7 +316,8 @@ export default async function handler(req, res) {
       // than a unit, but all genuine, mailable owner addresses (street farming).
       u = candidates;
       blockLevel = 'street';
-      building = { name: tcAddr(wantStreet), address: (postcodeIn || (candidates[0] && candidates[0].postcode) || ''), unitCount: u.length };
+      const pc = postcodeIn || (candidates[0] && candidates[0].postcode) || '';
+      building = { name: tcAddr(wantStreet), address: [tcAddr(wantStreet), pc].filter(Boolean).join(', '), unitCount: u.length };
     }
     if (u.length) { buildingResolved = true; units = u.map((c) => c.fullAddress); }
   }
