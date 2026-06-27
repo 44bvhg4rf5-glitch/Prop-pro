@@ -500,9 +500,46 @@ function applyOwnerToData(a,name){
   }catch{}
 }
 
+/* ── Company letterhead, footer & signature (configurable branding) ── */
+const BRAND_DEFAULTS = { companyName:'', tagline:'', brandColor:'#1d4ed8', signatoryName:'', signatoryTitle:'', contactAddress:'', phone:'', email:'', footerText:'', website:'', signatureImg:'', logoImg:'' };
+function getBrand(){ try { return { ...BRAND_DEFAULTS, ...(JSON.parse(localStorage.getItem('pmBrand')||'{}')) }; } catch { return { ...BRAND_DEFAULTS }; } }
+function saveBrand(b){ try { localStorage.setItem('pmBrand', JSON.stringify(b)); return true; } catch(e){ toast('Could not save — the image may be too large. Try a smaller file.', 'err'); return false; } }
+
+// Wrap an already-built letter (placeholders resolved) in the company letterhead,
+// signature block and footer, as a print-ready A4 page. Used for every print path.
+function renderLetterHTML(builtText, prop){
+  const b = getBrand();
+  const e = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Letterhead: logo image if uploaded, else the company name in the brand colour.
+  let head = '';
+  if (b.logoImg) head = '<img class="lh-logo" src="' + b.logoImg + '" alt="">';
+  else if (b.companyName) head = '<div class="lh-name" style="color:' + (b.brandColor||'#1d4ed8') + '">' + e(b.companyName) + '</div>';
+  if (b.tagline) head += '<div class="lh-tag" style="color:' + (b.brandColor||'#1d4ed8') + '">' + e(b.tagline) + '</div>';
+  // Signature block (image + signatory details).
+  const sigLines = [ b.signatoryName ? '<strong>' + e(b.signatoryName) + '</strong>' : '', e(b.signatoryTitle), e(b.companyName), e(b.contactAddress), e(b.phone), e(b.email) ].filter(Boolean).join('<br>');
+  const sigBlock = '<div class="lh-sign">' + (b.signatureImg ? '<img class="lh-sigimg" src="' + b.signatureImg + '" alt="">' : '') + (sigLines ? '<div class="lh-sig-lines">' + sigLines + '</div>' : '') + '</div>';
+  // Clean the body: drop unfilled [bracket placeholders] and any leftover blank/punctuation lines.
+  let text = String(builtText||'').replace(/\{\{signature\}\}/g, 'SIG')
+    .replace(/\[[^\]\n]{0,40}\]/g, '')
+    .replace(/^[ \t|·•\-]+$/gm, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n');
+  let bodyHtml;
+  if (text.includes('SIG')) {
+    const [before, after] = text.split('SIG');
+    bodyHtml = '<div class="lh-body">' + e(before.trim()) + '</div>' + sigBlock + (after && after.trim() ? '<div class="lh-body">' + e(after.trim()) + '</div>' : '');
+  } else {
+    bodyHtml = '<div class="lh-body">' + e(text.trim()) + '</div>' + sigBlock;
+  }
+  const footer = (b.footerText || b.website)
+    ? '<div class="lh-foot"><div class="lh-foot-text">' + e(b.footerText) + '</div>' + (b.website ? '<div class="lh-foot-web">' + e(b.website) + '</div>' : '') + '</div>'
+    : '';
+  return '<div class="letter-page"><div class="lh-head">' + head + '</div>' + bodyHtml + footer + '</div>';
+}
+
 function doPrint(content){
   const pa=document.getElementById('pa');
-  pa.innerHTML=`<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:36px 54px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111">${content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+  pa.innerHTML=renderLetterHTML(content, {});
   pa.style.display='block'; window.print(); pa.style.display='none';
 }
 
@@ -767,8 +804,8 @@ function newTpl(){
 }
 function prevTpl(){
   const body=(document.getElementById('tedit')||{}).value||'';
-  const mock={address:'14 Station Road, Harrow, HA1 2SB',district:'Harrow',haCode:'HA1',portal:'Rightmove',price:450000,beds:3,type:'Semi-Detached',status:'For Sale'};
-  const pc=document.getElementById('prev-content'); if(pc) pc.textContent=buildLetter(body,mock);
+  const mock={address:'The Legal Owner\nFlat 1\nHillrise Court\n135 Kenton Road\nHARROW\nHA3 0AZ',district:'Harrow',haCode:'HA3',portal:'Rightmove',price:450000,beds:3,type:'Semi-Detached',status:'For Sale'};
+  const pc=document.getElementById('prev-content'); if(pc) pc.innerHTML=renderLetterHTML(buildLetter(body,mock),mock);
   const pa=document.getElementById('prev-area'); if(pa){pa.style.display='block';pa.scrollIntoView({behavior:'smooth'});}
 }
 function prevForProp(i){
@@ -777,9 +814,48 @@ function prevForProp(i){
   const tpl=[...templates,...uploadedTpls].find(t=>t.id===tId)||templates[0];
   showPanel('templates');
   setTimeout(()=>{
-    const pc=document.getElementById('prev-content'); if(pc) pc.textContent=buildLetter(tpl.body,p);
+    const pc=document.getElementById('prev-content'); if(pc) pc.innerHTML=renderLetterHTML(buildLetter(tpl.body,p),p);
     const pa=document.getElementById('prev-area'); if(pa){pa.style.display='block';pa.scrollIntoView({behavior:'smooth'});}
   },80);
+}
+
+/* ── Branding form (Letter Templates panel) ── */
+function loadBrandForm(){
+  const b=getBrand(); const set=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||'';};
+  set('br-name',b.companyName); set('br-tag',b.tagline); set('br-signame',b.signatoryName); set('br-sigtitle',b.signatoryTitle);
+  set('br-addr',b.contactAddress); set('br-phone',b.phone); set('br-email',b.email); set('br-footer',b.footerText); set('br-web',b.website);
+  const col=document.getElementById('br-color'); if(col) col.value=b.brandColor||'#1d4ed8';
+  const sp=document.getElementById('br-sig-prev'); if(sp) sp.innerHTML=b.signatureImg?'<img src="'+b.signatureImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No signature yet</span>';
+  const lp=document.getElementById('br-logo-prev'); if(lp) lp.innerHTML=b.logoImg?'<img src="'+b.logoImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No logo — company name is used</span>';
+  renderBrandPreview();
+}
+function saveBrandFromForm(){
+  const b=getBrand(); const g=id=>(document.getElementById(id)||{}).value||'';
+  b.companyName=g('br-name').trim(); b.tagline=g('br-tag').trim(); b.brandColor=g('br-color')||'#1d4ed8';
+  b.signatoryName=g('br-signame').trim(); b.signatoryTitle=g('br-sigtitle').trim(); b.contactAddress=g('br-addr').trim();
+  b.phone=g('br-phone').trim(); b.email=g('br-email').trim(); b.footerText=g('br-footer').trim(); b.website=g('br-web').trim();
+  if(saveBrand(b)) toast('Letterhead saved — it’s now on every letter','ok');
+  renderBrandPreview();
+}
+function brandImg(input,key){
+  const f=input.files&&input.files[0]; if(!f) return;
+  if(f.size>6*1024*1024){ toast('That image is large — please use one under 6MB','warn'); return; }
+  const r=new FileReader();
+  r.onload=()=>{ const img=new Image(); img.onload=()=>{
+    const max = key==='logoImg'?440:380; const scale=Math.min(1, max/(img.width||max));
+    const w=Math.max(1,Math.round((img.width||max)*scale)), h=Math.max(1,Math.round((img.height||100)*scale));
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+    const data=c.toDataURL('image/png');
+    const b=getBrand(); b[key]=data; if(saveBrand(b)){ loadBrandForm(); toast((key==='logoImg'?'Logo':'Signature')+' uploaded','ok'); }
+  }; img.onerror=()=>toast('Could not read that image','err'); img.src=r.result; };
+  r.readAsDataURL(f);
+}
+function clearBrandImg(key){ const b=getBrand(); b[key]=''; saveBrand(b); loadBrandForm(); }
+function renderBrandPreview(){
+  const el=document.getElementById('br-preview'); if(!el) return;
+  const mock={address:'The Legal Owner\nFlat 1\nHillrise Court\n135 Kenton Road\nHARROW\nHA3 0AZ',district:'Harrow',haCode:'HA3'};
+  const sample='{{address}}\n\nDear Homeowner,\n\nI wanted to get in touch to see if your property is currently let. If it is, I’d be interested to hear whether you’re receiving the level of service and communication you should expect from your agent.\n\nWith the lettings market busier than ever, it has never been more important to choose an agent you trust — one that is experienced, proactive and local.\n\nI’d love to talk about how we can help. Please give me a call or pop into our office.\n\nKind regards,';
+  el.innerHTML=renderLetterHTML(buildLetter(sample,mock),mock);
 }
 function insV(v){const ta=document.getElementById('tedit');if(!ta)return;const s=ta.selectionStart;ta.value=ta.value.slice(0,s)+v+ta.value.slice(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+v.length;ta.focus();}
 function wrapT(b,a){const ta=document.getElementById('tedit');if(!ta)return;const s=ta.selectionStart,e=ta.selectionEnd;ta.value=ta.value.slice(0,s)+b+(ta.value.slice(s,e)||'text')+a+ta.value.slice(e);ta.focus();}
@@ -988,7 +1064,7 @@ function printSuccessLetters(){
     const letter=buildSLLetter(slActiveLetter.body,a);
     const pa=document.getElementById('pa');
     if(!pa)return;
-    pa.innerHTML=`<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:38px 56px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111;page-break-after:always">${letter.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+    pa.innerHTML=renderLetterHTML(letter, a);
     pa.style.display='block';
     window.print();
     pa.style.display='none';
@@ -999,10 +1075,7 @@ function printSuccessLetters(){
   if(selected.length>1){
     const pa=document.getElementById('pa');
     if(pa){
-      pa.innerHTML=selected.map(a=>{
-        const letter=buildSLLetter(slActiveLetter.body,a);
-        return`<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:38px 56px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111;page-break-after:always">${letter.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
-      }).join('');
+      pa.innerHTML=selected.map(a=>renderLetterHTML(buildSLLetter(slActiveLetter.body,a), a)).join('');
       pa.style.display='block';
       window.print();
       pa.style.display='none';
@@ -2381,8 +2454,7 @@ async function printAllDue(){
     // fall through to browser print if PrintNode failed
   }
   const pa=document.getElementById('pa'); if(!pa) return 0;
-  pa.innerHTML=pend.map(i=>{ const it=queue[i]; const content=buildLetter(it.tpl?.body||'', it.prop||{});
-    return '<div style="font-family:Georgia,serif;font-size:13pt;line-height:1.85;padding:36px 54px;max-width:720px;margin:0 auto;white-space:pre-wrap;color:#111;page-break-after:always">'+content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'; }).join('');
+  pa.innerHTML=pend.map(i=>{ const it=queue[i]; return renderLetterHTML(buildLetter(it.tpl?.body||'', it.prop||{}), it.prop||{}); }).join('');
   pa.style.display='block'; window.print(); pa.style.display='none';
   pend.forEach(i=>{ queue[i].status='done'; });
   renderQueue(); if(typeof updQStats==='function') updQStats(); logLetterPrinted(pend.length);
@@ -2637,7 +2709,7 @@ function showPanel(n){
   if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
   if (n === 'schedule')  { loadContacts(); loadGroups(); loadPrintSchedule(); runDueSequences(true); renderSchedule(); }
   if (n === 'ha')        loadTargeting();
-  if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); }
+  if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); loadBrandForm(); }
   if (n === 'queue')     renderQueue();
   if (n === 'blocked')   { loadBlocklist().then(renderBlockedPanel); renderBlockedPanel(); }
   if (n === 'leads')     loadLeads();

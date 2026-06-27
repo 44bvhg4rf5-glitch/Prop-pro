@@ -498,6 +498,32 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 
 /* ── MISC ── */
 #pa{display:none}
+/* ── Letterhead letter page (screen preview + print) ── */
+.letter-page{background:#fff;width:100%;max-width:760px;margin:0 auto;padding:40px 50px 30px;font-family:'Georgia','Times New Roman',serif;font-size:13px;line-height:1.7;color:#111;box-sizing:border-box;display:flex;flex-direction:column;min-height:560px}
+.lh-head{margin-bottom:34px}
+.lh-logo{max-height:74px;max-width:360px;display:block}
+.lh-name{font-size:25px;font-weight:700;letter-spacing:-.3px;line-height:1.1}
+.lh-tag{font-size:12px;font-weight:600;margin-top:3px}
+.lh-body{white-space:pre-wrap}
+.lh-sign{margin-top:14px}
+.lh-sigimg{max-height:58px;display:block;margin-bottom:3px}
+.lh-sig-lines{line-height:1.5}
+.lh-foot{margin-top:auto;padding-top:26px;border-top:1px solid #e2e2e2;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;font-size:9px;color:#888}
+.lh-foot-text{max-width:70%;line-height:1.5}
+.lh-foot-web{white-space:nowrap;font-weight:600}
+/* ── Branding editor ── */
+.brand-grid{display:grid;grid-template-columns:1fr 360px;gap:22px;align-items:start}
+.br-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.brand-fields label.perf-lbl{margin-top:10px}
+.brand-preview-wrap{position:sticky;top:10px}
+.brand-preview{background:var(--slate);border:1px solid var(--border);border-radius:var(--r2);padding:12px;overflow:hidden}
+.brand-preview .letter-page{transform:scale(.92);transform-origin:top center;min-height:420px;padding:26px 30px 18px;box-shadow:0 2px 12px rgba(0,0,0,.1)}
+@media(max-width:900px){.brand-grid{grid-template-columns:1fr}.brand-preview-wrap{position:static}}
+@media print{
+  @page{size:A4;margin:0}
+  .letter-page{width:210mm;min-height:297mm;max-width:none;margin:0;padding:24mm 22mm 16mm;font-size:12.5pt;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .lh-foot{font-size:8pt}
+}
 .info-box{background:rgba(37,99,235,.05);border:1px solid rgba(37,99,235,.12);border-radius:var(--r2);padding:10px 13px;font-size:12px;color:var(--blue);display:flex;align-items:flex-start;gap:8px}
 /* ── INVESTOR DASHBOARD ── */
 .inv-hero{background:linear-gradient(135deg,#0A0F1E 0%,#1a2744 40%,#0d1f3c 100%);border-radius:var(--r);padding:28px 30px;color:#fff;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
