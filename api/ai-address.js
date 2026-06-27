@@ -106,8 +106,10 @@ TASK: Decide which single full address this listing most likely is.
 Reply with ONLY this JSON:
 {"fullAddress":"<best full address incl. postcode, or empty string if truly unsure>","houseNumber":"<just the number, e.g. 92>","confidence":"high|medium|low","reasoning":"<one or two sentences citing the specific evidence>","inRegister":true|false,"inLandRegistry":true|false}`;
 
-  const searchCapable = ['anthropic', 'gemini'].includes(provider());
-  const r = await runLLM({ system: sys, user: prompt, maxTokens: 700, search: searchCapable, timeoutMs: 40000 });
+  // Always ASK for web research: runLLM routes to a search-capable provider
+  // (Gemini) when one is configured, and otherwise falls back to Groq (which
+  // answers from the supplied evidence). So both keys work together here.
+  const r = await runLLM({ system: sys, user: prompt, maxTokens: 700, search: true, timeoutMs: 40000 });
   if (r.error) { sendJson(res, 502, { error: 'AI lookup failed: ' + r.error }); return; }
 
   const ai = extractJson(r.text) || {};
@@ -138,8 +140,8 @@ Reply with ONLY this JSON:
     evidence: {
       usedDescription: !!(listing && listing.description),
       landRegistryCount: sold.length,
-      searchEnabled: searchCapable,
-      provider: provider(),
+      searchEnabled: !!r.searched,   // did the answering provider actually browse the web
+      provider: r.provider || provider(),
     },
   });
 }
