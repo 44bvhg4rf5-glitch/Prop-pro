@@ -112,18 +112,23 @@ function scoreEvidence(cands, { listingSqft, pin, isFlat }) {
   const reasons = [];
   let confidence = 'low';
   if (top) {
-    if (haveSize && top.sizeSqft) reasons.push(`Floor area ${fmtN(top.sizeSqft)} sq ft vs listing ${fmtN(listingSqft)} (closest of ${cands.length})`);
-    if (havePin && top._distM != null) reasons.push(`${top._distM} m from the listing's map pin (nearest of ${cands.length})`);
+    const multiFlat = isFlat && cands.length > 1;
+    if (!multiFlat && haveSize && top.sizeSqft) reasons.push(`Floor area ${fmtN(top.sizeSqft)} sq ft vs listing ${fmtN(listingSqft)} (closest of ${cands.length})`);
+    if (!multiFlat && havePin && top._distM != null) reasons.push(`${top._distM} m from the listing's map pin (nearest of ${cands.length})`);
     if (cands.length === 1) { reasons.push('The only address of this type on this postcode'); confidence = 'high'; }
-    else {
+    else if (isFlat) {
+      // Flats in a block are near-identical in size and the listing never says
+      // which flat — so no signal can pick one. Always leave it to the user.
+      confidence = 'low';
+      reasons.push('Several flats here look alike — pick the right one or read the flat number on the listing');
+    } else {
       const gap = (top._score || 0) - (second ? (second._score || 0) : 0);
       const sizeClose = haveSize && top.sizeSqft && Math.abs(top.sizeSqft - listingSqft) / Math.max(listingSqft, 1) <= 0.12;
       const pinClose = havePin && top._distM != null && top._distM <= 40;
       const signals = (sizeClose ? 1 : 0) + (pinClose ? 1 : 0);
       // House + two independent signals agreeing on a clear winner = high.
-      if (!isFlat && signals >= 2 && gap >= 0.18) confidence = 'high';
-      else if (!isFlat && signals >= 1 && gap >= 0.2) confidence = 'medium';
-      else if (signals >= 1) confidence = 'medium';
+      if (signals >= 2 && gap >= 0.18) confidence = 'high';
+      else if (signals >= 1 && gap >= 0.12) confidence = 'medium';
       else confidence = 'low';
     }
   }
