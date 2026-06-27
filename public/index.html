@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260626-gemini">
+  <link rel="stylesheet" href="styles.css?v=20260626-letterhead">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -712,6 +712,51 @@
     <button class="btn bp" onclick="newTpl()">+ New Template</button>
   </div>
   <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EEF4FF"><i class=ic-pencil></i></div>Company letterhead &amp; signature</div>
+    <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">This appears on every letter you print — your name at the top, your details &amp; signature at the bottom. Fill it in once.</div>
+    <div class="brand-grid">
+      <div class="brand-fields">
+        <div class="br-row2">
+          <div><label class="perf-lbl">Company name</label><input id="br-name" placeholder="e.g. Colin Dean Residential"></div>
+          <div><label class="perf-lbl">Brand colour</label><input type="color" id="br-color" value="#1d4ed8" style="height:38px;padding:3px"></div>
+        </div>
+        <label class="perf-lbl">Tagline (optional)</label><input id="br-tag" placeholder="e.g. in partnership with Dexters">
+        <div class="br-row2">
+          <div><label class="perf-lbl">Your name</label><input id="br-signame" placeholder="e.g. Daniel Murray"></div>
+          <div><label class="perf-lbl">Your title</label><input id="br-sigtitle" placeholder="e.g. Director"></div>
+        </div>
+        <label class="perf-lbl">Office address line</label><input id="br-addr" placeholder="e.g. 350 Pinner Road, North Harrow, HA1 4LB">
+        <div class="br-row2">
+          <div><label class="perf-lbl">Phone</label><input id="br-phone" placeholder="020 8515 7929"></div>
+          <div><label class="perf-lbl">Email</label><input id="br-email" placeholder="you@agency.com"></div>
+        </div>
+        <label class="perf-lbl">Footer line (regulatory / company info)</label><input id="br-footer" placeholder="e.g. Colin Dean Residential is a trading name of…">
+        <label class="perf-lbl">Website (footer, right)</label><input id="br-web" placeholder="colindean.com">
+        <div class="br-row2" style="margin-top:12px">
+          <div>
+            <label class="perf-lbl">Your signature (image)</label>
+            <div id="br-sig-prev" style="min-height:30px;margin-bottom:6px"></div>
+            <input type="file" accept="image/*" id="br-sig-file" style="display:none" onchange="brandImg(this,'signatureImg')">
+            <button class="btn bs sm-btn" onclick="document.getElementById('br-sig-file').click()"><i class=ic-upload></i> Upload signature</button>
+            <button class="btn bghost sm-btn" onclick="clearBrandImg('signatureImg')">Remove</button>
+          </div>
+          <div>
+            <label class="perf-lbl">Logo (optional — replaces name)</label>
+            <div id="br-logo-prev" style="min-height:30px;margin-bottom:6px"></div>
+            <input type="file" accept="image/*" id="br-logo-file" style="display:none" onchange="brandImg(this,'logoImg')">
+            <button class="btn bs sm-btn" onclick="document.getElementById('br-logo-file').click()"><i class=ic-upload></i> Upload logo</button>
+            <button class="btn bghost sm-btn" onclick="clearBrandImg('logoImg')">Remove</button>
+          </div>
+        </div>
+        <div class="fr" style="margin-top:14px"><button class="btn bp sm-btn" onclick="saveBrandFromForm()"><i class=ic-save></i> Save letterhead</button></div>
+      </div>
+      <div class="brand-preview-wrap">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Live preview</div>
+        <div id="br-preview" class="brand-preview"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
     <div class="ct"><div class="ct-icon" style="background:#EEF4FF"><i class=ic-folder></i>️</div>Letter Cycles (folders)</div>
     <div style="font-size:12px;color:var(--muted);margin:2px 0 14px">Group your templates into named cycles — e.g. a <strong>Rentals</strong> cycle of up to 6 letters over up to 60 days. When a property is put on a cycle (after printing), each letter is queued automatically on its day.</div>
     <div id="groups-mgr"></div>
@@ -752,6 +797,7 @@
         <button class="vt" onclick="insV('{{type}}')">{{type}}</button>
         <button class="vt" onclick="insV('{{district}}')">{{district}}</button>
         <button class="vt" onclick="insV('{{postcode}}')">{{postcode}}</button>
+        <button class="vt" onclick="insV('{{signature}}')" title="Where your signature & details go (otherwise added at the end)">{{signature}}</button>
       </div>
       <textarea id="tedit" rows="14" style="font-family:'Georgia',serif;font-size:13px;line-height:1.75" placeholder="Write your letter here…"></textarea>
       <div class="fr" style="margin-top:10px">
@@ -1508,6 +1554,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260626-gemini"></script>
+<script src="app.js?v=20260626-letterhead"></script>
 </body>
 </html>
