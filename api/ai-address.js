@@ -72,7 +72,11 @@ export default async function handler(req, res) {
   // Assemble the candidate set the AI is allowed to choose from: register matches
   // ∪ real sold addresses. The AI must pick from these (or say "unsure") — it may
   // not invent a number, which is what keeps it honest.
-  const registerList = candIn.map((c) => ({ address: c.fullAddress, sqft: c.sizeSqft || null, metresFromPin: c.distM != null ? c.distM : null }));
+  const registerList = candIn.map((c) => ({
+    address: c.fullAddress, sqft: c.sizeSqft || null,
+    sqftGap: (c.sizeSqft && size) ? Math.abs(c.sizeSqft - size) : null,
+    metresFromPin: c.distM != null ? c.distM : null,
+  }));
   const soldList = sold.map((s) => `${s.paon} ${s.street}${s.lastSold ? ' (last sold ' + s.lastSold + ')' : ''}`);
 
   const sys = 'You are a UK property address verifier for an estate agency. Your job is to identify the EXACT full postal address (with house/flat number) of a specific Rightmove listing, working ONLY from the evidence given. You never invent a house number. If the evidence does not point clearly to one address, you say so and give your best estimate with low confidence. You reply with ONLY a JSON object, no prose.';
@@ -84,13 +88,20 @@ export default async function handler(req, res) {
 ${listing && listing.description ? '- Description: "' + listing.description + '"' : ''}
 ${listing && listing.keyFeatures && listing.keyFeatures.length ? '- Key features: ' + listing.keyFeatures.join('; ') : ''}
 
-CANDIDATE ADDRESSES from the energy-certificate register + map pin (floor area and distance from the listing's map pin shown):
-${registerList.length ? registerList.map((c, i) => `${i + 1}. ${c.address}${c.sqft ? ' — ' + c.sqft + ' sq ft' : ''}${c.metresFromPin != null ? ' — ' + c.metresFromPin + ' m from pin' : ''}`).join('\n') : '(none)'}
+CANDIDATE ADDRESSES from the energy-certificate register + map pin:
+${registerList.length ? registerList.map((c, i) => `${i + 1}. ${c.address}${c.sqft ? ' — ' + c.sqft + ' sq ft' + (c.sqftGap != null ? ' (' + c.sqftGap + ' sq ft from the listing — smaller is a better match)' : '') : ''}${c.metresFromPin != null ? ' — ' + c.metresFromPin + ' m from the pin' : ''}`).join('\n') : '(none)'}
 
 REAL ADDRESSES on this postcode from HM Land Registry sold-price records:
 ${soldList.length ? soldList.join('\n') : '(none found)'}
 
-TASK: Decide which single full address this listing most likely is. Cross-check the floor area, the distance from the map pin, the property type/beds, and any clue in the description (corner plot, private drive, a number mentioned, position on the street). Prefer an address that appears in BOTH the register list AND the Land Registry list. Do NOT output a house number that is not supported by the evidence above.
+HOW TO WEIGH THE EVIDENCE:
+- Floor area is the strongest signal for a house: the best match has the SMALLEST "sq ft from the listing" gap. Do not call a larger gap a better match.
+- The map pin is APPROXIMATE (often 10-30 m off), so treat small differences in "m from the pin" as a tie, not a decider.
+- Prefer an address that appears in BOTH the register list AND the Land Registry list.
+- Use description clues (corner plot, private drive, end-of-terrace, a number mentioned) to break ties.
+- Do NOT output a house number that is not supported by the evidence above.
+
+TASK: Decide which single full address this listing most likely is.
 
 Reply with ONLY this JSON:
 {"fullAddress":"<best full address incl. postcode, or empty string if truly unsure>","houseNumber":"<just the number, e.g. 92>","confidence":"high|medium|low","reasoning":"<one or two sentences citing the specific evidence>","inRegister":true|false,"inLandRegistry":true|false}`;
