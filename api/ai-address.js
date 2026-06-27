@@ -2,6 +2,7 @@ import https from 'https';
 import { readBody, sendJson, guardOrigin } from '../lib/helpers.js';
 import { runLLM, llmConfigured, extractJson, provider } from '../lib/llm.js';
 import { rightmoveProperty } from '../lib/sources.js';
+import { webSearch, searchConfigured } from '../lib/search.js';
 
 export const config = { maxDuration: 45 };
 
@@ -67,7 +68,15 @@ export default async function handler(req, res) {
   let listing = null;
   if (url) listing = await rightmoveProperty(url).catch(() => null);
   const postcode = (listing && listing.postcode) || (p.postcode || '').trim();
-  const sold = await landRegistryByPostcode(postcode);
+  // Independent sources, fetched in parallel: Land Registry sold addresses + a
+  // free live web search (Tavily/Brave) for the street — planning notices, agent
+  // pages and sold listings often name the exact house number.
+  const [sold, web] = await Promise.all([
+    landRegistryByPostcode(postcode),
+    searchConfigured()
+      ? webSearch(`${street} ${postcode} property for sale OR sold price OR planning application house number`, { maxResults: 5 }).catch(() => ({ answer: '', results: [] }))
+      : Promise.resolve({ answer: '', results: [] }),
+  ]);
 
   // Assemble the candidate set the AI is allowed to choose from: register matches
   // ∪ real sold addresses. The AI must pick from these (or say "unsure") — it may
@@ -93,6 +102,7 @@ ${registerList.length ? registerList.map((c, i) => `${i + 1}. ${c.address}${c.sq
 
 REAL ADDRESSES on this postcode from HM Land Registry sold-price records:
 ${soldList.length ? soldList.join('\n') : '(none found)'}
+${web.results.length ? '\nLIVE WEB SEARCH RESULTS (use ONLY a house number that is clearly tied to THIS street + postcode; ignore unrelated hits):\n' + web.results.map((r) => `- ${r.title}: ${r.content}`).join('\n') : ''}
 
 HOW TO WEIGH THE EVIDENCE:
 - Floor area is the strongest signal for a house: the best match has the SMALLEST "sq ft from the listing" gap. Do not call a larger gap a better match.
@@ -140,7 +150,8 @@ Reply with ONLY this JSON:
     evidence: {
       usedDescription: !!(listing && listing.description),
       landRegistryCount: sold.length,
-      searchEnabled: !!r.searched,   // did the answering provider actually browse the web
+      webResults: web.results.length,                       // free web-search hits fed to the AI
+      searchEnabled: !!r.searched || web.results.length > 0, // live web data was available
       provider: r.provider || provider(),
     },
   });

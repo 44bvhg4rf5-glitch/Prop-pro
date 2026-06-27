@@ -1929,6 +1929,7 @@ function renderAiCheck(i){
   if(d.ai&&d.ai.inRegister) tags.push('in EPC register');
   if(d.evidence&&d.evidence.usedDescription) tags.push('read the listing text');
   if(d.evidence&&d.evidence.landRegistryCount) tags.push(d.evidence.landRegistryCount+' sold records');
+  if(d.evidence&&d.evidence.webResults) tags.push('checked the web ('+d.evidence.webResults+')');
   out.innerHTML='<div style="background:'+st.bg+';border-radius:7px;padding:9px 11px">'
     +'<div style="font-size:10px;font-weight:800;letter-spacing:.5px;color:'+st.c+'"><i class='+st.ic+'></i> AI CROSS-CHECK · '+esc((d.headline||'').toUpperCase())+'</div>'
     +(aiAddr?'<div style="font-size:13px;font-weight:700;color:var(--text);margin-top:5px">'+esc(aiAddr)+'</div>':'')
