@@ -7,6 +7,7 @@ import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 export const config = { maxDuration: 30 };
 
 const _memPage = new Map(); // per-instance cache of listing-page data (no setup needed)
+const _memPcAll = new Map(); // per-instance cache of exact-postcode address lists
 
 // Resolve a live listing to a confirmed full address. Strategy:
 //   1. EPC pinpoint — when the home has a certificate, floor-area matching nails
@@ -184,6 +185,8 @@ async function osPostcodeAll(OS, postcode) {
 async function epcPostcodeAll(postcode) {
   const KEY = process.env.EPC_API_KEY || '';
   if (!KEY) return [];
+  const mk = 'pcall:' + postcode.toUpperCase().replace(/\s+/g, '');
+  if (_memPcAll.has(mk)) return _memPcAll.get(mk);
   try {
     const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(postcode).replace(/%20/g, '+')}&page_size=500`;
     const { status, json } = await fetchJson(url, KEY);
@@ -196,8 +199,28 @@ async function epcPostcodeAll(postcode) {
       const key = full.toLowerCase();
       if (full && !seen.has(key)) seen.set(key, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: pc, uprn: r.uprn ? String(r.uprn) : '' });
     });
-    return [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+    const out = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+    _memPcAll.set(mk, out); if (_memPcAll.size > 2000) _memPcAll.clear();
+    return out;
   } catch { return []; }
+}
+
+// The building name shared by a postcode's flats ("Flat 6, Apex House, 57…" →
+// "Apex House"), so an exact-postcode block can be labelled as the real building.
+function commonBuilding(units) {
+  const counts = new Map();
+  for (const u of units) {
+    const segs = (u.fullAddress || '').split(',').map((s) => s.trim());
+    for (const s of segs) {
+      const seg = s.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+\s*/i, '').trim();
+      if (BLD_WORD.test(seg) && !/^\d/.test(seg) && !ROAD_WORD.test(seg.split(/\s+/).slice(-1)[0])) {
+        counts.set(seg, (counts.get(seg) || 0) + 1);
+      }
+    }
+  }
+  let best = '', n = 0;
+  for (const [k, v] of counts) if (v > n) { best = k; n = v; }
+  return n >= Math.max(2, units.length * 0.4) ? best : '';
 }
 
 export default async function handler(req, res) {
@@ -305,18 +328,34 @@ export default async function handler(req, res) {
   // A house we could pinpoint by floor area + map pin needs no pooling.
   const housePinpointed = !isFlat && (evidence.confidence === 'high' || evidence.confidence === 'medium');
   let buildingResolved = false, building = null, units = [], blockLevel = null;
-  if (!housePinpointed && candidates.length) {
+
+  // Exact-postcode block (PRECISE): once enrichment gives the listing's full
+  // postcode, that postcode is almost always one building or a short block — far
+  // tighter than the whole street. This is the main lever for precise coverage.
+  let pcUnits = [];
+  if (!housePinpointed && FULL_POSTCODE.test(postcodeIn)) {
+    pcUnits = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' ')).catch(() => []);
+  }
+
+  if (!housePinpointed && pcUnits.length) {
+    const cb = isFlat ? (buildingNameOf(streetIn) || commonBuilding(pcUnits)) : '';
+    units = pcUnits.map((c) => c.fullAddress);
+    blockLevel = (isFlat || cb) ? 'building' : 'postcode'; // exact postcode of flats = the building
+    const label = cb ? tcAddr(cb) : (wantStreet ? tcAddr(wantStreet) : postcodeIn);
+    const src = cb ? (pcUnits.find((x) => norm(x.fullAddress).includes(norm(cb))) || pcUnits[0]) : pcUnits[0];
+    const addr = cb ? src.fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '') : [label, postcodeIn].filter(Boolean).join(', ');
+    building = { name: label, address: addr, unitCount: units.length, postcode: postcodeIn };
+    buildingResolved = true;
+  } else if (!housePinpointed && candidates.length) {
     const bn = isFlat ? (buildingNameOf(streetIn) || buildingNameOf(hint)) : '';
     let u = [];
     if (bn) u = candidates.filter((c) => norm(c.fullAddress).includes(norm(bn)));
     if (u.length) {
-      // Named block — the tight, premium result ("Apex House" → its flats).
       blockLevel = 'building';
       const first = u[0].fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
       building = { name: tcAddr(bn), address: first, unitCount: u.length };
     } else if (wantStreet) {
-      // Street-level: every real home on the listing's street/postcode. Looser
-      // than a unit, but all genuine, mailable owner addresses (street farming).
+      // Street-level fallback (no exact postcode): real homes on the street.
       u = candidates;
       blockLevel = 'street';
       const pc = postcodeIn || (candidates[0] && candidates[0].postcode) || '';
