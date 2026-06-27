@@ -48,18 +48,26 @@ function distM(a, b) {
 // UPRN → exact lat/lon via OS Places. Gives each candidate a real coordinate so
 // we can rank by how close it is to the listing's own map pin — an independent
 // signal from floor area, so when both agree we can be confident.
-async function osUprnCoords(OS, uprns) {
-  const out = new Map();
-  await Promise.all([...new Set(uprns.filter(Boolean).map(String))].slice(0, 18).map(async (uprn) => {
-    const url = `https://api.os.uk/search/places/v1/uprn?uprn=${encodeURIComponent(uprn)}&dataset=DPA&output_srs=EPSG:4326&key=${encodeURIComponent(OS)}`;
-    const { status, json } = await osGet(url);
-    const dpa = status === 200 && json && Array.isArray(json.results) && json.results[0] && json.results[0].DPA;
-    if (dpa) {
-      const lat = parseFloat(dpa.LAT), lon = parseFloat(dpa.LNG);
-      if (!Number.isNaN(lat) && !Number.isNaN(lon)) out.set(uprn, { lat, lon });
-    }
-  }));
-  return out;
+const leadNum = (s) => ((String(s || '').trim().match(/^(\d+[a-z]?)/i) || [])[1] || '').toLowerCase();
+// Coordinates for the real addresses on a street, keyed by BOTH uprn and house
+// number, so we can attach a coordinate to each EPC candidate. The OS Places
+// `find` endpoint (free-text street search) returns DPA records with lat/lon and
+// is the OS endpoint that works on our plan.
+async function osStreetCoords(OS, query) {
+  const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(query)}&dataset=DPA&maxresults=100&output_srs=EPSG:4326&key=${encodeURIComponent(OS)}`;
+  const { status, json } = await osGet(url);
+  const byUprn = new Map(), byNum = new Map();
+  if (status === 200 && json && Array.isArray(json.results)) {
+    json.results.map((r) => r.DPA).filter(Boolean).forEach((d) => {
+      const lat = parseFloat(d.LAT), lon = parseFloat(d.LNG);
+      if (Number.isNaN(lat) || Number.isNaN(lon)) return;
+      const co = { lat, lon };
+      if (d.UPRN) byUprn.set(String(d.UPRN), co);
+      const num = (d.BUILDING_NUMBER || leadNum(d.ADDRESS)).toString().toLowerCase();
+      if (num && !byNum.has(num)) byNum.set(num, co);
+    });
+  }
+  return { status, count: byUprn.size, byUprn, byNum };
 }
 const fmtN = (n) => Number(n).toLocaleString();
 // Combine independent signals (floor area + distance to the map pin) into a
@@ -246,10 +254,16 @@ export default async function handler(req, res) {
   const pin = (!Number.isNaN(lat) && !Number.isNaN(lon)) ? { lat, lon } : null;
   const isFlat = /flat|apartment|maisonette|studio/i.test(rmType) || candidates.some((c) => /\bflat|apartment\b/i.test(c.line1 || ''));
   let evidence = { confidence: candidates.length === 1 ? 'high' : 'low', reasons: [], pinMatched: false };
+  let osDbg = null;
   if (candidates.length > 1) {
     if (OS && pin && !isFlat) {
-      const coords = await osUprnCoords(OS, candidates.map((c) => c.uprn));
-      candidates.forEach((c) => { const co = coords.get(String(c.uprn)); c._distM = co ? distM(pin, co) : null; });
+      const q = [wantStreet, (candidates[0] && candidates[0].postcode) || postcodeIn].filter(Boolean).join(' ');
+      const geo = await osStreetCoords(OS, q);
+      osDbg = { status: geo.status, coords: geo.count, query: q };
+      candidates.forEach((c) => {
+        const co = geo.byUprn.get(String(c.uprn)) || geo.byNum.get(leadNum(c.line1) || leadNum(c.fullAddress));
+        c._distM = co ? distM(pin, co) : null;
+      });
     }
     evidence = scoreEvidence(candidates, { listingSqft, pin, isFlat });
   } else if (candidates.length === 1) {
@@ -269,5 +283,6 @@ export default async function handler(req, res) {
     enriched, postcode: postcodeIn || null,
     total: candidates.length, candidates: out,
     note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
+    ...(u.searchParams.get('osdebug') ? { osDebug: osDbg } : {}),
   });
 }

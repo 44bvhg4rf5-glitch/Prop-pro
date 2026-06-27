@@ -6,5 +6,6 @@ export default function handler(req, res) {
     aiEnabled: llmConfigured(),
     aiProvider: provider() || null,
     epcEnabled: Boolean(process.env.EPC_API_KEY),
+    osEnabled: Boolean(process.env.OS_PLACES_KEY),
   });
 }
