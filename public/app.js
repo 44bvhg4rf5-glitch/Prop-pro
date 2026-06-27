@@ -1319,7 +1319,9 @@ async function runLiveSearch(){
       if (minBeds > 0)   qs.set('minBeds', String(minBeds));
       if (maxPriceV > 0) qs.set('maxPrice', String(maxPriceV));
       if (minPriceV > 0) qs.set('minPrice', String(minPriceV));
-      if (document.getElementById('f-deep')?.checked) qs.set('pages', '12');
+      // Deep coverage: a busy outcode can have 250-300 live listings (≈13 pages).
+      // Fetch wide by default so we never under-report what's live on Rightmove.
+      qs.set('pages', document.getElementById('f-deep')?.checked ? '42' : '15');
       if (document.getElementById('f-sstc')?.checked) qs.set('includeSSTC', '1');
       const r = await fetch('/api/listings?' + qs.toString());
       if (!r.ok) throw new Error('listings endpoint ' + r.status);
@@ -1380,76 +1382,50 @@ async function runLiveSearch(){
     props = props.filter(p => !isExcludedAgent(p));
     if (beforeAgents !== props.length) addLog(`Agent targeting: skipped ${beforeAgents - props.length} listing(s) from excluded agencies`);
 
-    // ── Auto-resolve exact EPC addresses, keep only matched listings ──
+    // ── Show EVERY live listing instantly (full coverage). ──
+    // We do NOT bulk-resolve addresses up front — that was slow and, worse, it
+    // silently dropped any listing whose exact house number couldn't be matched,
+    // so an outcode with 295 live homes showed only ~95. Instead we show all of
+    // them now and confirm the exact house number per-property, on demand, when
+    // the user is about to write to it. We NEVER guess a number: a listing that
+    // only publishes a street name stays "unconfirmed" until a human confirms it,
+    // so we can't post to 108 Crofts Road when the property is really 83.
     const found = props.length;
-    let done = 0, matchedCount = 0;
-    setStatus('Finding exact addresses…', `Checking the EPC register for ${found} propert${found===1?'y':'ies'}…`, 72, '…');
-    const results = await mapLimit(props, 5, async (p) => {
-      const r = await epcLookup(p);
-      done++;
-      if (r && r.candidates && r.candidates.length) matchedCount++;
-      setStatus('Finding exact addresses…', `Matched ${matchedCount} of ${found}…`, 72 + Math.round(done * (22 / found)), matchedCount);
-      return r;
-    });
-    const matched = [];
-    let unresolved = 0;
-    props.forEach((p, idx) => {
-      const r = results[idx] || {};
+    let confirmedCount = 0;
+    props.forEach((p) => {
       const orig = p.displayAddress || p.address || '';
-      const cands = Array.isArray(r.candidates) ? r.candidates : [];
-      // We only ever show a printable FULL address (with a house number).
+      p._origAddress = orig;
       if (hasHouseNumber(orig)) {
-        // The listing already publishes the house number — that's authoritative.
-        // Never overwrite it; just enrich the postcode from a matching candidate.
-        const num = (orig.split(',')[0].match(/\d+[a-z]?/i) || [''])[0].toLowerCase();
-        const match = num && cands.find(c => new RegExp('(^|\\D)' + num + '(\\D|$)', 'i').test(c.line1 || c.fullAddress || ''));
-        if (match) {
-          // Same house found in the address data — use its complete record.
-          p.address = match.fullAddress; p.displayAddress = match.fullAddress; p.fullAddress = match.fullAddress;
-          if (match.postcode) p.postcode = match.postcode;
-          if (match.uprn) p.uprn = match.uprn;
-        }
-        p.addressSource = match ? r.source : 'Listing';
+        // The listing itself publishes the house number — that's authoritative.
+        p.fullAddress = orig;
+        p.addressSource = 'Listing';
         p.addressConfirmed = true;
-        matched.push(p);
-      } else if (cands.length && (r.confirmed || r.epcMatch)) {
-        // No number on the listing — use the certified/confirmed full address.
-        const top = cands[0];
-        p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
-        if (top.postcode) p.postcode = top.postcode;
-        if (top.uprn) p.uprn = top.uprn;
-        p.addressSource = r.source;
-        p.addressConfirmed = !!r.confirmed;
-        p._candidates = cands;
-        p._epcResolved = true; p._epcTop = top;
-        p._epcMeta = { sizeMatched: r.sizeMatched, total: r.total };
-        matched.push(p);
+        confirmedCount++;
       } else {
-        unresolved++; // street-level only — no exact address, so not shown
+        // Street-level only. Do not guess — flag for one-tap confirmation.
+        p.fullAddress = '';
+        p.addressConfirmed = false;
       }
     });
-    if (unresolved) addLog(`${unresolved} listing(s) hide their exact house number — open them on Rightmove to read it (not shown, as there's no full address to print).`);
-    // Two listings must never resolve to the same house (one letter per address).
-    const seenAddr = new Set();
-    const deduped = matched.filter(p => { const k = (p.fullAddress||'').toLowerCase(); if(seenAddr.has(k)) return false; seenAddr.add(k); return true; });
-    props = deduped.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
+    props = props.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
     window._allResolved = props;   // master set for instant agent re-filtering
 
     document.getElementById('search-status').style.display = 'none';
     if (btn) { btn.disabled = false; btn.textContent = '<i class=ic-search></i> Find Live Properties'; }
     if (!props.length) {
       document.getElementById('results-area').style.display = 'block';
-      document.getElementById('results-title').textContent = 'No exact addresses found';
-      document.getElementById('results-sub').textContent = `${found} live listings, but none could be matched to an EPC address. Try other districts.`;
+      document.getElementById('results-title').textContent = 'No live listings found';
+      document.getElementById('results-sub').textContent = `No properties are currently live for that search. Try another district or widen the filters.`;
       document.getElementById('results-table').innerHTML =
         '<div style="text-align:center;padding:32px;color:var(--muted)"><div style="font-size:32px;margin-bottom:12px"><i class=ic-search></i></div>'
-        + '<div style="font-size:14px;font-weight:600">No EPC-matched addresses this time</div></div>';
-      blog(`Found ${found} listings, 0 matched to an EPC address`, 'warn');
+        + '<div style="font-size:14px;font-weight:600">Nothing live right now</div></div>';
+      blog(`Found 0 live listings`, 'warn');
       return;
     }
     renderLiveResults();
-    blog(`<i class=ic-check></i> ${props.length} of ${found} listings matched to an EPC address (closest by floor size)`, 'ok');
-    toast(`<i class=ic-check></i> ${props.length} properties matched to a full address`, 'ok');
+    const needConfirm = found - confirmedCount;
+    blog(`<i class=ic-check></i> ${found} live listings shown · ${confirmedCount} with a full address · ${needConfirm} need a one-tap address confirm before posting`, 'ok');
+    toast(`<i class=ic-check></i> ${found} live properties found`, 'ok');
     updateKPIs();
     return;
   }
@@ -1858,32 +1834,69 @@ function useEpcAddress(i,j){
   toast('Address updated — verify on the listing before posting','ok');
 }
 
-// ── Verify picker for OS-Places-rescued matches (real street addresses) ──
-function togglePick(i){
+// ── Confirm the exact house number for a street-level listing, on demand ──
+// We never guess. We pull the real candidate addresses on the listing's
+// street/postcode from the public registers, the user verifies against the
+// Rightmove listing, and either taps the exact house OR types the number they
+// read on the listing. Only then is the address "confirmed" and printable.
+async function confirmAddress(i){
+  const p=props[i]; if(!p) return;
   const box=document.getElementById('pick-'+i); if(!box) return;
-  if(box.style.display==='none'){ renderPickBox(i); box.style.display='block'; }
-  else box.style.display='none';
+  box.style.display='block';
+  box.innerHTML='<span style="font-size:12px;color:var(--muted)"><i class=ic-search></i> Finding the real addresses on this street…</span>';
+  let r=null;
+  try{ r=await epcLookup(p); }catch(e){ r=null; }
+  const cands=(r&&Array.isArray(r.candidates))?r.candidates:[];
+  p._candidates=cands;
+  p._resolveNote=(r&&r.note)||'';
+  renderConfirmBox(i);
 }
-function renderPickBox(i){
+function renderConfirmBox(i){
   const box=document.getElementById('pick-'+i); const p=props[i]; if(!box||!p) return;
-  const cands=p._candidates||[]; const chosen=p._pickChosen??0;
-  box.innerHTML='<div style="border:1px solid var(--border2);border-radius:8px;padding:9px 11px;background:#fff">'
-    +'<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">REAL ROYAL MAIL ADDRESSES ON THIS STREET — pick the exact house</div>'
-    + cands.slice(0,10).map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
-        +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'+(j===chosen?'✓ ':'')+c.fullAddress+'</span>'
-        +(j===chosen?'<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">USING</span>'
-           :'<button onclick="event.stopPropagation();useCandidate('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Use</button>')
-      +'</div>').join('')
-    + (cands.length>10?'<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(cands.length-10)+' more on this street</div>':'')
-    +'</div>';
+  const cands=p._candidates||[]; const chosen=p._pickChosen;
+  const rmLink=p.rmUrl||p.portalUrl||'';
+  const verifyLink=rmLink?'<a href="'+rmLink+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--blue);font-weight:700;text-decoration:none">open the listing on Rightmove ↗</a>':'the listing';
+  const list=cands.length
+    ? '<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:7px">REAL ADDRESSES ON THIS STREET — tap the exact house (cross-check against the listing first)</div>'
+      + cands.slice(0,12).map((c,j)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;'+(j?'border-top:1px solid var(--border)':'')+'">'
+          +'<span style="font-size:12px;color:var(--text);font-weight:'+(j===chosen?'700':'400')+'">'+(j===chosen?'✓ ':'')+c.fullAddress+(c.sizeSqft?' <span style="color:var(--muted);font-weight:400">· '+Number(c.sizeSqft).toLocaleString()+' sq ft</span>':'')+'</span>'
+          +(j===chosen?'<span style="flex-shrink:0;font-size:10px;color:var(--green);font-weight:700">CONFIRMED</span>'
+             :'<button onclick="event.stopPropagation();useCandidate('+i+','+j+')" style="flex-shrink:0;padding:4px 11px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">This one</button>')
+        +'</div>').join('')
+      + (cands.length>12?'<div style="font-size:10px;color:var(--muted);margin-top:6px">+'+(cands.length-12)+' more on this street</div>':'')
+    : '<div style="font-size:11px;color:var(--muted);margin-bottom:7px">No exact match in the public registers for this street. '+verifyLink+' to read the house number, then enter it below.</div>';
+  box.innerHTML='<div style="border:1px solid var(--border2);border-radius:8px;padding:10px 12px;background:#fff">'
+    + list
+    + '<div style="border-top:1px solid var(--border);margin-top:9px;padding-top:9px">'
+      + '<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:6px">OR TYPE THE EXACT NUMBER FROM THE LISTING</div>'
+      + '<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">'
+        + '<input id="mn-'+i+'" type="text" placeholder="e.g. 83" onclick="event.stopPropagation()" style="width:90px;padding:7px 9px;border:1.5px solid var(--border2);border-radius:6px;font-size:13px;font-family:inherit">'
+        + '<span style="font-size:12px;color:var(--muted)">'+esc((p._origAddress||p.displayAddress||'').split(',').slice(0,2).join(', '))+'</span>'
+        + '<button onclick="event.stopPropagation();applyManualNumber('+i+')" style="padding:7px 13px;background:var(--green);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Confirm</button>'
+      + '</div>'
+    + '</div>'
+    + '</div>';
 }
+// Tap a real candidate address → confirmed + printable.
 function useCandidate(i,j){
   const p=props[i]; const c=(p._candidates||[])[j]; if(!c) return;
   p._pickChosen=j; p.address=c.fullAddress; p.displayAddress=c.fullAddress; p.fullAddress=c.fullAddress;
   if(c.postcode) p.postcode=c.postcode; if(c.uprn) p.uprn=c.uprn;
-  const span=document.getElementById('addr-'+i); if(span) span.textContent=c.fullAddress;
-  renderPickBox(i);
-  toast('Address set — verify on the listing before posting','ok');
+  p.addressSource='Confirmed from register'; p.addressConfirmed=true;
+  renderLiveResults();
+  toast('<i class=ic-check></i> Address confirmed','ok');
+}
+// Type the verified house number from the listing → confirmed + printable.
+function applyManualNumber(i){
+  const p=props[i]; const inp=document.getElementById('mn-'+i); if(!p||!inp) return;
+  const num=(inp.value||'').trim();
+  if(!/\d/.test(num)){ toast('Enter the house/flat number shown on the listing','warn'); return; }
+  const base=(p._origAddress||p.displayAddress||p.address||'').replace(/^\s*\d+[a-z]?\s+/i,'');
+  const full=num+' '+base;
+  p.address=full; p.displayAddress=full; p.fullAddress=full;
+  p.addressSource='Verified on listing'; p.addressConfirmed=true;
+  renderLiveResults();
+  toast('<i class=ic-check></i> Address confirmed','ok');
 }
 
 function renderLiveResults(){
@@ -1935,9 +1948,7 @@ function renderLiveResults(){
           +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px"><i class=ic-send></i> '+p.postcode+'</span>':'')
           +(p.addressConfirmed
              ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px"><i class=ic-check></i> Address confirmed'+(p._epcTop&&p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+'</span>'
-             : ((p._candidates&&p._candidates.length>1)
-                ? '<button onclick="event.stopPropagation();togglePick('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:2px 9px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Verify house ('+p._candidates.length+' on street)</button>'
-                : (p.addressSource?'<span style="font-size:11px;color:var(--muted)">'+p.addressSource+'</span>':'')))
+             : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>')
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')
@@ -1997,6 +2008,7 @@ function selectNoneResults(){ props.forEach(p=>p.selected=false); renderLiveResu
 // ── Queue a single property immediately ──
 function quickQueueOne(i){
   const p = props[i]; if(!p) return;
+  if(!p.addressConfirmed){ toast('Confirm the exact address first — tap "Confirm exact address"','warn'); confirmAddress(i); return; }
   const tplEl = document.getElementById('f-tpl');
   const tpl   = [...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro')) || templates[0];
   queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
@@ -2009,25 +2021,31 @@ function quickQueueOne(i){
 function queueAllSelected(){
   const sel = props.filter(p=>p.selected);
   if(!sel.length){ toast('Select properties first','warn'); return; }
+  const ready = sel.filter(p=>p.addressConfirmed);
+  const skipped = sel.length - ready.length;
+  if(!ready.length){ toast('None of the selected properties have a confirmed address yet — tap "Confirm exact address" on each','warn'); return; }
   const tplEl = document.getElementById('f-tpl');
   const tpl   = [...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro')) || templates[0];
-  sel.forEach(p=>{
+  ready.forEach(p=>{
     queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
   });
   updQBadge(); updQStats(); updateKPIs();
-  toast(`<i class=ic-mailbox></i> ${sel.length} letters queued — go to Print Queue to print`, 'ok');
+  toast(`<i class=ic-mailbox></i> ${ready.length} letters queued`+(skipped?` · ${skipped} skipped (address not confirmed)`:'')+' — go to Print Queue', skipped?'warn':'ok');
   showPanel('queue');
 }
 
 // ── Queue ALL results and go straight to print ──
 function queueAllResults(){
+  const ready = props.filter(p=>p.addressConfirmed);
+  const skipped = props.length - ready.length;
+  if(!ready.length){ toast('No confirmed addresses yet — tap "Confirm exact address" on the properties you want to write to','warn'); return; }
   const tplEl = document.getElementById('f-tpl');
   const tpl   = [...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro')) || templates[0];
-  props.forEach(p=>{
+  ready.forEach(p=>{
     queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
   });
   updQBadge(); updQStats(); updateKPIs();
-  toast(`<i class=ic-mailbox></i> ${props.length} letters queued`, 'ok');
+  toast(`<i class=ic-mailbox></i> ${ready.length} letters queued`+(skipped?` · ${skipped} skipped (address not confirmed)`:''), skipped?'warn':'ok');
   showPanel('queue');
 }
 
