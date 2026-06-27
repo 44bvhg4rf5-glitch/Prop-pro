@@ -1,5 +1,5 @@
 import https from 'https';
-import { FULL_POSTCODE, reverseGeocode, sendJson, guardOrigin } from '../lib/helpers.js';
+import { FULL_POSTCODE, reverseGeocode, sendJson, guardOrigin, EPC_BASE, fetchJson } from '../lib/helpers.js';
 import { epcResolve } from './epc.js';
 import { rightmoveProperty } from '../lib/sources.js';
 
@@ -79,6 +79,26 @@ async function osPostcodeAll(OS, postcode) {
     .map((a) => { delete a._thoro; delete a._commercial; return a; })
     .sort((x, y) => x.fullAddress.localeCompare(y.fullAddress, undefined, { numeric: true }));
 }
+// Every certificated address on an exact postcode, via the EPC register (the
+// source actually configured here). Used as the enriched-postcode fallback.
+async function epcPostcodeAll(postcode) {
+  const KEY = process.env.EPC_API_KEY || '';
+  if (!KEY) return [];
+  try {
+    const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(postcode).replace(/%20/g, '+')}&page_size=500`;
+    const { status, json } = await fetchJson(url, KEY);
+    const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
+    const seen = new Map();
+    data.forEach((r) => {
+      const lines = [r.addressLine1, r.addressLine2, r.addressLine3, r.addressLine4].filter(Boolean);
+      const pc = (r.postcode || '').replace(/\+/g, ' ');
+      const full = tcAddr([...lines, r.postTown, pc].filter(Boolean).join(', '));
+      const key = full.toLowerCase();
+      if (full && !seen.has(key)) seen.set(key, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: pc, uprn: r.uprn ? String(r.uprn) : '' });
+    });
+    return [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+  } catch { return []; }
+}
 
 export default async function handler(req, res) {
   if (!guardOrigin(req, res)) return;
@@ -142,9 +162,11 @@ export default async function handler(req, res) {
   }
   // Enriched full postcode but nothing matched the (approximate) street → return
   // every real address on the exact postcode so the right one is always present.
-  if (!candidates.length && enriched && OS && FULL_POSTCODE.test(postcodeIn)) {
-    const all = await osPostcodeAll(OS, postcodeIn.replace(/\s+/, ' '));
-    if (all.length) { source = 'Royal Mail / OS Places'; candidates = all; confirmed = all.length === 1; }
+  // Prefer EPC (the source configured here); fall back to OS Places if present.
+  if (!candidates.length && enriched && FULL_POSTCODE.test(postcodeIn)) {
+    let all = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' '));
+    if (!all.length && OS) all = await osPostcodeAll(OS, postcodeIn.replace(/\s+/, ' '));
+    if (all.length) { source = all[0].uprn && OS ? 'Royal Mail / OS Places' : 'EPC register'; candidates = all; confirmed = all.length === 1; }
   }
 
   sendJson(res, 200, {
