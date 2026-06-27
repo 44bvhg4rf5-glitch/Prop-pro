@@ -134,7 +134,10 @@ export default async function handler(req, res) {
   // 1. EPC pinpoint (exact house via floor-area when a certificate exists).
   const epc = await epcResolve({ postcodeIn, street: streetIn, rmType, listingSqft, lat, lon, area });
   const epcCands = (epc && Array.isArray(epc.candidates)) ? epc.candidates : [];
-  const epcConfident = !!(epc && (epc.sizeMatched || epcCands.length === 1));
+  // Only a SINGLE certificated address on the street is a genuine confirmation.
+  // Floor-area "closest match" is a useful ranking, not proof — a multi-house
+  // street must never be auto-confirmed (that wrongly turned 83 into 108).
+  const epcConfident = !!(epc && epcCands.length === 1);
 
   // Candidate postcodes (reuse EPC's; otherwise compute from postcode + pin).
   let pcList = (epc && epc.pcList && epc.pcList.length) ? epc.pcList : [];
@@ -152,7 +155,7 @@ export default async function handler(req, res) {
   let confirmed = false, candidates = [], source = '';
   if (epcCands.length) {
     source = 'EPC register';
-    confirmed = epcConfident || epcCands.length === 1;
+    confirmed = epcCands.length === 1; // single address = exact; otherwise user picks
     candidates = epcCands;
   } else if (OS && pcList.length && wantStreet) {
     const osCands = await osStreetAddresses(OS, pcList, wantStreet, area);
