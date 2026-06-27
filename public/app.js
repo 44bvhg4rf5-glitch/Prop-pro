@@ -1400,11 +1400,13 @@ async function runLiveSearch(){
         p.fullAddress = orig;
         p.addressSource = 'Listing';
         p.addressConfirmed = true;
+        p.addressFound = true;
         confirmedCount++;
       } else {
         // Street-level only. Do not guess — flag for one-tap confirmation.
         p.fullAddress = '';
         p.addressConfirmed = false;
+        p.addressFound = false;
       }
     });
     props = props.map((p, i) => ({ ...p, id: p.id || ('p' + i) }));
@@ -1423,9 +1425,49 @@ async function runLiveSearch(){
       return;
     }
     renderLiveResults();
-    const needConfirm = found - confirmedCount;
-    blog(`<i class=ic-check></i> ${found} live listings shown · ${confirmedCount} with a full address · ${needConfirm} need a one-tap address confirm before posting`, 'ok');
-    toast(`<i class=ic-check></i> ${found} live properties found`, 'ok');
+    updateKPIs();
+
+    // ── Auto-find the exact full address for every street-only listing ──
+    // Fast deterministic resolver (EPC + floor area; no slow per-house geocode).
+    //  · a SINGLE certified address  → applied + printable (high confidence)
+    //  · a clear best match on size  → shown as the address, flagged "verify"
+    //  · anything weaker             → stays street-only (tap to confirm / AI)
+    // We then default the list to the properties that now have a full address.
+    const toResolve = props.filter(p => !p.addressConfirmed);
+    if (toResolve.length) {
+      document.getElementById('search-status').style.display = 'block';
+      let done = 0, foundN = confirmedCount;
+      setStatus('Finding exact addresses…', `Looking up ${toResolve.length} street-only listing${toResolve.length>1?'s':''} in the public registers…`, 5, '…');
+      await mapLimit(toResolve, 6, async (p) => {
+        const r = await epcLookup(p, 1, { fast: true });
+        const cands = (r && Array.isArray(r.candidates)) ? r.candidates : [];
+        if (cands.length) {
+          p._candidates = cands;
+          p._resolveConf = r.confidence || 'low';
+          p._resolveReasons = Array.isArray(r.reasons) ? r.reasons : [];
+          const top = cands[0];
+          if (r.confidence === 'high') {
+            p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
+            if (top.postcode) p.postcode = top.postcode; if (top.uprn) p.uprn = top.uprn;
+            p.addressSource = r.source || 'EPC register'; p.addressConfirmed = true; p.addressFound = true;
+          } else if (r.confidence === 'medium') {
+            p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
+            if (top.postcode) p.postcode = top.postcode;
+            p.addressSource = r.source || 'EPC register'; p.addressConfirmed = false; p.addressFound = true; p.addressLikely = true;
+          }
+        }
+        done++;
+        if (p.addressFound) foundN++;
+        setStatus('Finding exact addresses…', `Found ${foundN} full address${foundN===1?'':'es'} so far…`, 5 + Math.round(done * (90 / toResolve.length)), foundN);
+      });
+      document.getElementById('search-status').style.display = 'none';
+    }
+    // Default the view to "only show properties with a full address".
+    if (window.addrFilter === undefined) window.addrFilter = 'found';
+    renderLiveResults();
+    const foundTotal = props.filter(p => p.addressFound).length;
+    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings now show a full address (${props.filter(p=>p.addressConfirmed).length} confirmed, ${props.filter(p=>p.addressLikely).length} to verify)`, 'ok');
+    toast(`<i class=ic-check></i> ${foundTotal} full addresses found`, 'ok');
     updateKPIs();
     return;
   }
@@ -1730,7 +1772,8 @@ async function mapLimit(items, limit, worker){
 }
 
 // Look up a listing's exact address in the EPC register (one retry on failure).
-async function epcLookup(p, retries=1){
+// opts.fast → skip the slow per-house geocode (used for bulk auto-resolve).
+async function epcLookup(p, retries=1, opts={}){
   try{
     const pc = (p.postcode||'').replace(/—.*/,'').trim();
     // Only pass a real postcode-district as the area filter — never a location
@@ -1744,12 +1787,15 @@ async function epcLookup(p, retries=1){
     // Pass the Rightmove listing URL so the resolver can fetch the full postcode
     // from the property page when we only have the outcode — big accuracy boost.
     const rmu = p.rmUrl||p.portalUrl||p.url||'';
-    if(/rightmove\.co\.uk/i.test(rmu) && !/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('url', rmu);
+    // In the fast bulk pass, skip the per-listing property-page fetch (one HTTP
+    // call each — too slow and hammers Rightmove); rely on the map-pin postcode.
+    if(!opts.fast && /rightmove\.co\.uk/i.test(rmu) && !/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(pc)) qs.set('url', rmu);
+    if(opts.fast) qs.set('fast','1');
     // Unified resolver: EPC pinpoint + OS Places rescue (Royal Mail full coverage).
     const r = await fetch('/api/resolve?'+qs.toString());
-    if(!r.ok) return retries>0 ? epcLookup(p, retries-1) : null;
+    if(!r.ok) return retries>0 ? epcLookup(p, retries-1, opts) : null;
     return await r.json();
-  }catch(e){ return retries>0 ? epcLookup(p, retries-1) : null; }
+  }catch(e){ return retries>0 ? epcLookup(p, retries-1, opts) : null; }
 }
 
 // Does an address already include a house number / unit (a printable full address)?
@@ -1972,16 +2018,21 @@ function applyManualNumber(i){
   toast('<i class=ic-check></i> Address confirmed','ok');
 }
 
+// Toggle the results between "only properties with a full address" and "all".
+function setAddrFilter(f){ window.addrFilter = f; renderLiveResults(); }
+
 function renderLiveResults(){
   const area = document.getElementById('results-area');
   if(area) area.style.display = 'block';
 
-  const real = props.filter(p=>p.propertyId&&p.propertyId.length>=6).length;
   const selCount = props.filter(p=>p.selected).length;
+  const foundCount = props.filter(p=>p.addressFound).length;
+  const af = window.addrFilter || 'all';   // 'found' = only properties with a full address
+  const shownCount = af==='found' ? foundCount : props.length;
   const title = document.getElementById('results-title');
   const sub   = document.getElementById('results-sub');
-  if(title) title.textContent = `${props.length} Live Properties Found`;
-  if(sub)   sub.textContent   = `${real} with direct Rightmove verification links · ${selCount} selected for letters`;
+  if(title) title.textContent = af==='found' ? `${foundCount} Properties With a Full Address` : `${props.length} Live Properties Found`;
+  if(sub)   sub.textContent   = `${foundCount} of ${props.length} have a full address · ${selCount} selected for letters`;
 
   // Update select button state
   const qBtn = document.getElementById('queue-selected-btn');
@@ -1991,7 +2042,24 @@ function renderLiveResults(){
   if(!table) return;
   table.innerHTML = '';
 
+  // Filter bar — default shows only properties whose full address was found.
+  const fbar = document.createElement('div');
+  fbar.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:6px';
+  const mkBtn = (key,label) => '<button onclick="setAddrFilter(\''+key+'\')" style="padding:6px 13px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid '+(af===key?'var(--blue)':'var(--border2)')+';background:'+(af===key?'var(--blue)':'#fff')+';color:'+(af===key?'#fff':'var(--text)')+'">'+label+'</button>';
+  fbar.innerHTML = '<span style="font-size:11px;color:var(--muted);font-weight:600">Show:</span>'
+    + mkBtn('found','Full address found ('+foundCount+')')
+    + mkBtn('all','All listings ('+props.length+')');
+  table.appendChild(fbar);
+
+  if(af==='found' && !foundCount){
+    const empty=document.createElement('div');
+    empty.style.cssText='text-align:center;padding:28px;color:var(--muted)';
+    empty.innerHTML='<div style="font-size:13px;font-weight:600">No full addresses resolved yet</div><div style="font-size:12px;margin-top:6px">Tap "All listings" to see every property and confirm addresses one by one.</div>';
+    table.appendChild(empty);
+  }
+
   props.forEach((p, i) => {
+    if(af==='found' && !p.addressFound) return;
     const isReal   = p.propertyId && p.propertyId.length >= 6;
     const isSale   = p.status === 'For Sale';
     const accentBg = isSale ? 'rgba(0,79,154,.08)' : 'rgba(5,150,105,.08)';
@@ -2020,8 +2088,10 @@ function renderLiveResults(){
         +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
           +(p.postcode?'<span style="font-size:12px;font-weight:700;color:var(--blue);background:rgba(37,99,235,.08);padding:2px 9px;border-radius:4px"><i class=ic-send></i> '+p.postcode+'</span>':'')
           +(p.addressConfirmed
-             ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px"><i class=ic-check></i> Address confirmed'+(p._epcTop&&p._epcTop.sizeSqft?' · '+Number(p._epcTop.sizeSqft).toLocaleString()+' sq ft':'')+'</span>'
-             : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>')
+             ? '<span style="font-size:11px;font-weight:700;color:var(--green);background:rgba(5,150,105,.1);padding:2px 9px;border-radius:4px"><i class=ic-check></i> Address confirmed</span>'
+             : (p.addressLikely
+                ? '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Likely — tap to verify</button>'
+                : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>'))
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')

@@ -274,12 +274,15 @@ export default async function handler(req, res) {
   // real coordinate (via its UPRN) is to the listing's own map pin. Floor area
   // and map-pin distance are independent — when they agree on the same house we
   // can be confident; when they disagree we lower confidence and ask the user.
+  // Fast mode (bulk auto-resolve over many listings): skip the per-house geocode,
+  // which is rate-limited to 1/sec and far too slow for a whole page of results.
+  const fast = !!u.searchParams.get('fast');
   const pin = (!Number.isNaN(lat) && !Number.isNaN(lon)) ? { lat, lon } : null;
   const isFlat = /flat|apartment|maisonette|studio/i.test(rmType) || candidates.some((c) => /\bflat|apartment\b/i.test(c.line1 || ''));
   let evidence = { confidence: candidates.length === 1 ? 'high' : 'low', reasons: [], pinMatched: false };
   let resolveDbg = null;
   if (candidates.length > 1) {
-    if (pin && !isFlat) {
+    if (pin && !isFlat && !fast) {
       await geocodeCandidates(candidates, postcodeIn).catch(() => {});
       candidates.forEach((c) => { c._distM = c._geo ? distM(pin, c._geo) : null; delete c._geo; });
       resolveDbg = { geocoded: candidates.filter((c) => c._distM != null).length };
