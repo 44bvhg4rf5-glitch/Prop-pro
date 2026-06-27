@@ -1884,6 +1884,13 @@ function renderConfirmBox(i){
     : '<div style="font-size:11px;color:var(--muted);margin-bottom:7px">No exact match in the public registers for this street. '+verifyLink+' to read the house number, then enter it below.</div>';
   box.innerHTML='<div style="border:1px solid var(--border2);border-radius:8px;padding:10px 12px;background:#fff">'
     + list
+    // AI second opinion — finds the address a different way and cross-checks it.
+    + '<div style="border-top:1px solid var(--border);margin-top:9px;padding-top:9px">'
+      + '<div id="aicheck-'+i+'">'
+        + '<button onclick="event.stopPropagation();aiCrossCheck('+i+')" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:rgba(124,58,237,.1);color:#7C3AED;border:1.5px solid rgba(124,58,237,.3);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-bot></i> Cross-check with AI</button>'
+        + '<div style="font-size:10px;color:var(--muted);margin-top:5px">Independently finds the address from the listing wording + Land Registry, then compares it with the match above.</div>'
+      + '</div>'
+    + '</div>'
     + '<div style="border-top:1px solid var(--border);margin-top:9px;padding-top:9px">'
       + '<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.4px;margin-bottom:6px">OR TYPE THE EXACT NUMBER FROM THE LISTING</div>'
       + '<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">'
@@ -1893,6 +1900,54 @@ function renderConfirmBox(i){
       + '</div>'
     + '</div>'
     + '</div>';
+}
+// ── AI second opinion: find the address independently, then cross-reference ──
+async function aiCrossCheck(i){
+  const p=props[i]; if(!p) return;
+  const out=document.getElementById('aicheck-'+i); if(!out) return;
+  out.innerHTML='<div style="font-size:12px;color:#7C3AED;font-weight:600"><i class=ic-bot></i> AI is reading the listing + Land Registry records…</div>';
+  try{
+    const body={
+      url:p.rmUrl||p.portalUrl||'', street:p._origAddress||p.displayAddress||p.address||'',
+      postcode:(p.postcode||'').replace(/—.*/,'').trim(), type:p.type||'', beds:p.beds||0, size:p.sizeSqft||0,
+      lat:p.lat, lon:p.lon, candidates:(p._candidates||[]).slice(0,14), engineConfidence:p._resolveConf||'low',
+    };
+    const r=await fetch('/api/ai-address',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ out.innerHTML='<div style="font-size:12px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('AI error '+r.status))+'</div>'; return; }
+    p._ai=d;
+    renderAiCheck(i);
+  }catch(e){ out.innerHTML='<div style="font-size:12px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
+}
+function renderAiCheck(i){
+  const out=document.getElementById('aicheck-'+i); const p=props[i]; const d=p&&p._ai; if(!out||!d) return;
+  const styles={double_confirmed:{c:'var(--green)',bg:'rgba(5,150,105,.1)',ic:'ic-check'},ai_only:{c:'#92400E',bg:'#FFFBEB',ic:'ic-bot'},conflict:{c:'#B91C1C',bg:'rgba(220,38,38,.08)',ic:'ic-alert'},unresolved:{c:'var(--muted)',bg:'rgba(0,0,0,.04)',ic:'ic-search'}};
+  const st=styles[d.verdict]||styles.unresolved;
+  const aiAddr=d.ai&&(d.ai.fullAddress||(d.ai.houseNumber?d.ai.houseNumber+' '+((p._origAddress||'').replace(/^\s*\d+[a-z]?\s+/i,'')):''));
+  const tags=[];
+  if(d.ai&&d.ai.inLandRegistry) tags.push('in Land Registry');
+  if(d.ai&&d.ai.inRegister) tags.push('in EPC register');
+  if(d.evidence&&d.evidence.usedDescription) tags.push('read the listing text');
+  if(d.evidence&&d.evidence.landRegistryCount) tags.push(d.evidence.landRegistryCount+' sold records');
+  out.innerHTML='<div style="background:'+st.bg+';border-radius:7px;padding:9px 11px">'
+    +'<div style="font-size:10px;font-weight:800;letter-spacing:.5px;color:'+st.c+'"><i class='+st.ic+'></i> AI CROSS-CHECK · '+esc((d.headline||'').toUpperCase())+'</div>'
+    +(aiAddr?'<div style="font-size:13px;font-weight:700;color:var(--text);margin-top:5px">'+esc(aiAddr)+'</div>':'')
+    +(d.ai&&d.ai.reasoning?'<div style="font-size:11px;color:var(--text);margin-top:3px;line-height:1.45">'+esc(d.ai.reasoning)+'</div>':'')
+    +(tags.length?'<div style="font-size:10px;color:var(--muted);margin-top:4px">'+tags.map(esc).join(' · ')+'</div>':'')
+    // When both methods agree, one tap confirms the double-checked address.
+    +(d.agreed&&aiAddr?'<button onclick="event.stopPropagation();useAiAddress('+i+')" style="margin-top:8px;padding:7px 14px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-check></i> Use this double-confirmed address</button>'
+      :(d.verdict==='conflict'?'<div style="font-size:10px;color:'+st.c+';margin-top:6px;font-weight:600">The two methods point to different houses — open the listing and confirm by hand.</div>':''))
+    +'<div style="font-size:9px;color:var(--muted);margin-top:6px">AI assists — always confirm against the live listing before posting.</div>'
+    +'</div>';
+}
+function useAiAddress(i){
+  const p=props[i]; const d=p&&p._ai; if(!p||!d||!d.ai) return;
+  const addr=d.ai.fullAddress||(d.ai.houseNumber?d.ai.houseNumber+' '+((p._origAddress||'').replace(/^\s*\d+[a-z]?\s+/i,'')):'');
+  if(!addr){ toast('No AI address to use','warn'); return; }
+  p.address=addr; p.displayAddress=addr; p.fullAddress=addr;
+  p.addressSource='Double-confirmed (engine + AI)'; p.addressConfirmed=true;
+  renderLiveResults();
+  toast('<i class=ic-check></i> Double-confirmed address set','ok');
 }
 // Tap a real candidate address → confirmed + printable.
 function useCandidate(i,j){
