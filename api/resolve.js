@@ -294,9 +294,11 @@ export default async function handler(req, res) {
   // 4. Building-level resolution for flats. The listing names a block but hides
   // the unit — we can't know the exact flat, but we CAN list every real flat in
   // that building from the register. All genuine, mailable owner addresses.
+  // A house we could pinpoint by floor area + map pin needs no pooling.
+  const housePinpointed = !isFlat && (evidence.confidence === 'high' || evidence.confidence === 'medium');
   let buildingResolved = false, building = null, units = [], blockLevel = null;
-  if (isFlat && candidates.length) {
-    const bn = buildingNameOf(streetIn) || buildingNameOf(hint);
+  if (!housePinpointed && candidates.length) {
+    const bn = isFlat ? (buildingNameOf(streetIn) || buildingNameOf(hint)) : '';
     let u = [];
     if (bn) u = candidates.filter((c) => norm(c.fullAddress).includes(norm(bn)));
     if (u.length) {
@@ -305,8 +307,8 @@ export default async function handler(req, res) {
       const first = u[0].fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
       building = { name: tcAddr(bn), address: first, unitCount: u.length };
     } else if (wantStreet) {
-      // No named block, but the listing's street is known — return every real
-      // flat on that street/postcode. Looser, but all genuine mailable owners.
+      // Street-level: every real home on the listing's street/postcode. Looser
+      // than a unit, but all genuine, mailable owner addresses (street farming).
       u = candidates;
       blockLevel = 'street';
       building = { name: tcAddr(wantStreet), address: (postcodeIn || (candidates[0] && candidates[0].postcode) || ''), unitCount: u.length };
