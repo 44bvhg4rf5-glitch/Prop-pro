@@ -2039,7 +2039,8 @@ function resolvedAddrHTML(p, i){
     const u = p.block.units;
     const open = window._blockOpen && window._blockOpen[i];
     const show = open ? u.length : Math.min(u.length, 6);
-    const head = (p.block.level==='building' ? 'REAL FLATS IN THIS BUILDING' : 'REAL HOMES ON THIS STREET') + ' — ' + u.length + ' full address' + (u.length===1?'':'es');
+    const headMap = { building:'REAL FLATS IN THIS BUILDING', postcode:'REAL HOMES AT THIS POSTCODE', street:'REAL HOMES ON THIS STREET' };
+    const head = (headMap[p.block.level] || headMap.street) + ' — ' + u.length + ' full address' + (u.length===1?'':'es');
     return '<div style="background:rgba(5,150,105,.05);border:1px solid rgba(5,150,105,.22);border-radius:8px;padding:9px 11px;margin:2px 0 9px">'
       + '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--green);margin-bottom:6px">'+head+'</div>'
       + u.slice(0, show).map(a=>'<div style="font-size:12px;color:var(--text);padding:3px 0;'+(0?'':'')+'border-top:1px solid rgba(0,0,0,.05)">'+esc(a)+'</div>').join('')
@@ -2123,7 +2124,7 @@ function renderLiveResults(){
              : (p.addressLikely
                 ? '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Likely — tap to verify</button>'
                 : (p.block
-                   ? '<span style="font-size:11px;font-weight:700;color:#6D28D9;background:rgba(124,58,237,.1);padding:2px 9px;border-radius:4px"><i class=ic-home></i> '+(p.block.level==='building'?'Building':'Street')+': '+p.block.units.length+' owner address'+(p.block.units.length===1?'':'es')+'</span>'
+                   ? '<span style="font-size:11px;font-weight:700;color:#6D28D9;background:rgba(124,58,237,.1);padding:2px 9px;border-radius:4px"><i class=ic-home></i> '+({building:'Building',postcode:'Block',street:'Street'}[p.block.level]||'Block')+': '+p.block.units.length+' owner address'+(p.block.units.length===1?'':'es')+'</span>'
                    : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>')))
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
