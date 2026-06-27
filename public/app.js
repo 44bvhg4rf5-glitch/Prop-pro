@@ -2030,6 +2030,27 @@ function applyManualNumber(i){
 
 // Toggle the results between "only properties with a full address" and "all".
 function setAddrFilter(f){ window.addrFilter = f; renderLiveResults(); }
+function toggleBlock(i){ window._blockOpen = window._blockOpen || {}; window._blockOpen[i] = !window._blockOpen[i]; renderLiveResults(); }
+
+// The real full addresses (Number, Street, Postcode) resolved for a listing —
+// shown plainly so you see actual mailable addresses, not just a block name.
+function resolvedAddrHTML(p, i){
+  if(p.block && p.block.units && p.block.units.length){
+    const u = p.block.units;
+    const open = window._blockOpen && window._blockOpen[i];
+    const show = open ? u.length : Math.min(u.length, 6);
+    const head = (p.block.level==='building' ? 'REAL FLATS IN THIS BUILDING' : 'REAL HOMES ON THIS STREET') + ' — ' + u.length + ' full address' + (u.length===1?'':'es');
+    return '<div style="background:rgba(5,150,105,.05);border:1px solid rgba(5,150,105,.22);border-radius:8px;padding:9px 11px;margin:2px 0 9px">'
+      + '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--green);margin-bottom:6px">'+head+'</div>'
+      + u.slice(0, show).map(a=>'<div style="font-size:12px;color:var(--text);padding:3px 0;'+(0?'':'')+'border-top:1px solid rgba(0,0,0,.05)">'+esc(a)+'</div>').join('')
+      + (u.length>6 ? '<button onclick="event.stopPropagation();toggleBlock('+i+')" style="margin-top:7px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit">'+(open?'▴ Show fewer':'▾ Show all '+u.length+' full addresses')+'</button>' : '')
+      + '</div>';
+  }
+  if((p.addressConfirmed || p.addressLikely) && (p.fullAddress||p.displayAddress)){
+    return '<div style="font-size:13px;color:var(--text);font-weight:700;margin:2px 0 9px"><i class=ic-check style="color:var(--green)"></i> '+esc(p.fullAddress||p.displayAddress)+'</div>';
+  }
+  return '';
+}
 
 function renderLiveResults(){
   const area = document.getElementById('results-area');
@@ -2109,6 +2130,8 @@ function renderLiveResults(){
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')
           +(p.addedDate?'<span style="font-size:11px;color:var(--muted)">Listed: '+p.addedDate+'</span>':'')
         +'</div>'
+        // Resolved full addresses (Number, Street, Postcode)
+        + resolvedAddrHTML(p, i)
         // Property tags
         +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'
           +(p.type?'<span class="ptag">'+p.type+'</span>':'')
