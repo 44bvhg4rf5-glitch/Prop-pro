@@ -6,6 +6,8 @@ import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 
 export const config = { maxDuration: 30 };
 
+const _memPage = new Map(); // per-instance cache of listing-page data (no setup needed)
+
 // Resolve a live listing to a confirmed full address. Strategy:
 //   1. EPC pinpoint — when the home has a certificate, floor-area matching nails
 //      the exact house (high confidence).
@@ -220,8 +222,9 @@ export default async function handler(req, res) {
     // pages rarely change, so a whole search only fetches each page once ever,
     // keeping the bulk resolve fast and gentle on Rightmove.
     const ckey = 'rm:' + url;
-    let p = storeConfigured() ? await getJSON(ckey, null) : null;
+    let p = _memPage.has(ckey) ? _memPage.get(ckey) : (storeConfigured() ? await getJSON(ckey, null) : null);
     if (!p) { p = await rightmoveProperty(url).catch(() => null); if (p && storeConfigured()) await setJSON(ckey, p).catch(() => {}); }
+    if (p) { _memPage.set(ckey, p); if (_memPage.size > 3000) _memPage.clear(); }
     if (p) {
       if (FULL_POSTCODE.test(p.postcode)) { postcodeIn = p.postcode.toUpperCase(); enriched = true; }
       if (Number.isNaN(lat) && p.lat != null) lat = p.lat;

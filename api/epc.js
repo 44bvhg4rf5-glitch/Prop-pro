@@ -9,14 +9,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // every home on a street) shares a postcode, so a whole search hits the register
 // once per postcode instead of once per listing — far fewer calls, no rate-limit
 // failures, and instant on repeat searches. Retries once on a 429.
+const _memEpc = new Map(); // per-instance cache — survives across requests on a warm function, no setup needed
 async function epcByPostcode(pc, KEY) {
   const ck = 'epc:' + pc.toUpperCase().replace(/\s+/g, '');
-  if (storeConfigured()) { const c = await getJSON(ck, null); if (c) return { data: c }; }
+  if (_memEpc.has(ck)) return { data: _memEpc.get(ck) };
+  if (storeConfigured()) { const c = await getJSON(ck, null); if (c) { _memEpc.set(ck, c); return { data: c }; } }
   const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
   let { status, json } = await fetchJson(url, KEY);
   if (status === 429) { await sleep(700); ({ status, json } = await fetchJson(url, KEY)); }
   if (status === 401 || status === 403) return { error: status };
   const data = (status === 200 && json && Array.isArray(json.data)) ? json.data : [];
+  _memEpc.set(ck, data);
+  if (_memEpc.size > 2000) _memEpc.clear();
   if (storeConfigured() && data.length) await setJSON(ck, data).catch(() => {});
   return { data };
 }
