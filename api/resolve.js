@@ -2,8 +2,9 @@ import https from 'https';
 import { FULL_POSTCODE, reverseGeocode, sendJson, guardOrigin, EPC_BASE, fetchJson } from '../lib/helpers.js';
 import { epcResolve } from './epc.js';
 import { rightmoveProperty } from '../lib/sources.js';
+import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 
-export const config = { maxDuration: 20 };
+export const config = { maxDuration: 30 };
 
 // Resolve a live listing to a confirmed full address. Strategy:
 //   1. EPC pinpoint — when the home has a certificate, floor-area matching nails
@@ -49,25 +50,42 @@ function distM(a, b) {
 // we can rank by how close it is to the listing's own map pin — an independent
 // signal from floor area, so when both agree we can be confident.
 const leadNum = (s) => ((String(s || '').trim().match(/^(\d+[a-z]?)/i) || [])[1] || '').toLowerCase();
-// Coordinates for the real addresses on a street, keyed by BOTH uprn and house
-// number, so we can attach a coordinate to each EPC candidate. The OS Places
-// `find` endpoint (free-text street search) returns DPA records with lat/lon and
-// is the OS endpoint that works on our plan.
-async function osStreetCoords(OS, query) {
-  const url = `https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(query)}&dataset=DPA&maxresults=100&output_srs=EPSG:4326&key=${encodeURIComponent(OS)}`;
-  const { status, json } = await osGet(url);
-  const byUprn = new Map(), byNum = new Map();
-  if (status === 200 && json && Array.isArray(json.results)) {
-    json.results.map((r) => r.DPA).filter(Boolean).forEach((d) => {
-      const lat = parseFloat(d.LAT), lon = parseFloat(d.LNG);
-      if (Number.isNaN(lat) || Number.isNaN(lon)) return;
-      const co = { lat, lon };
-      if (d.UPRN) byUprn.set(String(d.UPRN), co);
-      const num = (d.BUILDING_NUMBER || leadNum(d.ADDRESS)).toString().toLowerCase();
-      if (num && !byNum.has(num)) byNum.set(num, co);
-    });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// House-level geocode via OpenStreetMap Nominatim — free, keyless and (unlike our
+// rate-limited OS Places key) reliably available. Gives each candidate a real
+// coordinate so we can rank by distance to the listing's own map pin: a signal
+// fully independent of floor area, so when the two agree we can be confident.
+const NOMI_UA = 'PropMailPro/1.0 (+https://prop-pro-theta.vercel.app; edbrown0606@gmail.com)';
+function nominatim(street, postcode) {
+  return new Promise((resolve) => {
+    const qs = `street=${encodeURIComponent(street)}&postalcode=${encodeURIComponent(postcode)}&country=gb&format=json&limit=1`;
+    https.get('https://nominatim.openstreetmap.org/search?' + qs, { headers: { 'User-Agent': NOMI_UA, Accept: 'application/json' } }, (r) => {
+      let b = ''; r.on('data', (c) => (b += c));
+      r.on('end', () => { try { const j = JSON.parse(b); const h = Array.isArray(j) && j[0]; resolve(h ? { lat: parseFloat(h.lat), lon: parseFloat(h.lon), type: h.type } : null); } catch { resolve(null); } });
+    }).on('error', () => resolve(null));
+  });
+}
+// Geocode the top size-ranked candidates (those most worth confirming), one
+// request per second per Nominatim's usage policy, cached permanently in KV so
+// repeat confirms are instant and we stay polite. Attaches c._geo.
+async function geocodeCandidates(cands, fallbackPc) {
+  const cache = storeConfigured();
+  let issued = 0;
+  for (const c of cands.slice(0, 5)) {
+    const num = leadNum(c.line1) || leadNum(c.fullAddress);
+    if (!num) continue;
+    const street = (c.fullAddress.split(',')[0] || '').trim(); // e.g. "92 Sudbury Court Drive"
+    const pc = c.postcode || fallbackPc || '';
+    const key = 'geo:' + (street + '|' + pc).toLowerCase().replace(/\s+/g, ' ');
+    let co = cache ? await getJSON(key, null) : null;
+    if (!co) {
+      if (issued++) await sleep(1100);          // ≤1 req/sec
+      co = await nominatim(street, pc);
+      if (co && cache) await setJSON(key, co);
+    }
+    if (co && co.lat != null && !Number.isNaN(co.lat)) c._geo = co;
   }
-  return { status, count: byUprn.size, byUprn, byNum };
 }
 const fmtN = (n) => Number(n).toLocaleString();
 // Combine independent signals (floor area + distance to the map pin) into a
@@ -254,16 +272,12 @@ export default async function handler(req, res) {
   const pin = (!Number.isNaN(lat) && !Number.isNaN(lon)) ? { lat, lon } : null;
   const isFlat = /flat|apartment|maisonette|studio/i.test(rmType) || candidates.some((c) => /\bflat|apartment\b/i.test(c.line1 || ''));
   let evidence = { confidence: candidates.length === 1 ? 'high' : 'low', reasons: [], pinMatched: false };
-  let osDbg = null;
+  let resolveDbg = null;
   if (candidates.length > 1) {
-    if (OS && pin && !isFlat) {
-      const q = [wantStreet, (candidates[0] && candidates[0].postcode) || postcodeIn].filter(Boolean).join(' ');
-      const geo = await osStreetCoords(OS, q);
-      osDbg = { status: geo.status, coords: geo.count, query: q };
-      candidates.forEach((c) => {
-        const co = geo.byUprn.get(String(c.uprn)) || geo.byNum.get(leadNum(c.line1) || leadNum(c.fullAddress));
-        c._distM = co ? distM(pin, co) : null;
-      });
+    if (pin && !isFlat) {
+      await geocodeCandidates(candidates, postcodeIn).catch(() => {});
+      candidates.forEach((c) => { c._distM = c._geo ? distM(pin, c._geo) : null; delete c._geo; });
+      resolveDbg = { geocoded: candidates.filter((c) => c._distM != null).length };
     }
     evidence = scoreEvidence(candidates, { listingSqft, pin, isFlat });
   } else if (candidates.length === 1) {
@@ -283,6 +297,6 @@ export default async function handler(req, res) {
     enriched, postcode: postcodeIn || null,
     total: candidates.length, candidates: out,
     note: candidates.length ? undefined : 'No exact address — open the listing on Rightmove to read the house number.',
-    ...(u.searchParams.get('osdebug') ? { osDebug: osDbg } : {}),
+    ...(u.searchParams.get('osdebug') ? { resolveDebug: resolveDbg } : {}),
   });
 }
