@@ -1438,7 +1438,7 @@ async function runLiveSearch(){
       document.getElementById('search-status').style.display = 'block';
       let done = 0, foundN = confirmedCount;
       setStatus('Finding exact addresses…', `Looking up ${toResolve.length} street-only listing${toResolve.length>1?'s':''} in the public registers…`, 5, '…');
-      await mapLimit(toResolve, 5, async (p) => {
+      await mapLimit(toResolve, 3, async (p) => {
         // Full resolve (uses the listing page's exact postcode — cached server-
         // side, so a search fetches each page only once). This is what lets
         // named blocks like "Apex House" resolve to their real flats.
