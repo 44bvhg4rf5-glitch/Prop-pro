@@ -352,17 +352,29 @@ export default async function handler(req, res) {
     if (!pcUnits.length) pcUnits = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' ')).catch(() => []);
   }
 
-  // House pinpoint via the map pin: reverse-geocode the pin to the nearest real
-  // address and match its number to a house on the postcode — one cheap call
-  // that picks the EXACT house. (Houses only; flats all share one pin.)
-  if (!isFlat && pin && pcUnits.length > 1 && evidence.confidence !== 'high') {
+  // House pinpoint via the map pin. The pin is only ~25m accurate, so it must
+  // NEVER override a floor-area match (that would pick the neighbour). It may
+  // only: (a) confirm the size-best house when both agree → high confidence, or
+  // (b) when there's no floor-area signal, offer the nearest house as a best
+  // guess at MEDIUM (shown, but never auto-confirmed for printing).
+  if (!isFlat && pin && pcUnits.length > 1) {
     const rev = await nominatimReverse(pin.lat, pin.lon).catch(() => null);
-    if (rev && rev.num) {
-      const m = pcUnits.find((c) => leadNum(c.line1) === rev.num || leadNum(c.fullAddress) === rev.num);
-      if (m && (!wantStreet || !rev.road || norm(rev.road).includes(wantStreet) || norm(m.fullAddress).includes(norm(rev.road)))) {
-        candidates = [m]; confirmed = true;
-        evidence = { confidence: 'high', reasons: ['The listing\'s map pin sits on number ' + rev.num + (rev.road ? ' ' + tcAddr(rev.road) : '')], pinMatched: true };
+    const revNum = rev && rev.num;
+    if (revNum) {
+      const onStreet = !wantStreet || !rev.road || norm(rev.road).includes(wantStreet) || (pcUnits[0] && norm(pcUnits[0].fullAddress).includes(norm(rev.road)));
+      const m = onStreet && pcUnits.find((c) => leadNum(c.line1) === revNum || leadNum(c.fullAddress) === revNum);
+      const sizeBest = (evidence.confidence === 'high' || evidence.confidence === 'medium') ? candidates[0] : null;
+      const sizeBestNum = sizeBest && (leadNum(sizeBest.line1) || leadNum(sizeBest.fullAddress));
+      if (m && sizeBest && sizeBestNum === revNum) {
+        // Floor area AND the map pin agree on the same house — confident.
+        candidates = [sizeBest]; confirmed = true;
+        evidence = { confidence: 'high', reasons: ['Floor area and the map pin agree on number ' + revNum, ...evidence.reasons], pinMatched: true };
+      } else if (m && !sizeBest) {
+        // No floor area to go on — the pin's nearest house is a best guess only.
+        candidates = [m];
+        evidence = { confidence: 'medium', reasons: ['Map pin is nearest to number ' + revNum + ' (verify against the listing)'], pinMatched: true };
       }
+      // else (pin disagrees with a size match) → keep the size pick untouched.
     }
   }
 
