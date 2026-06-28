@@ -59,7 +59,7 @@ jobs:
             topic=$(echo "$item" | jq -r '.topic // ""')
             file="agent-${agent}.yml"
             # Stagger launches so the agents don't all hit the AI provider at once (avoids 429s).
-            if [ "$first" = "1" ]; then first=0; else sleep 25; fi
+            if [ "$first" = "1" ]; then first=0; else sleep 40; fi
             echo "Launching $agent ($file) on issue #$ISSUE ..."
             case "$agent" in
               research|competitor|content|rnd)
