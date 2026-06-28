@@ -74,7 +74,7 @@ async function nearby(lat, lon, area) {
   const k = lat.toFixed(4) + ',' + lon.toFixed(4);
   let pcs = _memRev.get(k);
   if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
-  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 4);
+  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 5);
 }
 
 const FLAT = /flat|apartment|maisonette|studio/i;
@@ -114,11 +114,14 @@ async function resolveOne(p) {
 
   let chosen, why;
   if (building) { chosen = cands[0].us; why = 'building named on the listing'; }
-  else {
+  else if (cands.length === 1) {
+    // Only one building on the listing's street here — unambiguous, no guess.
+    chosen = cands[0].us; why = 'the only building on this street/postcode';
+  } else {
+    // Several buildings on the street → trust the freshest only when it's CLEARLY
+    // freshest and lines up with the listing going live; else skip (no guess).
     const top = cands[0];
-    // Street-only: only trust the freshest building when it's CLEARLY freshest
-    // and the cert lines up with the listing going live — else skip (no guess).
-    const gapDays = cands.length > 1 ? daysBetween(top.latest, cands[1].latest) : 999;
+    const gapDays = daysBetween(top.latest, cands[1].latest);
     const nearList = listDate && top.latest ? daysBetween(top.latest, listDate) <= 180 : false;
     if (!top.latest || gapDays < 45 || (listDate && !nearList)) return null;
     chosen = top.us; why = 'freshest EPC on the street (being marketed)';
