@@ -74,3 +74,4 @@ export default async function handler(req, res) {
 
   sendJson(res, 200, { postcode, point: [lat, lon], sources: out });
 }
+
