@@ -273,9 +273,9 @@ function togProp(i){
 
 function updSelBar(){
   const s=props.filter(p=>p.selected).length;
-  document.getElementById('sel-bar').style.display=s?'flex':'none';
-  document.getElementById('sel-txt').textContent=`${s} propert${s===1?'y':'ies'} selected`;
-  document.getElementById('psel-btn').disabled=!s;
+  const bar=document.getElementById('sel-bar'); if(bar) bar.style.display=s?'flex':'none';
+  const txt=document.getElementById('sel-txt'); if(txt) txt.textContent=`${s} propert${s===1?'y':'ies'} selected`;
+  const btn=document.getElementById('psel-btn'); if(btn) btn.disabled=!s;
 }
 
 

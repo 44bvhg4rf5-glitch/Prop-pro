@@ -1,5 +1,5 @@
 import https from 'https';
-import { readBody, sendJson } from '../lib/helpers.js';
+import { readBody, sendJson, guardOrigin } from '../lib/helpers.js';
 import { lettersToPdfBase64 } from '../lib/pdf.js';
 
 // Call the PrintNode API with HTTP Basic auth (API key as username).
@@ -29,6 +29,7 @@ function printnode(path, key, method = 'GET', payload = null) {
 }
 
 export default async function handler(req, res) {
+  if (!guardOrigin(req, res)) return;
   const u = new URL(req.url, 'http://localhost');
   const action = u.searchParams.get('action') || 'printers';
   const key = req.headers['x-printnode-key'] || process.env.PRINTNODE_API_KEY || '';
