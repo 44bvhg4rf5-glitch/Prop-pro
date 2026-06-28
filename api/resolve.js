@@ -69,6 +69,25 @@ function nominatim(street, postcode) {
     }).on('error', () => resolve(null));
   });
 }
+// Reverse-geocode the listing's map pin to the nearest real address (one cheap
+// call) — its house number + road, used to pick the exact house on the postcode.
+const _memRev = new Map();
+function nominatimReverse(lat, lon) {
+  const k = lat.toFixed(5) + ',' + lon.toFixed(5);
+  if (_memRev.has(k)) return Promise.resolve(_memRev.get(k));
+  return new Promise((resolve) => {
+    const qs = `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&format=jsonv2&addressdetails=1`;
+    https.get('https://nominatim.openstreetmap.org/reverse?' + qs, { headers: { 'User-Agent': NOMI_UA, Accept: 'application/json' } }, (r) => {
+      let b = ''; r.on('data', (c) => (b += c));
+      r.on('end', () => {
+        let out = null;
+        try { const a = (JSON.parse(b) || {}).address || {}; const num = a.house_number || ''; const road = a.road || ''; if (num) out = { num: String(num).toLowerCase(), road }; } catch {}
+        _memRev.set(k, out); if (_memRev.size > 3000) _memRev.clear();
+        resolve(out);
+      });
+    }).on('error', () => { resolve(null); });
+  });
+}
 // Geocode the top size-ranked candidates (those most worth confirming), one
 // request per second per Nominatim's usage policy, cached permanently in KV so
 // repeat confirms are instant and we stay polite. Attaches c._geo.
@@ -322,21 +341,32 @@ export default async function handler(req, res) {
   } else if (candidates.length === 1) {
     evidence.reasons = ['The only matching address on this postcode'];
   }
-  // 4. Building-level resolution for flats. The listing names a block but hides
-  // the unit — we can't know the exact flat, but we CAN list every real flat in
-  // that building from the register. All genuine, mailable owner addresses.
-  // A house we could pinpoint by floor area + map pin needs no pooling.
-  const housePinpointed = !isFlat && (evidence.confidence === 'high' || evidence.confidence === 'medium');
-  let buildingResolved = false, building = null, units = [], blockLevel = null;
 
-  // Exact-postcode block (PRECISE): once enrichment gives the listing's full
-  // postcode, that postcode is almost always one building or a short block — far
-  // tighter than the whole street. This is the main lever for precise coverage.
+  // The exact postcode's real addresses — the tight set (one building / a few
+  // houses) we resolve precisely against.
   let pcUnits = [];
-  if (!housePinpointed && FULL_POSTCODE.test(postcodeIn)) {
-    pcUnits = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' ')).catch(() => []);
+  if (FULL_POSTCODE.test(postcodeIn)) pcUnits = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' ')).catch(() => []);
+
+  // House pinpoint via the map pin: reverse-geocode the pin to the nearest real
+  // address and match its number to a house on the postcode — one cheap call
+  // that picks the EXACT house. (Houses only; flats all share one pin.)
+  if (!isFlat && pin && pcUnits.length > 1 && evidence.confidence !== 'high') {
+    const rev = await nominatimReverse(pin.lat, pin.lon).catch(() => null);
+    if (rev && rev.num) {
+      const m = pcUnits.find((c) => leadNum(c.line1) === rev.num || leadNum(c.fullAddress) === rev.num);
+      if (m && (!wantStreet || !rev.road || norm(rev.road).includes(wantStreet) || norm(m.fullAddress).includes(norm(rev.road)))) {
+        candidates = [m]; confirmed = true;
+        evidence = { confidence: 'high', reasons: ['The listing\'s map pin sits on number ' + rev.num + (rev.road ? ' ' + tcAddr(rev.road) : '')], pinMatched: true };
+      }
+    }
   }
 
+  // 4. Building-level resolution. We can't know the exact flat (listing hides
+  // it), but we CAN list every real home in the building/postcode — all genuine
+  // mailable owner addresses. Skipped when a house was pinpointed above.
+  const housePinpointed = !isFlat && (evidence.confidence === 'high' || evidence.confidence === 'medium');
+
+  let buildingResolved = false, building = null, units = [], blockLevel = null;
   if (!housePinpointed && pcUnits.length) {
     const cb = isFlat ? (buildingNameOf(streetIn) || commonBuilding(pcUnits)) : '';
     units = pcUnits.map((c) => c.fullAddress);
