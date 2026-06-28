@@ -69,6 +69,17 @@ export default async function handler(req, res) {
           result.owners.push({ name: c.company_name, role: 'company', source: 'Companies House', detail: 'registered at this address' });
         }
       }
+      // Also search by BUILDING NAME — a block's freeholder / management company
+      // is usually named after the building (e.g. "Apex House (Harrow) RTM Ltd")
+      // but registered at an agent's address, so the location search misses it.
+      const bname = line1.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '').replace(/^\d+[a-z]?\s+/, '').trim();
+      if (bname && bname.length > 3 && /[a-z]/i.test(bname)) {
+        const ns = await chGet('/search/companies?q=' + encodeURIComponent(bname) + '&items_per_page=20', CH);
+        ((ns.json && ns.json.items) || [])
+          .filter((c) => norm(c.title).includes(norm(bname)) && /(management|freehold|rtm|resident|estate|propert|lessee|maintenance)/i.test(c.title) && c.company_status !== 'dissolved')
+          .slice(0, 4)
+          .forEach((c) => { if (!result.owners.some((o) => norm(o.detail || '') === norm(c.title))) result.owners.push({ name: c.title, role: 'freeholder / management company', source: 'Companies House', detail: c.title }); });
+      }
       result.sources.push('Companies House');
     } catch { /* ignore */ }
   }

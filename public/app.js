@@ -1055,6 +1055,38 @@ function exportAddrCSV(){
   el.click();
   toast('Address CSV exported','ok');
 }
+// ── Find addresses on the web (free, via the web-search key) ──
+async function webAddrSearch(){
+  const q=(document.getElementById('wa-q').value||'').trim();
+  if(!q){ toast('Enter a street and area','warn'); return; }
+  const btn=document.getElementById('wa-btn'); if(btn){btn.disabled=true;btn.textContent='Searching…';}
+  const box=document.getElementById('wa-results'); box.innerHTML='<div style="color:var(--muted);font-size:13px;padding:10px 0">Searching the web for addresses…</div>';
+  try{
+    const r=await fetch('/api/webaddr?q='+encodeURIComponent(q));
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ box.innerHTML='<div style="color:var(--amber);font-size:13px;padding:8px 0">'+esc(d.note||d.error||'Search unavailable')+'</div>'; return; }
+    window._waList=d.addresses||[];
+    if(!window._waList.length){ box.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px 0">'+esc(d.note||'No addresses found.')+'</div>'; return; }
+    box.innerHTML='<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+window._waList.length+' addresses found on the web — verify before posting.</div>'
+      +window._waList.map((a,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'
+        +'<span style="font-size:13px;color:var(--text);font-weight:600">'+esc(a.address)+(a.hasPostcode?'':' <span style="color:var(--amber);font-size:11px;font-weight:400">(no postcode)</span>')+'</span>'
+        +'<button onclick="queueWebAddr('+i+')" style="padding:6px 12px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0"><i class=ic-mailbox></i> Queue</button>'
+      +'</div>').join('')
+      +((d.sources&&d.sources.length)?'<div style="font-size:10px;color:var(--muted);margin-top:8px">Sources: '+d.sources.map(s=>'<a href="'+s.url+'" target="_blank" rel="noopener" style="color:var(--blue);text-decoration:none">'+esc((s.title||'link').slice(0,30))+'</a>').join(' · ')+'</div>':'');
+  }catch(e){ box.innerHTML='<div style="color:var(--amber);font-size:13px">'+esc(e.message)+'</div>'; }
+  finally{ if(btn){btn.disabled=false;btn.textContent='Search the web';} }
+}
+function queueWebAddr(i){
+  const a=(window._waList||[])[i]; if(!a) return;
+  const tplEl=document.getElementById('f-tpl');
+  const tpl=[...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro'))||templates[0];
+  const pcM=(a.address||'').match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+  const prop={address:a.address,displayAddress:a.address,fullAddress:a.address,postcode:pcM?pcM[0]:'',addressConfirmed:true,source:'Web search',status:'Success letter'};
+  queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false});
+  updQBadge();updQStats();updateKPIs();
+  toast('<i class=ic-mailbox></i> Letter queued for '+esc(a.address),'ok');
+}
+
 function printSuccessLetters(){
   if(!slActiveLetter){toast('Choose a letter template first','warn');return;}
   let selected=slAddresses.filter(a=>slSelected.has(a.idx));
