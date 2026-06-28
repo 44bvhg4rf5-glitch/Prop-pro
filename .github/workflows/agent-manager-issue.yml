@@ -59,6 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISPATCH: ${{ steps.agent.outputs.dispatch_json }}
+          ISSUE: ${{ github.event.issue.number }}
         run: |
           first=1
           echo "$DISPATCH" | jq -c '.[]' | while read -r item; do
@@ -67,12 +68,12 @@ jobs:
             file="agent-${agent}.yml"
             # Stagger launches so the agents don't all hit the AI provider at once (avoids 429s).
             if [ "$first" = "1" ]; then first=0; else sleep 25; fi
-            echo "Launching $agent ($file) ..."
+            echo "Launching $agent ($file) on issue #$ISSUE ..."
             case "$agent" in
               research|competitor|content|rnd)
-                gh workflow run "$file" --ref main -f topic="$topic" || echo "::warning::could not launch $agent" ;;
+                gh workflow run "$file" --ref main -f topic="$topic" -f issue="$ISSUE" || echo "::warning::could not launch $agent" ;;
               health|security)
-                gh workflow run "$file" --ref main || echo "::warning::could not launch $agent" ;;
+                gh workflow run "$file" --ref main -f issue="$ISSUE" || echo "::warning::could not launch $agent" ;;
               *)
                 echo "::warning::unknown agent $agent — skipped" ;;
             esac

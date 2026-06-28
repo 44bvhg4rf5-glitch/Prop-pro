@@ -168,7 +168,7 @@ async function managerReport() {
   // Strip the trailing JSON block so the human-readable plan stays clean.
   let body = stripPreamble(r.text).replace(/```json[\s\S]*?```\s*$/, '').trim();
   const queued = dispatch.length
-    ? `\n\n---\n🚀 **Launching now:** ${dispatch.map((d) => '`' + d.agent + '`').join(', ')} — each will open its own report issue shortly.`
+    ? `\n\n---\n🚀 **Launching now:** ${dispatch.map((d) => '`' + d.agent + '`').join(', ')} — each will reply in this thread shortly.`
     : '\n\n---\n_No agent was auto-launched for this task — see the plan above for what needs doing._';
   return { body: `${body}${queued}\n\n_Managed by: ${r.provider || 'AI'}_`, problem: false, dispatch };
 }

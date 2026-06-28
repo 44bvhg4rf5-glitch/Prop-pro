@@ -5,7 +5,12 @@ name: Security agent
 on:
   schedule:
     - cron: '0 9 * * 1'        # every Monday 09:00 UTC (staggered after Research + Competitor to avoid AI rate limits)
-  workflow_dispatch: {}          # adds a "Run workflow" button you can press anytime
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: 'Internal: issue number to reply on (the Manager sets this; leave blank for a standalone report)'
+        required: false
+        default: ''
 
 permissions:
   issues: write                  # so it can open the report issue
@@ -25,7 +30,15 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/agent.js
-      - name: Post findings as an issue
+      - name: Post the findings (reply in the thread, or open a new issue)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh issue create --title "${{ steps.agent.outputs.report_title }}" --body-file "${{ steps.agent.outputs.report_file }}"
+          ISSUE: ${{ github.event.inputs.issue }}
+          TITLE: ${{ steps.agent.outputs.report_title }}
+          FILE: ${{ steps.agent.outputs.report_file }}
+        run: |
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body-file "$FILE"
+          else
+            gh issue create --title "$TITLE" --body-file "$FILE"
+          fi
