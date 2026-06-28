@@ -2966,6 +2966,51 @@ function renderHome(){
   el.innerHTML = html;
 }
 
+/* ═══ SELLER RADAR — propensity to sell + anniversary prospecting ═══ */
+async function runRadar(){
+  const area=(document.getElementById('radar-area').value||'').trim();
+  if(!area){ toast('Enter a postcode or outcode','warn'); return; }
+  const btn=document.getElementById('radar-btn'); if(btn){btn.disabled=true;btn.textContent='Scanning…';}
+  const res=document.getElementById('radar-results'); res.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">Scanning Land Registry for '+esc(area)+'…</div>';
+  try{
+    const isPc=/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i.test(area);
+    const qs=new URLSearchParams(isPc?{postcode:area.toUpperCase()}:{district:area.toUpperCase()});
+    qs.set('today', new Date().toISOString().slice(0,10));
+    const r=await fetch('/api/propensity?'+qs.toString());
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ res.innerHTML='<div style="padding:20px;color:var(--amber)">'+esc(d.error||'Lookup failed')+'</div>'; return; }
+    window._radar=d.properties||[];
+    renderRadar(d);
+  }catch(e){ res.innerHTML='<div style="padding:20px;color:var(--amber)">'+esc(e.message)+'</div>'; }
+  finally{ if(btn){btn.disabled=false;btn.textContent='Scan for sellers';} }
+}
+function renderRadar(d){
+  const sum=document.getElementById('radar-summary'); sum.style.display='flex'; sum.style.flexWrap='wrap';
+  const card=(n,l,c)=>'<div style="flex:1;min-width:120px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:24px;font-weight:800;color:'+c+'">'+n+'</div><div style="font-size:11px;color:var(--muted);font-weight:600">'+l+'</div></div>';
+  sum.innerHTML=card(d.total||0,'owners in '+esc(d.area||''),'var(--text)')+card(d.hot||0,'HOT — likely to sell','#DC2626')+card(d.anniversaries||0,'anniversary ≤30 days','#0369A1');
+  const res=document.getElementById('radar-results'); const props=d.properties||[];
+  if(!props.length){ res.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">No Land Registry records found for that area.</div>'; return; }
+  const bandCol={hot:'#DC2626',warm:'#D97706',cold:'#64748B'};
+  res.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Ranked by likelihood to come to market — contact the top of the list first.</div>'+props.map((p,i)=>
+    '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)">'
+    +'<div style="width:46px;height:46px;border-radius:10px;background:'+(bandCol[p.band]||'#64748B')+';color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0"><div style="font-size:16px;font-weight:800;line-height:1">'+p.score+'</div><div style="font-size:8px;font-weight:700;letter-spacing:.5px">'+(p.band||'').toUpperCase()+'</div></div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:var(--text)">'+esc(p.address)+'</div>'
+    +'<div style="font-size:12px;color:var(--muted)">Owned '+p.yearsOwned+' yrs · bought '+p.lastSold+(p.lastPrice?' for £'+Number(p.lastPrice).toLocaleString():'')
+    +(p.anniversarySoon?' · <span style="color:#0369A1;font-weight:700">anniversary in '+p.daysToAnniversary+' days</span>':'')+'</div></div>'
+    +'<button onclick="queueRadar('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0"><i class=ic-mailbox></i> Queue</button>'
+    +'</div>').join('');
+}
+function queueRadar(i){
+  const p=(window._radar||[])[i]; if(!p) return;
+  const tplEl=document.getElementById('f-tpl');
+  const tpl=[...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro'))||templates[0];
+  const pcM=(p.address||'').match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+  const prop={address:p.address,displayAddress:p.address,fullAddress:p.address,postcode:pcM?pcM[0]:p.postcode,addressConfirmed:true,haCode:p.outcode||'',district:p.outcode||'',source:'Seller Radar',status:'Off-market'};
+  queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false});
+  updQBadge();updQStats();updateKPIs();
+  toast('<i class=ic-mailbox></i> Letter queued for '+esc(p.address),'ok');
+}
+
 function showPanel(n){
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(x => x.classList.remove('active'));
