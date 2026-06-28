@@ -1,0 +1,79 @@
+name: Manager (chat by issue)
+
+# Talk to the Manager by opening a GitHub Issue. Start the title with "Manager"
+# (e.g. "Manager: find what Spectre changed and write me letters") OR add the
+# "manager" label to any issue. The Manager reads it, replies on the SAME issue
+# with its plan, and launches the right agents. Free: GitHub Actions + Groq.
+on:
+  issues:
+    types: [opened, labeled]
+
+# If both 'opened' and 'labeled' fire for the same issue, keep just one run.
+concurrency:
+  group: manager-issue-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  issues: write
+  actions: write
+
+jobs:
+  manage:
+    # Only act when the issue is addressed to the Manager (by label or title),
+    # and never on the agents' own auto-generated report issues.
+    if: >
+      github.event.issue.user.login != 'github-actions[bot]' &&
+      (
+        (github.event.action == 'labeled' && github.event.label.name == 'manager') ||
+        (github.event.action == 'opened' && (
+          contains(github.event.issue.labels.*.name, 'manager') ||
+          startsWith(github.event.issue.title, 'Manager') ||
+          startsWith(github.event.issue.title, 'manager')
+        ))
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run the Manager on your request
+        id: agent
+        env:
+          AGENT_ROLE: manager
+          # Passed via env (never inline in a shell command) so issue text can't inject anything.
+          AGENT_TASK: ${{ github.event.issue.title }} — ${{ github.event.issue.body }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/agent.js
+      - name: Make sure the 'manager' label exists for next time
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh label create manager --color 5319e7 --description "Ask the Manager agent" 2>/dev/null || true
+      - name: Reply on your issue with the plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue comment "${{ github.event.issue.number }}" --body-file "${{ steps.agent.outputs.report_file }}"
+      - name: Launch the assigned agents
+        if: steps.agent.outputs.dispatch_json != '' && steps.agent.outputs.dispatch_json != '[]'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH: ${{ steps.agent.outputs.dispatch_json }}
+        run: |
+          first=1
+          echo "$DISPATCH" | jq -c '.[]' | while read -r item; do
+            agent=$(echo "$item" | jq -r '.agent')
+            topic=$(echo "$item" | jq -r '.topic // ""')
+            file="agent-${agent}.yml"
+            # Stagger launches so the agents don't all hit the AI provider at once (avoids 429s).
+            if [ "$first" = "1" ]; then first=0; else sleep 25; fi
+            echo "Launching $agent ($file) ..."
+            case "$agent" in
+              research|competitor|content|rnd)
+                gh workflow run "$file" --ref main -f topic="$topic" || echo "::warning::could not launch $agent" ;;
+              health|security)
+                gh workflow run "$file" --ref main || echo "::warning::could not launch $agent" ;;
+              *)
+                echo "::warning::unknown agent $agent — skipped" ;;
+            esac
+          done
