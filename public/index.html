@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260628-size">
+  <link rel="stylesheet" href="styles.css?v=20260628-freedata">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -462,6 +462,15 @@
       </div>
     </div>
     <a href="https://www.royalmail.com/find-a-postcode" target="_blank" rel="noopener" style="color:#fff;font-size:11px;font-weight:600;text-decoration:none;opacity:.65;flex-shrink:0;text-align:center;border:1px solid rgba(255,255,255,.2);padding:8px 12px;border-radius:8px">Royal Mail <i class=ic-arrowupright></i></a>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#EEF2FF"><i class=ic-search></i></div>Find addresses on the web <span class="nb nb-b" style="margin-left:6px">NEW</span></div>
+    <div style="font-size:12px;color:var(--muted);margin:2px 0 10px">Search the web (free) for real full addresses on a street or area — handy when a postcode lookup comes up short. Enter a street + area, e.g. "Crofts Road, Harrow".</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="wa-q" type="text" placeholder="Street and area, e.g. Crofts Road, Harrow HA1" style="flex:1;min-width:220px;padding:11px 13px;border:1.5px solid var(--border2);border-radius:9px;font-size:14px;font-family:inherit">
+      <button onclick="webAddrSearch()" id="wa-btn" style="padding:11px 18px;background:#4F46E5;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Search the web</button>
+    </div>
+    <div id="wa-results" style="margin-top:12px"></div>
   </div>
   <div class="card">
     <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-search></i></div>Postcode Lookup</div>
@@ -1578,6 +1587,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260628-size"></script>
+<script src="app.js?v=20260628-freedata"></script>
 </body>
 </html>
