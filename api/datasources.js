@@ -36,14 +36,15 @@ export default async function handler(req, res) {
   // 1. OS Places — postcode endpoint (Royal Mail PAF: every delivery address).
   const OS = process.env.OS_PLACES_KEY || '';
   if (OS) {
-    const r = await getJson(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
+    let r = await getJson(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
+    for (let i = 0; i < 2 && r.status === 429; i++) { await new Promise((s) => setTimeout(s, 1200)); r = await getJson(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' }); }
     const rows = (r.json && r.json.results) || [];
     out.os_places_postcode = { status: r.status, count: rows.length, sample: rows.slice(0, 4).map((x) => x.DPA && x.DPA.ADDRESS) };
   } else out.os_places_postcode = { status: 'no key' };
 
   // 2. OpenStreetMap Overpass — crowdsourced house numbers near the pin.
-  const oq = `[out:json][timeout:15];(node["addr:housenumber"](around:90,${lat},${lon});way["addr:housenumber"](around:90,${lat},${lon}););out tags 60;`;
-  const ov = await postJson('overpass-api.de', '/api/interpreter', 'data=' + encodeURIComponent(oq), { 'Content-Type': 'application/x-www-form-urlencoded' });
+  const oq = `[out:json][timeout:20];(node["addr:housenumber"](around:120,${lat},${lon});way["addr:housenumber"](around:120,${lat},${lon}););out tags center 80;`;
+  const ov = await getJson('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(oq), { 'User-Agent': 'PropMailPro/1.0 (edbrown0606@gmail.com)', Accept: 'application/json' });
   const els = (ov.json && ov.json.elements) || [];
   out.osm_overpass = { status: ov.status, count: els.length, sample: els.slice(0, 5).map((e) => [e.tags['addr:housenumber'], e.tags['addr:unit'] || e.tags['addr:flats'] || '', e.tags['addr:street']].filter(Boolean).join(' ')) };
 
