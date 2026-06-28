@@ -1,0 +1,59 @@
+name: Manager
+
+# The Manager sits above the whole team. You give it a task; it writes a plan,
+# decides which specialist agents should handle it, posts the plan as a GitHub
+# Issue, and then LAUNCHES those agents for you (each opens its own report).
+# Free: GitHub Actions + Groq. No tokens to set up — GITHUB_TOKEN is allowed to
+# trigger the other workflows' workflow_dispatch events.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'What do you want done? Describe it plainly — the Manager will plan it and assign the right agents.'
+        required: true
+        default: ''
+
+permissions:
+  issues: write
+  actions: write
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run the Manager
+        id: agent
+        env:
+          AGENT_ROLE: manager
+          AGENT_TASK: ${{ github.event.inputs.task }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/agent.js
+      - name: Post the plan as an issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue create --title "${{ steps.agent.outputs.report_title }}" --body-file "${{ steps.agent.outputs.report_file }}"
+      - name: Launch the assigned agents
+        if: steps.agent.outputs.dispatch_json != '' && steps.agent.outputs.dispatch_json != '[]'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH: ${{ steps.agent.outputs.dispatch_json }}
+        run: |
+          echo "$DISPATCH" | jq -c '.[]' | while read -r item; do
+            agent=$(echo "$item" | jq -r '.agent')
+            topic=$(echo "$item" | jq -r '.topic // ""')
+            file="agent-${agent}.yml"
+            echo "Launching $agent ($file) ..."
+            case "$agent" in
+              research|competitor|content|rnd)
+                gh workflow run "$file" --ref main -f topic="$topic" || echo "::warning::could not launch $agent" ;;
+              health|security)
+                gh workflow run "$file" --ref main || echo "::warning::could not launch $agent" ;;
+              *)
+                echo "::warning::unknown agent $agent — skipped" ;;
+            esac
+          done
