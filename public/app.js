@@ -1436,55 +1436,42 @@ async function runLiveSearch(){
     const toResolve = props.filter(p => !p.addressConfirmed);
     if (toResolve.length) {
       document.getElementById('search-status').style.display = 'block';
-      let done = 0, foundN = confirmedCount;
-      setStatus('Finding exact addresses…', `Looking up ${toResolve.length} street-only listing${toResolve.length>1?'s':''} in the public registers…`, 5, '…');
-      await mapLimit(toResolve, 3, async (p) => {
-        // Full resolve (uses the listing page's exact postcode — cached server-
-        // side, so a search fetches each page only once). This is what lets
-        // named blocks like "Apex House" resolve to their real flats.
-        const r = await epcLookup(p, 1);
-        const cands = (r && Array.isArray(r.candidates)) ? r.candidates : [];
-        if (cands.length) {
-          p._candidates = cands;
-          p._resolveConf = r.confidence || 'low';
-          p._resolveReasons = Array.isArray(r.reasons) ? r.reasons : [];
-          const top = cands[0];
-          if (r.confidence === 'high') {
-            p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
-            if (top.postcode) p.postcode = top.postcode; if (top.uprn) p.uprn = top.uprn;
-            p.addressSource = r.source || 'EPC register'; p.addressConfirmed = true; p.addressFound = true;
-          } else if (r.confidence === 'medium') {
-            p.address = top.fullAddress; p.displayAddress = top.fullAddress; p.fullAddress = top.fullAddress;
-            if (top.postcode) p.postcode = top.postcode;
-            p.addressSource = r.source || 'EPC register'; p.addressConfirmed = false; p.addressFound = true; p.addressLikely = true;
-          }
-        }
-        // Building / postcode block → a precise single address (shown + counted).
-        // Street-level (only a road name, no exact building/postcode) is NOT
-        // precise enough — keep the data but don't surface it as "found", so the
-        // results never show bare road names.
-        if (r && r.buildingResolved && Array.isArray(r.units) && r.units.length) {
-          const addr = (r.building && r.building.address) || '';
-          p.block = { level: r.blockLevel, name: (r.building && r.building.name) || '', address: addr, units: r.units };
-          if (r.blockLevel !== 'street') {
-            if (addr) { p.displayAddress = addr; p.fullAddress = addr; }
-            p.addressFound = true;
-          }
-        }
-        done++;
-        if (p.addressFound) foundN++;
-        setStatus('Finding exact addresses…', `Found ${foundN} full address${foundN===1?'':'es'} so far…`, 5 + Math.round(done * (90 / toResolve.length)), foundN);
-      });
+      setStatus('Finding exact addresses…', `Resolving ${toResolve.length} listings to precise addresses…`, 5, '…');
+      // One batch server call per chunk resolves listings to a PRECISE address
+      // (exact house / building / exact-postcode) from the map pin — reliably at
+      // scale, and never a bare street name. Anything it can't pin precisely is
+      // left out of the "found" view entirely (no work for the user).
+      const byId = {}; toResolve.forEach(p => { byId[p.id] = p; });
+      const payload = toResolve.map(p => ({ id: p.id, displayAddress: p.displayAddress || p.address, type: p.type, lat: p.lat, lon: p.lon, haCode: p.haCode }));
+      const CHUNK = 45; let doneC = 0;
+      for (let c = 0; c < payload.length; c += CHUNK) {
+        const chunk = payload.slice(c, c + CHUNK);
+        let d = {};
+        try {
+          const r = await fetch('/api/resolve-batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listings: chunk }) });
+          d = await r.json();
+        } catch (e) { /* chunk failed — those stay unresolved */ }
+        (d.results || []).forEach(res => {
+          const p = byId[res.id]; if (!p) return;
+          if (res.postcode) p.postcode = res.postcode;
+          p.displayAddress = res.address; p.fullAddress = res.address; p.address = res.address;
+          p.addressFound = true;
+          if (res.level === 'exact') { p.addressConfirmed = true; p.addressSource = 'Register (exact)'; }
+          else { p.block = { level: res.level, name: res.building || '', address: res.address, units: res.units || [res.address] }; }
+        });
+        doneC += chunk.length;
+        const foundSoFar = props.filter(x => x.addressFound).length;
+        setStatus('Finding exact addresses…', `Resolved ${foundSoFar} precise addresses…`, 5 + Math.round(doneC * (90 / payload.length)), foundSoFar);
+      }
       document.getElementById('search-status').style.display = 'none';
     }
     // Default the view to "only show properties with a full address".
     if (window.addrFilter === undefined) window.addrFilter = 'found';
     renderLiveResults();
     const foundTotal = props.filter(p => p.addressFound).length;
-    const blockN = props.filter(p => p.block).length;
-    const ownerTotal = (() => { const s = new Set(); props.forEach(p => { if(p.block) p.block.units.forEach(u => s.add(u.toLowerCase())); else if(p.addressFound && p.fullAddress) s.add(p.fullAddress.toLowerCase()); }); return s.size; })();
-    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings resolved (${props.filter(p=>p.addressConfirmed).length} exact · ${blockN} building/street) → ${ownerTotal} unique real owner addresses to mail`, 'ok');
-    toast(`<i class=ic-check></i> ${foundTotal}/${found} resolved · ${ownerTotal} mailable owner addresses`, 'ok');
+    const pct = found ? Math.round(foundTotal / found * 100) : 0;
+    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings resolved to a precise full address (${pct}%) — ${props.filter(p=>p.addressConfirmed).length} exact, ${props.filter(p=>p.block).length} building/block`, 'ok');
+    toast(`<i class=ic-check></i> ${foundTotal} of ${found} resolved to a full address (${pct}%)`, 'ok');
     updateKPIs();
     return;
   }
