@@ -1957,6 +1957,26 @@ function renderConfirmBox(i){
     + '</div>'
     + '</div>';
 }
+// ── Best-effort: read the house number from free street imagery (Mapillary) ──
+async function readStreetNumber(i){
+  const p=props[i]; if(!p) return;
+  if(p.lat==null||p.lon==null){ toast('No map location for this listing','warn'); return; }
+  toast('<i class=ic-search></i> Reading street imagery…','inf');
+  try{
+    const body={lat:p.lat,lon:p.lon,candidates:(p._candidates||[]).slice(0,40)};
+    const r=await fetch('/api/streetview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ toast(d.note||d.error||'Street imagery unavailable','warn'); return; }
+    if(d.matched){
+      p.address=d.matched; p.displayAddress=d.matched; p.fullAddress=d.matched;
+      p.addressSource='Street imagery (verify)'; p.addressConfirmed=false; p.addressLikely=true; p.addressFound=true; p.block=null;
+      renderLiveResults();
+      toast('<i class=ic-check></i> Imagery read number '+d.number+' → '+d.matched+' — verify before posting','ok');
+    } else if(d.found){ toast('Read "'+d.number+'" but it is not on this postcode — ignored','warn'); }
+    else { toast(d.note||'No legible number in the imagery','warn'); }
+  }catch(e){ toast(e.message,'warn'); }
+}
+
 // ── AI second opinion: find the address independently, then cross-reference ──
 async function aiCrossCheck(i){
   const p=props[i]; if(!p) return;
@@ -2151,6 +2171,8 @@ function renderLiveResults(){
           +'<button onclick="event.stopPropagation();quickQueueOne('+i+')" style="padding:7px 13px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .12s" onmouseover="this.style.background=\'rgba(37,99,235,.18)\'" onmouseout="this.style.background=\'rgba(37,99,235,.1)\'"><i class=ic-mailbox></i> Queue Letter</button>'
           // Queue every real owner in the block (building/street)
           +(p.block?'<button onclick="event.stopPropagation();queueBlock('+i+')" style="padding:7px 13px;background:rgba(124,58,237,.12);color:#6D28D9;border:1.5px solid rgba(124,58,237,.3);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue all '+p.block.units.length+' owners</button>':'')
+          // Houses not yet pinned: try reading the number from street imagery
+          +((!p.addressConfirmed && p.lat!=null && !/flat|apartment|maisonette|studio|share/i.test(p.type||''))?'<button onclick="event.stopPropagation();readStreetNumber('+i+')" style="padding:7px 11px;background:rgba(2,132,199,.08);color:#0369A1;border:1.5px solid rgba(2,132,199,.25);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-search></i> Read number (street imagery)</button>':'')
           +'<button onclick="event.stopPropagation();researchOwner(props['+i+'])" style="padding:7px 13px;background:rgba(201,146,26,.1);color:#9A6C12;border:1.5px solid rgba(201,146,26,.3);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-user></i> Find owner</button>'
           // Zoopla cross-check
           +'<a href="'+p.zoUrl+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="padding:7px 11px;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:11px;font-weight:600;color:#7C3AED;text-decoration:none;background:rgba(124,58,237,.06)">Zoopla</a>'
