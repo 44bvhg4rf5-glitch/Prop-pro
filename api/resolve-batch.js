@@ -2,6 +2,7 @@ import https from 'https';
 import { sendJson, guardOrigin, readBody, reverseGeocode, EPC_BASE, fetchJson, FULL_POSTCODE } from '../lib/helpers.js';
 import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 import { rightmoveProperty } from '../lib/sources.js';
+import { councilTaxAddresses, councilTaxCached } from '../lib/counciltax.js';
 
 export const config = { maxDuration: 60 };
 
@@ -128,6 +129,31 @@ const distM = (a, b) => { const R = 6371000, t = Math.PI / 180, dLa = (b.lat - a
 const FLAT = /flat|apartment|maisonette|studio/i;
 const daysBetween = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
 
+// ── Council Tax (VOA) — authoritative residential unit list per postcode ──
+// Used only to ADD: complete a block's unit list and confirm a resolved address.
+// It never overrides the EPC-freshness choice of building/flat.
+function addrParts(full) {
+  const flat = (String(full).match(/\b(?:flat|apartment|apt|unit|room|studio|maisonette)\s+([0-9a-z]+)/i) || [])[1] || '';
+  const m = stripFlat(full).match(new RegExp('(\\d+[a-z]?)\\s+([a-z][a-z\'’ ]*?\\s(?:' + ROADS + '))', 'i'));
+  return { flat: flat.toLowerCase(), no: m ? m[1].toLowerCase() : '', street: m ? norm(m[2]) : '' };
+}
+const ctStreetMatch = (a, b) => !!a && !!b && (a === b || a.includes(b) || b.includes(a));
+// Does a Council Tax row refer to the same dwelling as these parsed parts?
+function ctSame(r, parts) {
+  return !!parts.no && r.flat === parts.flat && r.buildingNo === parts.no && ctStreetMatch(r.street, parts.street);
+}
+// Council Tax rows for a postcode. Cached fetches are free; only NEW postcodes
+// cost the per-request budget, so a big search can't hammer the public service.
+async function councilTaxFor(pc, ctx) {
+  if (!pc) return [];
+  const cached = councilTaxCached(pc);
+  if (cached) return cached;
+  if (!ctx || ctx.ctBudget <= 0) return [];
+  ctx.ctBudget--;
+  const r = await councilTaxAddresses(pc).catch(() => ({ rows: [] }));
+  return r.rows || [];
+}
+
 async function resolveOne(p, ctx) {
   const disp = p.displayAddress || p.address || '';
   if (p.lat == null || p.lon == null) return null;
@@ -219,12 +245,22 @@ async function resolveOne(p, ctx) {
   }
 
   if (exact) {
-    return { id: p.id, level: 'exact', deliverable: true, address: exact.fullAddress, postcode: exact.postcode, units: [exact.fullAddress], why };
+    // Cross-check against the Council Tax register: if the dwelling is listed
+    // there too, mark it confirmed (extra confidence, never used to reject).
+    const ctRows = await councilTaxFor(exact.postcode, ctx);
+    const verified = ctRows.length ? ctRows.some((r) => ctSame(r, addrParts(exact.fullAddress))) : undefined;
+    return { id: p.id, level: 'exact', deliverable: true, address: exact.fullAddress, postcode: exact.postcode, units: [exact.fullAddress], verified, why: verified ? why + '; confirmed on the Council Tax register' : why };
   }
   // Right building, but can't single out the flat — return the building + its
   // real units (deliverable only by mailing the block). Not counted as "exact".
+  // Prefer the COMPLETE unit list from Council Tax (every flat in the block),
+  // falling back to the EPC-known units when Council Tax has nothing.
   const addr = stripFlat(chosen[0].fullAddress);
-  return { id: p.id, level: 'building', deliverable: false, address: addr, postcode: chosen[0].postcode, building: tcAddr(building || street), units: chosen.map((u) => u.fullAddress), why };
+  const bparts = addrParts(chosen[0].fullAddress);
+  const ctRows = await councilTaxFor(chosen[0].postcode, ctx);
+  const ctUnits = ctRows.filter((r) => (bparts.no && r.buildingNo === bparts.no && ctStreetMatch(r.street, bparts.street)) || (building && norm(r.address).includes(norm(building))));
+  const units = ctUnits.length ? ctUnits.map((r) => tcAddr(r.address).replace(/\bAt\b/g, 'at')) : chosen.map((u) => u.fullAddress);
+  return { id: p.id, level: 'building', deliverable: false, address: addr, postcode: chosen[0].postcode, building: tcAddr(building || street), units, unitSource: ctUnits.length ? 'councilTax' : 'epc', why: ctUnits.length ? why + `; full unit list from Council Tax (${ctUnits.length})` : why };
 }
 
 async function mapLimit(items, limit, fn) {
@@ -245,7 +281,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 4 }; // cap free OpenStreetMap fallbacks per request
+  const ctx = { ovBudget: 4, ctBudget: 20 }; // cap free OpenStreetMap + Council Tax fetches per request
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });

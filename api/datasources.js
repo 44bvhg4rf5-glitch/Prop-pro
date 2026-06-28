@@ -1,5 +1,6 @@
 import https from 'https';
 import { sendJson, guardOrigin } from '../lib/helpers.js';
+import { councilTaxAddresses } from '../lib/counciltax.js';
 
 export const config = { maxDuration: 30 };
 
@@ -71,6 +72,14 @@ export default async function handler(req, res) {
     const items = (r.json && r.json.items) || [];
     out.companies_house = { status: r.status, count: items.length, sample: items.slice(0, 3).map((c) => c.company_name + ' — ' + ((c.registered_office_address || {}).address_line_1 || '')) };
   } else out.companies_house = { status: 'no key' };
+
+  // 5. Council Tax (VOA, gov.uk) — every residential dwelling in England & Wales
+  // for this postcode, INCLUDING flat numbers. Free, no key. This is the unit
+  // list we otherwise lack without paid Royal Mail PAF.
+  try {
+    const ct = await councilTaxAddresses(postcode);
+    out.council_tax = { status: ct.error ? ct.error : 200, count: (ct.rows || []).length, flats: (ct.rows || []).filter((r) => r.flat).length, sample: (ct.rows || []).slice(0, 5).map((r) => `${r.address}${r.band ? ' (Band ' + r.band + ')' : ''}`) };
+  } catch (e) { out.council_tax = { status: 'error', error: e.message }; }
 
   sendJson(res, 200, { postcode, point: [lat, lon], sources: out });
 }
