@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0b1020" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Command" />
+<meta name="robots" content="noindex, nofollow" />
+<link rel="manifest" href="/dashboard.webmanifest" />
+<link rel="apple-touch-icon" href="/dashboard-icon-180.png" />
+<link rel="icon" href="/dashboard-icon.svg" type="image/svg+xml" />
+<link rel="icon" type="image/png" sizes="192x192" href="/dashboard-icon-192.png" />
+<title>Command · PropMail Pro</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#151b30; --panel2:#1c2440; --line:#283154;
+    --txt:#e8ecf7; --dim:#9aa6c8; --accent:#6c8cff; --accent2:#34d6a6;
+    --claude:#d97757; --gemini:#4f8cff; --danger:#ff6b6b; --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.5;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    overscroll-behavior-y:none;
+  }
+  .app{max-width:760px;margin:0 auto;display:flex;flex-direction:column;height:100dvh}
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px 10px;position:sticky;top:0;background:linear-gradient(180deg,var(--bg),rgba(11,16,32,.85));
+    backdrop-filter:blur(8px);z-index:5;
+  }
+  header.top h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.2px}
+  header.top h1 span{color:var(--accent)}
+  .status-dot{font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center}
+  .status-dot b{color:var(--accent2);font-weight:600}
+
+  main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 100px}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin:12px 0}
+  .card h2{margin:0 0 10px;font-size:15px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.6px}
+  .brief{white-space:pre-wrap;font-size:16px;line-height:1.65}
+  .muted{color:var(--dim)}
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
+
+  button{font-family:inherit;font-size:15px;cursor:pointer;border:none;color:var(--txt)}
+  .btn{background:var(--accent);color:#fff;border-radius:12px;padding:11px 16px;font-weight:600}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  .btn.sm{padding:7px 12px;font-size:13px;border-radius:10px}
+  .row{display:flex;gap:8px;align-items:center}
+  .grow{flex:1}
+
+  /* tasks */
+  ul.tasks{list-style:none;margin:0;padding:0}
+  ul.tasks li{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--line)}
+  ul.tasks li:last-child{border-bottom:none}
+  .check{width:24px;height:24px;border-radius:7px;border:2px solid var(--line);flex:0 0 auto;display:grid;place-items:center;background:var(--panel2)}
+  .check.done{background:var(--accent2);border-color:var(--accent2);color:#04210f;font-weight:900}
+  .tasktext{flex:1}
+  .tasktext.done{text-decoration:line-through;color:var(--dim)}
+  .del{color:var(--dim);background:none;font-size:18px;padding:4px 8px}
+  .addrow input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:12px 14px;font-size:16px}
+
+  /* feed */
+  .feed-item{display:block;padding:12px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--txt)}
+  .feed-item:last-child{border-bottom:none}
+  .feed-item .meta{font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center;margin-bottom:3px;flex-wrap:wrap}
+  .tag{font-size:11px;padding:2px 7px;border-radius:6px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .tag.commit{background:rgba(52,214,166,.16);color:var(--accent2)}
+  .tag.pr{background:rgba(108,140,255,.18);color:var(--accent)}
+  .tag.issue{background:rgba(217,119,87,.18);color:var(--claude)}
+  .tag.update{background:rgba(255,193,7,.18);color:#ffce4a}
+  .feed-item .ttl{font-size:15px;line-height:1.4}
+
+  /* chat */
+  #chatView{display:none;flex-direction:column;height:100%}
+  #chatView.active{display:flex}
+  .chat-controls{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 10px}
+  .seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .seg button{padding:8px 12px;font-size:13px;background:none;color:var(--dim)}
+  .seg button.on{background:var(--accent);color:#fff;font-weight:600}
+  .seg.prov button.on[data-p="anthropic"]{background:var(--claude)}
+  .seg.prov button.on[data-p="gemini"]{background:var(--gemini)}
+  .messages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 0 10px}
+  .msg{max-width:88%;padding:11px 14px;border-radius:16px;white-space:pre-wrap;line-height:1.55;font-size:15px;word-wrap:break-word}
+  .msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .msg.ai{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:5px}
+  .msg.ai .who{font-size:11px;color:var(--dim);margin-bottom:4px;font-weight:600}
+  .composer{display:flex;gap:8px;padding:10px 0 14px;position:sticky;bottom:0;background:linear-gradient(0deg,var(--bg) 70%,transparent)}
+  .composer textarea{flex:1;resize:none;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:14px;padding:12px 14px;font-size:16px;max-height:120px;font-family:inherit}
+
+  /* bottom nav */
+  nav.tabbar{
+    position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;
+    background:rgba(21,27,48,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));z-index:10;
+  }
+  nav.tabbar button{background:none;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--dim);font-size:11px;flex:1;padding:4px}
+  nav.tabbar button.on{color:var(--accent)}
+  nav.tabbar .ic{font-size:21px;line-height:1}
+  .spinner{display:inline-block;width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .empty{text-align:center;color:var(--dim);padding:30px 10px}
+  a{color:var(--accent)}
+  .hint{font-size:13px;color:var(--dim);background:var(--panel2);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
+  code{background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Command<span>·</span></h1>
+    <div class="status-dot" id="statusDot">connecting…</div>
+  </header>
+
+  <main>
+    <!-- ── TODAY ── -->
+    <section class="view active" id="todayView">
+      <div class="card">
+        <h2>Morning Brief</h2>
+        <div class="brief" id="brief"><span class="spinner"></span> Preparing your brief…</div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn ghost sm" id="refreshBrief">↻ Regenerate</button>
+          <span class="pill" id="briefMeta"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Tasks</h2>
+        <div class="row addrow" style="margin-bottom:10px">
+          <input id="newTask" placeholder="Add a task…" autocomplete="off" enterkeyhint="done" />
+          <button class="btn" id="addTask">Add</button>
+        </div>
+        <ul class="tasks" id="taskList"></ul>
+        <div class="row" style="margin-top:10px;justify-content:space-between">
+          <span class="muted" id="taskCount"></span>
+          <button class="btn ghost sm" id="clearDone">Clear done</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CHAT ── -->
+    <section class="view" id="chatView">
+      <div class="chat-controls">
+        <div class="seg prov" id="provSeg">
+          <button data-p="" class="on">Auto</button>
+          <button data-p="anthropic">Claude</button>
+          <button data-p="gemini">Gemini</button>
+        </div>
+        <div class="seg" id="modeSeg">
+          <button data-m="chat" class="on">Chat</button>
+          <button data-m="cowork">Co-work</button>
+          <button data-m="code">Code</button>
+        </div>
+        <button class="btn ghost sm" id="newChat" style="margin-left:auto">New</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="composer">
+        <textarea id="chatInput" rows="1" placeholder="Message…" enterkeyhint="send"></textarea>
+        <button class="btn" id="sendChat">↑</button>
+      </div>
+    </section>
+
+    <!-- ── AGENTS ── -->
+    <section class="view" id="agentsView">
+      <div class="card">
+        <h2>Agent Activity</h2>
+        <div id="feed"><span class="spinner"></span> Loading activity…</div>
+        <button class="btn ghost sm" id="refreshFeed" style="margin-top:12px">↻ Refresh</button>
+      </div>
+      <div class="card">
+        <h2>Updates Log</h2>
+        <p class="muted" style="margin-top:0;font-size:14px">Posts your Claude Code agents push to <code>/api/dashboard?action=updates</code>.</p>
+        <div id="updates"><span class="muted">No updates yet.</span></div>
+      </div>
+    </section>
+
+    <!-- ── SETUP ── -->
+    <section class="view" id="setupView">
+      <div class="card">
+        <h2>Connections</h2>
+        <div id="setupBody"><span class="spinner"></span> Checking…</div>
+      </div>
+      <div class="card">
+        <h2>Let agents report in</h2>
+        <p class="muted" style="font-size:14px">Tell any Claude Code agent to post a status update with one HTTP call:</p>
+        <pre style="white-space:pre-wrap;background:var(--panel2);padding:12px;border-radius:12px;font-size:12.5px;overflow-x:auto"><code id="curlSnippet"></code></pre>
+      </div>
+      <div class="card">
+        <h2>Install to Home Screen</h2>
+        <p class="muted" style="font-size:14px">On iPhone/iPad: tap the Share icon in Safari → <b>Add to Home Screen</b>. It opens full-screen like a native app.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-v="today" class="on"><span class="ic">☀️</span>Today</button>
+    <button data-v="chat"><span class="ic">💬</span>Chat</button>
+    <button data-v="agents"><span class="ic">🤖</span>Agents</button>
+    <button data-v="setup"><span class="ic">⚙️</span>Setup</button>
+  </nav>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const api = (path, opts) => fetch('/api/dashboard?' + path, opts).then(r => r.json());
+const esc = (s) => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const ago = (iso) => {
+  if(!iso) return '';
+  const d = (Date.now() - new Date(iso).getTime())/1000;
+  if(d<60) return 'just now';
+  if(d<3600) return Math.floor(d/60)+'m ago';
+  if(d<86400) return Math.floor(d/3600)+'h ago';
+  return Math.floor(d/86400)+'d ago';
+};
+
+/* ── tab switching ── */
+$('#tabbar').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  const v = b.dataset.v;
+  document.querySelectorAll('nav.tabbar button').forEach(x=>x.classList.toggle('on', x===b));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  $('#'+v+'View').classList.add('active');
+  if(v==='agents') loadFeed();
+});
+
+/* ── status / setup ── */
+async function loadStatus(){
+  try{
+    const s = await api('action=status');
+    const ai = s.ai.enabled ? (s.ai.providers.join('+')||'on') : 'off';
+    $('#statusDot').innerHTML = `AI <b>${esc(ai)}</b> · GH <b>${s.github.enabled?'on':'off'}</b>`;
+    const rows = [
+      ['AI (chat & brief)', s.ai.enabled, s.ai.enabled? s.ai.providers.join(', ') : 'Add GEMINI_API_KEY or ANTHROPIC_API_KEY'],
+      ['GitHub activity', s.github.enabled, s.github.enabled? (s.github.repos.join(', ')||'auto: your recent repos') : 'Add GITHUB_TOKEN (+ optional GITHUB_REPOS)'],
+      ['Durable storage', s.store.enabled, s.store.enabled? 'tasks & updates persist across devices' : 'Add KV_REST_API_* — else in-memory only'],
+      ['Morning email', s.email.enabled, s.email.enabled? 'RESEND_API_KEY set' : 'Add RESEND_API_KEY + DASHBOARD_EMAIL for 9am email'],
+    ];
+    $('#setupBody').innerHTML = rows.map(([n,ok,d])=>
+      `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)">
+         <span style="font-size:18px">${ok?'✅':'⚪️'}</span>
+         <div><div style="font-weight:600">${esc(n)}</div><div class="muted" style="font-size:13px">${esc(d)}</div></div>
+       </div>`).join('');
+    const origin = location.origin;
+    $('#curlSnippet').textContent =
+`curl -X POST "${origin}/api/dashboard?action=updates" \\
+  -H "Content-Type: application/json" \\
+  -d '{"source":"my-agent","text":"Finished the auth refactor ✅"}'`;
+  }catch(e){ $('#statusDot').textContent='offline'; }
+}
+
+/* ── brief ── */
+async function loadBrief(refresh){
+  $('#brief').innerHTML = '<span class="spinner"></span> '+(refresh?'Regenerating…':'Preparing your brief…');
+  try{
+    const r = await api('action=summary'+(refresh?'&refresh=1':''));
+    if(r.error){ $('#brief').textContent = '⚠️ '+(r.error.message||'Could not generate brief.'); return; }
+    $('#brief').textContent = r.text || 'Nothing to report yet.';
+    $('#briefMeta').textContent = (r.provider && r.provider!=='none'? r.provider : 'offline') + (r.cached?' · cached':' · fresh');
+  }catch(e){ $('#brief').textContent='⚠️ Network error.'; }
+}
+$('#refreshBrief').onclick = ()=>loadBrief(true);
+
+/* ── tasks ── */
+function renderTasks(tasks){
+  const ul = $('#taskList');
+  if(!tasks.length){ ul.innerHTML = '<li class="empty">No tasks yet — add one above.</li>'; }
+  else ul.innerHTML = tasks.map(t=>
+    `<li data-id="${t.id}">
+       <div class="check ${t.done?'done':''}" data-act="toggle">${t.done?'✓':''}</div>
+       <span class="tasktext ${t.done?'done':''}">${esc(t.text)}</span>
+       <button class="del" data-act="delete">✕</button>
+     </li>`).join('');
+  const open = tasks.filter(t=>!t.done).length;
+  $('#taskCount').textContent = open+' open · '+tasks.length+' total';
+}
+async function loadTasks(){ const r = await api('action=tasks'); renderTasks(r.tasks||[]); }
+async function taskOp(body){ const r = await api('action=tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); renderTasks(r.tasks||[]); }
+$('#addTask').onclick = async ()=>{ const v=$('#newTask').value.trim(); if(!v) return; $('#newTask').value=''; await taskOp({op:'add',text:v}); };
+$('#newTask').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#addTask').click(); });
+$('#clearDone').onclick = ()=>taskOp({op:'clearDone'});
+$('#taskList').addEventListener('click', e=>{
+  const li = e.target.closest('li'); if(!li) return;
+  const act = e.target.dataset.act; if(!act) return;
+  taskOp({op:act, id:li.dataset.id});
+});
+
+/* ── agents feed ── */
+async function loadFeed(){
+  $('#feed').innerHTML = '<span class="spinner"></span> Loading activity…';
+  try{
+    const r = await api('action=feed');
+    if(!r.configured){ $('#feed').innerHTML = '<div class="hint">Connect GitHub: add a <code>GITHUB_TOKEN</code> env var (and optionally <code>GITHUB_REPOS</code>). Your agents\' commits & PRs then appear here.</div>'; }
+    else if(!r.items || !r.items.length){ $('#feed').innerHTML = '<div class="empty">No recent activity'+(r.note?'<br><span class="muted" style="font-size:13px">'+esc(r.note)+'</span>':'')+'</div>'; }
+    else $('#feed').innerHTML = r.items.map(i=>
+      `<a class="feed-item" href="${esc(i.url)}" target="_blank" rel="noopener">
+         <div class="meta"><span class="tag ${i.type}">${i.type}</span><span>${esc(i.repo)}</span><span>·</span><span>${ago(i.ts)}</span>${i.author?'<span>· '+esc(i.author)+'</span>':''}</div>
+         <div class="ttl">${esc(i.title)}</div>
+       </a>`).join('');
+  }catch(e){ $('#feed').innerHTML='<div class="empty">⚠️ Could not load.</div>'; }
+  loadUpdates();
+}
+async function loadUpdates(){
+  try{
+    const r = await api('action=updates');
+    const u = r.updates||[];
+    if(!u.length){ $('#updates').innerHTML='<span class="muted">No updates yet.</span>'; return; }
+    $('#updates').innerHTML = u.map(x=>
+      `<div class="feed-item">
+         <div class="meta"><span class="tag update">${esc(x.source)}</span><span>${ago(x.ts)}</span></div>
+         <div class="ttl">${esc(x.text)}</div>
+       </div>`).join('');
+  }catch(e){}
+}
+$('#refreshFeed').onclick = loadFeed;
+
+/* ── chat ── */
+let provider = '', mode = 'chat', history = [];
+const SYSTEM = {
+  chat: 'You are a sharp, concise personal assistant on a phone screen. Be direct and useful. Keep answers short unless asked to expand.',
+  cowork: 'You are the user\'s co-working partner and chief-of-staff. Help them think through projects, plan work, break down tasks, draft messages and make decisions. Be proactive: end with a concrete suggested next step. Concise, mobile-friendly.',
+  code: 'You are an expert pair programmer. Give correct, idiomatic code with brief explanations. Prefer complete, copy-pasteable snippets. Use fenced code blocks. Be concise.'
+};
+$('#provSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b)return; provider=b.dataset.p; [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); });
+$('#modeSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b)return; mode=b.dataset.m; [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); });
+$('#newChat').onclick = ()=>{ history=[]; $('#messages').innerHTML=''; };
+
+function addMsg(role, text, who){
+  const d = document.createElement('div');
+  d.className = 'msg '+(role==='user'?'user':'ai');
+  d.innerHTML = (role!=='user' && who? '<div class="who">'+esc(who)+'</div>':'') + esc(text);
+  $('#messages').appendChild(d);
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+  return d;
+}
+const ta = $('#chatInput');
+ta.addEventListener('input', ()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; });
+ta.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendChat(); } });
+$('#sendChat').onclick = sendChat;
+
+async function sendChat(){
+  const text = ta.value.trim(); if(!text) return;
+  ta.value=''; ta.style.height='auto';
+  addMsg('user', text);
+  history.push({role:'user', content:text});
+  const provLabel = provider==='anthropic'?'Claude':provider==='gemini'?'Gemini':'AI';
+  const pending = addMsg('ai','…', provLabel);
+  pending.querySelector('.who') && (pending.lastChild.textContent='');
+  pending.insertAdjacentHTML('beforeend','<span class="spinner"></span>');
+  try{
+    const r = await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ system:SYSTEM[mode], messages:history.slice(-12), max_tokens:1500, provider })});
+    const j = await r.json();
+    const txt = (j.content && j.content[0] && j.content[0].text) || (j.error && ('⚠️ '+(j.error.message||'AI error'))) || '⚠️ No response.';
+    const who = j.provider==='anthropic'?'Claude':j.provider==='gemini'?'Gemini':j.provider||provLabel;
+    pending.innerHTML = '<div class="who">'+esc(who)+'</div>'+esc(txt);
+    if(j.content) history.push({role:'assistant', content:txt});
+  }catch(e){ pending.innerHTML='<div class="who">'+esc(provLabel)+'</div>⚠️ Network error.'; }
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+}
+
+/* ── init ── */
+loadStatus(); loadBrief(false); loadTasks();
+</script>
+</body>
+</html>

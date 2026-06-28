@@ -1,0 +1,17 @@
+{
+  "name": "Command",
+  "short_name": "Command",
+  "description": "Personal command dashboard — morning briefs, Claude + Gemini chat, and live agent activity.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    { "src": "/dashboard-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/dashboard-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/dashboard-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/dashboard-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
