@@ -1,0 +1,14 @@
+{
+  "name": "Command · PropMail Pro",
+  "short_name": "Command",
+  "description": "Personal command dashboard — morning briefs, Claude + Gemini chat, and live agent activity.",
+  "start_url": "/dashboard",
+  "scope": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    { "src": "/dashboard-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
