@@ -21,9 +21,9 @@ async function securityReport() {
   const paths = [...listJs('api'), ...listJs('lib'), 'server.js'].filter(Boolean);
   let corpus = '';
   for (const p of paths) {
-    const code = readCapped(p, 7000);
+    const code = readCapped(p, 4500);
     if (code) corpus += `\n\n===== FILE: ${p} =====\n${code}`;
-    if (corpus.length > 95000) break;
+    if (corpus.length > 38000) break; // keep the request under the model's payload limit (was hitting HTTP 413)
   }
   const system = 'You are a senior application-security engineer reviewing the BACKEND of a Node.js + vanilla-JS web app (an estate-agent tool on Vercel). Report only concrete, real issues — never invent problems. Consider: injection, XSS / output encoding, authentication & session handling, API-key / secret exposure, SSRF via server-side fetch, CORS / origin checks, missing input validation, rate-limiting & abuse, and UK data-protection (GDPR) concerns. Be specific about the file and the exact risk, and give a practical fix.';
   const user = `Review this backend source and write a Markdown report with these sections:\n\n## Summary\n(2-4 lines on overall security posture)\n\n## Findings\n(For each: **[High/Medium/Low]** \`file\` — the risk — the fix. If you find nothing real, say so plainly.)\n\n## Already done well\n(Good security practices visible in the code.)\n\nSOURCE:\n${corpus}`;
