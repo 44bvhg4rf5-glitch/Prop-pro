@@ -1,5 +1,6 @@
-import { sendJson, guardOrigin, readBody, reverseGeocode, EPC_BASE, fetchJson } from '../lib/helpers.js';
+import { sendJson, guardOrigin, readBody, reverseGeocode, EPC_BASE, fetchJson, FULL_POSTCODE } from '../lib/helpers.js';
 import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
+import { rightmoveProperty } from '../lib/sources.js';
 
 export const config = { maxDuration: 60 };
 
@@ -68,12 +69,17 @@ async function epcPostcode(pc) {
   return out;
 }
 
-const _memRev = new Map();
-async function nearby(lat, lon, area) {
-  const k = lat.toFixed(4) + ',' + lon.toFixed(4);
-  let pcs = _memRev.get(k);
-  if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
-  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 10);
+// Exact postcode from the listing page (the accurate source — the pin is too
+// offset to trust). Cached per URL so a whole search fetches each page once.
+const _memPage = new Map();
+async function pageData(url) {
+  if (!url) return null;
+  if (_memPage.has(url)) return _memPage.get(url);
+  if (storeConfigured()) { const c = await getJSON('rm:' + url, null); if (c) { _memPage.set(url, c); return c; } }
+  const d = await rightmoveProperty(url).catch(() => null);
+  _memPage.set(url, d); if (_memPage.size > 4000) _memPage.clear();
+  if (d && storeConfigured()) await setJSON('rm:' + url, d).catch(() => {});
+  return d;
 }
 
 const FLAT = /flat|apartment|maisonette|studio/i;
@@ -81,24 +87,24 @@ const daysBetween = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
 
 async function resolveOne(p) {
   const disp = p.displayAddress || p.address || '';
-  if (p.lat == null || p.lon == null) return null;
   const seg0 = disp.split(',')[0].trim();
   const num = leadNum(seg0);
   const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
   const building = isFlat ? buildingNameOf(disp) : '';
   const street = streetOf(disp);
-  const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
   const listDate = (p.listDate || '').slice(0, 10);
-  const pcs = await nearby(p.lat, p.lon, area);
 
-  // Gather addresses on this street/building across the nearby postcodes.
-  let matches = [];
-  for (const pc of pcs) {
-    const units = await epcPostcode(pc);
-    if (!units.length) continue;
-    if (building) { const m = units.filter((u) => norm(u.fullAddress).includes(norm(building))); if (m.length) { matches = m; break; } }
-    else if (street) { units.forEach((u) => { if (norm(u.fullAddress).includes(street)) matches.push(u); }); }
-  }
+  // The accurate postcode comes from the listing page; without it we don't guess.
+  const pg = await pageData(p.url);
+  const pc = pg && FULL_POSTCODE.test(pg.postcode || '') ? pg.postcode.toUpperCase() : '';
+  if (!pc) return null;
+
+  const units = await epcPostcode(pc);
+  if (!units.length) return null;
+  // On the exact postcode, keep the addresses on the listing's street/building.
+  let matches = units;
+  if (building) { const m = units.filter((u) => norm(u.fullAddress).includes(norm(building))); if (m.length) matches = m; }
+  else if (street) { const m = units.filter((u) => norm(u.fullAddress).includes(street)); if (m.length) matches = m; }
   if (!matches.length) return null;
 
   // Group by building and score each by certificate freshness.
