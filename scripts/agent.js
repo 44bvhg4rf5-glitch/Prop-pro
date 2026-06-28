@@ -63,17 +63,55 @@ async function competitorReport() {
   return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${stripPreamble(r.text)}\n\n_Watched by: ${r.provider || 'AI'}${searchConfigured() ? ' + live web search' : ''}_`;
 }
 
+// Uptime & data-source health — pings the live site + key APIs and opens an
+// issue only when something is down (or when OS Places finally goes live).
+async function healthReport() {
+  const base = process.env.SITE_URL || 'https://prop-pro-theta.vercel.app';
+  const get = async (path) => {
+    try { const r = await fetch(base + path, { signal: AbortSignal.timeout(15000) }); let j = null; try { j = await r.json(); } catch {} return { ok: r.ok, status: r.status, j }; }
+    catch (e) { return { ok: false, status: 0, err: e.message }; }
+  };
+  const checks = [];
+  let r;
+  r = await get('/'); checks.push({ name: 'Website', ok: r.ok, status: r.status });
+  r = await get('/api/config'); checks.push({ name: 'Config API', ok: !!(r.ok && r.j && r.j.epcEnabled), status: r.status });
+  r = await get('/api/listings?district=HA1&channel=sale&pages=1'); checks.push({ name: 'Live property search', ok: !!(r.ok && r.j && Array.isArray(r.j.properties) && r.j.properties.length), status: r.status, detail: (r.j && r.j.properties) ? r.j.properties.length + ' listings' : '' });
+  let osStatus = '?'; const d = await get('/api/datasources?postcode=HA1%203WU'); if (d.j && d.j.sources && d.j.sources.os_places_postcode) osStatus = d.j.sources.os_places_postcode.status;
+  const osLive = osStatus === 200;
+  const fails = checks.filter((c) => !c.ok);
+  const problem = fails.length > 0 || osLive; // alert on a failure, or on the good news that OS is live
+  const lines = checks.map((c) => `- ${c.ok ? '✅' : '❌'} **${c.name}** — HTTP ${c.status}${c.detail ? ' · ' + c.detail : ''}`).join('\n');
+  const osLine = osLive
+    ? '- 🎉 **OS Places is LIVE (HTTP 200)** — Royal Mail flat-level addresses are now available. Ask Claude to wire it into the resolver!'
+    : `- ⏳ OS Places — HTTP ${osStatus} (still capped / on the free trial; awaiting OS Premium)`;
+  const body = `## Status — ${fails.length ? '❌ ATTENTION NEEDED' : '✅ all healthy'}\n\n${lines}\n\n### Data sources\n${osLine}\n\n_Checked: ${base}_`;
+  return { body, problem };
+}
+
+// Letter-copy writer — fresh, ready-to-post prospecting letter templates.
+async function contentReport() {
+  const brief = TOPIC || 'prospecting letters for a Harrow (HA) estate agent to win instructions';
+  const system = 'You are a senior UK estate-agency direct-mail copywriter. Write warm, professional, compliant letter copy that wins instructions — no clichés, no false claims, GDPR-friendly, concise, ready to post.';
+  const user = `Write THREE short ready-to-send prospecting letter templates (each ~120-160 words) for: ${brief}. Vary the angle: (1) a neighbour just sold, (2) low stock / high demand, (3) free valuation. Use placeholders like [Owner name], [Street], [Agent name], [Agency], [Phone]. Output ONLY Markdown:\n## Letter 1 — Neighbour just sold\n## Letter 2 — Low stock, high demand\n## Letter 3 — Free valuation offer`;
+  const r = await runLLM({ system, user, maxTokens: 1600 });
+  return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${stripPreamble(r.text)}\n\n_Written by: ${r.provider || 'AI'}_`;
+}
+
 const ROLES = {
   research: { fn: researchReport, dir: 'research', title: '🔎 Research' },
   competitor: { fn: competitorReport, dir: 'competitor', title: '🛰️ Competitor watch' },
+  content: { fn: contentReport, dir: 'content', title: '✍️ Letter copy' },
+  health: { fn: healthReport, dir: 'health', title: '🩺 Health check' },
   security: { fn: securityReport, dir: 'security', title: '🔒 Security' },
 };
 const role = ROLES[ROLE] || ROLES.security;
-const body = await role.fn();
+const out = await role.fn();
+const body = typeof out === 'string' ? out : out.body;
+const problem = typeof out === 'object' && out.problem;
 const dir = `reports/${role.dir}`;
 fs.mkdirSync(dir, { recursive: true });
 const file = `${dir}/${today}.md`;
 const title = `${role.title} report — ${today}`;
 fs.writeFileSync(file, `# ${title}\n\n${body}\n`);
-if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `report_file=${file}\nreport_title=${title}\n`);
+if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `report_file=${file}\nreport_title=${title}\nhas_problem=${problem ? 'true' : 'false'}\n`);
 console.log(`Wrote ${file}`);
