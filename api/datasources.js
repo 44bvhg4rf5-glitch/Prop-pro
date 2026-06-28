@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   if (OS) {
     const r = await getJsonRaw(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
     const rows = (r.json && r.json.results) || [];
-    out.os_places_postcode = { status: r.status, count: rows.length, sample: rows.slice(0, 4).map((x) => x.DPA && x.DPA.ADDRESS), error: r.status !== 200 ? (r.raw || '').slice(0, 300) : undefined, keyTail: OS.slice(-4) };
+    out.os_places_postcode = { status: r.status, count: rows.length, sample: rows.slice(0, 4).map((x) => x.DPA && x.DPA.ADDRESS), error: r.status !== 200 ? (r.raw || '').slice(0, 300) : undefined };
     // Also try the /find endpoint (different rate bucket) for comparison.
     const rf = await getJsonRaw(`https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(postcode)}&maxresults=5&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
     out.os_places_find = { status: rf.status, error: rf.status !== 200 ? (rf.raw || '').slice(0, 200) : undefined };

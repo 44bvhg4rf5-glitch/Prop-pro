@@ -1,5 +1,5 @@
 import https from 'https';
-import { sendJson } from '../lib/helpers.js';
+import { sendJson, guardOrigin } from '../lib/helpers.js';
 
 const LR = 'https://landregistry.data.gov.uk/data/ppi/transaction-record.json';
 const ALL_HA = ['HA0', 'HA1', 'HA2', 'HA3', 'HA4', 'HA5', 'HA6', 'HA7', 'HA8', 'HA9'];
@@ -30,6 +30,7 @@ function typeLabel(v) {
 
 // Land Registry "Sold Board" — recently registered sales across the HA area.
 export default async function handler(req, res) {
+  if (!guardOrigin(req, res)) return;
   const u = new URL(req.url, 'http://localhost');
   const days = Math.min(parseInt(u.searchParams.get('days') || '180', 10) || 180, 365);
   const districts = (u.searchParams.get('districts') || ALL_HA.join(','))

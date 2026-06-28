@@ -1,4 +1,4 @@
-import { EPC_BASE, fetchJson, sendJson } from '../lib/helpers.js';
+import { EPC_BASE, fetchJson, sendJson, guardOrigin } from '../lib/helpers.js';
 
 // London boroughs covering the HA postcode area.
 const COUNCILS = ['Harrow', 'Brent', 'Hillingdon', 'Barnet', 'Ealing'];
@@ -10,6 +10,7 @@ const outcodeOf = (pc) => (String(pc).toUpperCase().match(/^[A-Z]{1,2}\d[\dA-Z]?
 // New-EPC monitor: EPCs lodged recently across the HA area are an early
 // "about to come to market" signal — with full addresses.
 export default async function handler(req, res) {
+  if (!guardOrigin(req, res)) return;
   const EPC_API_KEY = process.env.EPC_API_KEY || '';
   if (!EPC_API_KEY) {
     sendJson(res, 503, { error: 'No EPC_API_KEY configured. Set it in the environment.' });
