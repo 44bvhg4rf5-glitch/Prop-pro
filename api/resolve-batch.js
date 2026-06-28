@@ -1,3 +1,4 @@
+import https from 'https';
 import { sendJson, guardOrigin, readBody, reverseGeocode, EPC_BASE, fetchJson, FULL_POSTCODE } from '../lib/helpers.js';
 import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 import { rightmoveProperty } from '../lib/sources.js';
@@ -96,10 +97,38 @@ async function certSqft(cert) {
   return v;
 }
 
+// OpenStreetMap Overpass — free, keyless crowdsourced addresses near a point.
+// Independent of EPC, so it resolves buildings/houses the register doesn't cover.
+const _memOv = new Map();
+function overpassNear(lat, lon) {
+  const k = lat.toFixed(4) + ',' + lon.toFixed(4);
+  if (_memOv.has(k)) return Promise.resolve(_memOv.get(k));
+  const q = `[out:json][timeout:18];(node["addr:housenumber"](around:140,${lat},${lon});way["addr:housenumber"](around:140,${lat},${lon}););out tags center 120;`;
+  return new Promise((resolve) => {
+    https.get('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q), { headers: { 'User-Agent': 'PropMailPro/1.0 (edbrown0606@gmail.com)', Accept: 'application/json' } }, (r) => {
+      let b = ''; r.on('data', (c) => (b += c));
+      r.on('end', () => {
+        let els = [];
+        try {
+          els = ((JSON.parse(b) || {}).elements || []).map((e) => ({
+            num: String(e.tags['addr:housenumber'] || '').toLowerCase(),
+            unit: e.tags['addr:unit'] || e.tags['addr:flats'] || '',
+            street: norm(e.tags['addr:street'] || ''),
+            lat: e.lat != null ? e.lat : (e.center && e.center.lat),
+            lon: e.lon != null ? e.lon : (e.center && e.center.lon),
+          })).filter((x) => x.num && x.street && x.lat != null);
+        } catch {}
+        _memOv.set(k, els); resolve(els);
+      });
+    }).on('error', () => { _memOv.set(k, []); resolve([]); });
+  });
+}
+const distM = (a, b) => { const R = 6371000, t = Math.PI / 180, dLa = (b.lat - a.lat) * t, dLo = (b.lon - a.lon) * t, la1 = a.lat * t, la2 = b.lat * t; return Math.round(2 * R * Math.asin(Math.sqrt(Math.sin(dLa / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLo / 2) ** 2))); };
+
 const FLAT = /flat|apartment|maisonette|studio/i;
 const daysBetween = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
 
-async function resolveOne(p) {
+async function resolveOne(p, ctx) {
   const disp = p.displayAddress || p.address || '';
   if (p.lat == null || p.lon == null) return null;
   const seg0 = disp.split(',')[0].trim();
@@ -128,7 +157,23 @@ async function resolveOne(p) {
     for (const us of groups.values()) cands.push({ us, latest: us.reduce((x, u) => (u.certDate > x ? u.certDate : x), '') });
     if (building && cands.length) break; // a named building is unambiguous
   }
-  if (!cands.length) return null;
+  // Fallback: EPC has nothing on this street here. Try OpenStreetMap (free,
+  // independent) for a building on the listing's street nearest the map pin.
+  // Budgeted so a big search can't overload the public Overpass server.
+  if (!cands.length) {
+    if (!street || !ctx || ctx.ovBudget <= 0) return null;
+    ctx.ovBudget--;
+    const els = await overpassNear(p.lat, p.lon).catch(() => []);
+    const onStreet = els.filter((e) => e.street.includes(street) || street.includes(e.street));
+    if (!onStreet.length) return null;
+    onStreet.forEach((e) => { e._d = distM({ lat: p.lat, lon: p.lon }, e); });
+    onStreet.sort((a, b) => a._d - b._d);
+    const e = onStreet[0];
+    if (e._d > 120) return null; // too far from the pin to trust
+    const addr = tcAddr([e.num + (e.unit ? e.unit : ''), street].join(' ')) + (pcs[0] ? ', ' + pcs[0] : '');
+    const deliverable = !isFlat || !!e.unit; // a house number is deliverable; a flat needs a unit
+    return { id: p.id, level: deliverable ? 'exact' : 'building', deliverable, address: addr, postcode: pcs[0] || '', units: [addr], why: 'OpenStreetMap address nearest the map pin' };
+  }
   cands.sort((a, b) => b.latest.localeCompare(a.latest));
 
   let chosen, why;
@@ -200,7 +245,8 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const results = (await mapLimit(listings, 6, resolveOne)).filter(Boolean);
+  const ctx = { ovBudget: 10 }; // cap free OpenStreetMap fallbacks per request
+  const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
 }
