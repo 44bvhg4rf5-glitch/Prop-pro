@@ -43,10 +43,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISPATCH: ${{ steps.agent.outputs.dispatch_json }}
         run: |
+          first=1
           echo "$DISPATCH" | jq -c '.[]' | while read -r item; do
             agent=$(echo "$item" | jq -r '.agent')
             topic=$(echo "$item" | jq -r '.topic // ""')
             file="agent-${agent}.yml"
+            # Stagger launches so the agents don't all hit the AI provider at once (avoids 429s).
+            if [ "$first" = "1" ]; then first=0; else sleep 25; fi
             echo "Launching $agent ($file) ..."
             case "$agent" in
               research|competitor|content|rnd)

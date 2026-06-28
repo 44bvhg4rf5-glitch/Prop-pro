@@ -38,9 +38,17 @@ function stripPreamble(text) {
   const m = t.match(/^##\s+\w/m);
   return m ? t.slice(m.index).trim() : t.trim();
 }
+// Keep web searches in our world. A vague topic like "Harrow market" can return
+// the wrong "Harrow" (e.g. a US pharma firm) — anchor it to UK property unless
+// it already clearly mentions property/estate-agency.
+function anchorProperty(topic) {
+  const t = String(topic || '').trim();
+  return /\b(estate agent|estate agency|property|properties|propert|housing|house price|rightmove|zoopla|instruction|conveyanc|letting|landlord|mortgage|spectre)\b/i.test(t)
+    ? t : `${t} — UK residential property / estate-agent market`;
+}
 
 async function researchReport() {
-  const topic = TOPIC || 'Current UK estate-agent lead generation, direct-mail / letter marketing tactics, and Rightmove / property-data trends for winning instructions';
+  const topic = anchorProperty(TOPIC || 'Current UK estate-agent lead generation, direct-mail / letter marketing tactics, and Rightmove / property-data trends for winning instructions');
   let web = { results: [], answer: '' };
   if (searchConfigured()) web = await webSearch(topic, { maxResults: 6 }).catch(() => ({ results: [], answer: '' }));
   const sources = web.results.map((x, i) => `[${i + 1}] ${x.title} — ${x.url}\n${x.content}`).join('\n\n');
@@ -97,22 +105,30 @@ async function contentReport() {
   return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${stripPreamble(r.text)}\n\n_Written by: ${r.provider || 'AI'}_`;
 }
 
-// Head of R&D — reads the live backend tools and proposes concrete, costed
-// research-and-development improvements (grounded in the actual code + the web).
+// A plain-English manifest of the tools currently in place. We brief R&D from
+// this (not raw source) so the report stays useful and never echoes code back.
+const TOOL_MANIFEST = `PropMail Pro — an estate-agent address-intelligence tool for the UK (Harrow / HA focus, now UK-wide). The live tools:
+- Live property finder: pulls current Rightmove listings for a postcode district (api/listings).
+- Address resolution engine (api/resolve, api/resolve-batch): turns a Rightmove listing into a real postal address using FREE public data — the EPC register (energy certificates, incl. floor area + certificate date), HM Land Registry Price Paid, postcodes.io reverse-geocode, and OpenStreetMap (Nominatim + Overpass). Key trick: "EPC-freshness" — a property gets a fresh certificate when it's marketed, so the building with the newest EPCs on a street is usually the one being let, which helps pick the right building and pin a flat. Returns a confidence level: exact / building / postcode.
+- Current ceiling: ~44% correct building, ~25% deliverable (exact unit). Flat-level letterbox data (which flat in a block) needs Royal Mail PAF via OS Places, which is paid / currently blocked on a free-trial cap.
+- Seller Radar (api/propensity): scores propensity-to-sell from years-owned (Land Registry) against the typical 7-13 year move cycle, and flags anniversaries.
+- AI Intel / owner research (api/owner): postal-only, public-records-only owner research (Companies House freeholder/SPV lookup, PlanIt planning) — strictly UK GDPR/PECR compliant.
+- Web address finder (api/webaddr): Tavily web search to pull addresses for the Success Letters panel.
+- Free-data audit (api/datasources): probes candidate free sources (OS Places, OSM Overpass, FHRS, Companies House) to see what returns usable addresses.
+- LLM layer (lib/llm.js): provider routing across Groq (fast/cheap) + Gemini (web search), with fallback.
+- 11 UI panels incl. Print Queue (letter queue with real addresses + Rightmove links), Templates, Auto Flow, Live Bot, Investor Board.
+Goal that matters most to the owner/investor: >40% full+exact deliverable addresses, zero wrong addresses, no bare street names, and "no work" for the (non-technical) user.`;
+
+// Head of R&D — proposes concrete, costed research-and-development improvements
+// to the tools above, grounded in the manifest + live web search.
 async function rndReport() {
-  // Inventory the real tools (the serverless endpoints) so the brief is grounded in what exists.
-  let corpus = '';
-  for (const p of listJs('api')) {
-    const code = readCapped(p, 2600);
-    if (code) corpus += `\n\n===== ${p} =====\n${code}`;
-    if (corpus.length > 30000) break;
-  }
-  const topic = TOPIC || 'new free UK property-address data sources and techniques to raise the exact-address win-rate — EPC register, HM Land Registry, OpenStreetMap, OS Places PAF, street-view analysis, propensity-to-sell signals';
+  let topic = TOPIC || 'new free UK property-address data sources and techniques to raise the exact-address win-rate — EPC register, HM Land Registry, OpenStreetMap, OS Places PAF, street-view analysis, propensity-to-sell signals';
+  topic = anchorProperty(topic);
   let web = { results: [] };
   if (searchConfigured()) web = await webSearch(topic, { maxResults: 6 }).catch(() => ({ results: [] }));
   const sources = web.results.map((x, i) => `[${i + 1}] ${x.title} — ${x.url}\n${x.content}`).join('\n\n');
-  const system = 'You are the Head of R&D for PropMail Pro, an estate-agent address-intelligence tool. You read the actual backend tools and propose concrete, realistic research-and-development improvements. Be specific to the code you see, separate quick wins from bigger bets, and always weigh impact against effort and cost — the product relies on FREE data wherever possible. Cite live sources like [1]. Never invent capabilities the code does not have.';
-  const user = `Here are the live backend tools (serverless endpoints) currently powering the site — for your analysis only, do NOT paste the source back:\n${corpus}\n\n${sources ? 'RELEVANT WEB FINDINGS:\n' + sources : '(No live web search configured — say so.)'}\n\nWrite a Markdown R&D brief:\n## Current tools (what's in place)\n## What's working vs the limits we're hitting\n## R&D ideas (ranked best first)\n(For each: **idea** — impact (High/Med/Low) · effort · cost · how to prototype it.)\n## Recommended next experiment\n## Sources`;
+  const system = 'You are the Head of R&D for PropMail Pro, a UK estate-agent address-intelligence tool. Propose concrete, realistic research-and-development improvements. Separate quick wins from bigger bets, and always weigh impact against effort and cost — the product relies on FREE data wherever possible. Cite live sources like [1]. Never invent capabilities the product does not have. Do NOT output any source code — write prose and tables only.';
+  const user = `THE TOOLS CURRENTLY IN PLACE:\n${TOOL_MANIFEST}\n\nR&D FOCUS: ${topic}\n\n${sources ? 'RELEVANT WEB FINDINGS:\n' + sources : '(No live web search configured — say so.)'}\n\nWrite a Markdown R&D brief (prose/tables only — no code):\n## Where we are today\n## What's working vs the limits we're hitting\n## R&D ideas (ranked best first)\n(For each: **idea** — impact (High/Med/Low) · effort · cost · how to prototype it.)\n## Recommended next experiment\n## Sources`;
   const r = await runLLM({ system, user, maxTokens: 2600, search: true });
   return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${stripPreamble(r.text)}\n\n_R&D by: ${r.provider || 'AI'}${searchConfigured() ? ' + live web search' : ''}_`;
 }
