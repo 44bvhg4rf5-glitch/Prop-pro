@@ -1459,13 +1459,17 @@ async function runLiveSearch(){
             p.addressSource = r.source || 'EPC register'; p.addressConfirmed = false; p.addressFound = true; p.addressLikely = true;
           }
         }
-        // Building / street block: show the ONE building address for this listing
-        // (the full unit list stays available behind a tap for bulk mailing).
+        // Building / postcode block → a precise single address (shown + counted).
+        // Street-level (only a road name, no exact building/postcode) is NOT
+        // precise enough — keep the data but don't surface it as "found", so the
+        // results never show bare road names.
         if (r && r.buildingResolved && Array.isArray(r.units) && r.units.length) {
           const addr = (r.building && r.building.address) || '';
           p.block = { level: r.blockLevel, name: (r.building && r.building.name) || '', address: addr, units: r.units };
-          if (addr) { p.displayAddress = addr; p.fullAddress = addr; }
-          p.addressFound = true;
+          if (r.blockLevel !== 'street') {
+            if (addr) { p.displayAddress = addr; p.fullAddress = addr; }
+            p.addressFound = true;
+          }
         }
         done++;
         if (p.addressFound) foundN++;
@@ -2907,6 +2911,7 @@ const HOME_TOOLS = [
     { id:'bot', name:'Live Bot', desc:'Continuous monitoring for new listings', svg:'<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/>' },
   ]},
   { group: 'Intelligence', items: [
+    { id:'radar', name:'Seller Radar', desc:'Who is most likely to sell — before they list', badge:'NEW', badgeColor:'b-blue', svg:'<circle cx="12" cy="12" r="9"/><path d="M12 12l6-3"/><circle cx="12" cy="12" r="1"/>' },
     { id:'intel', name:'AI Intel', desc:'Paste a Rightmove link → exact address → owner', badge:'NEW', badgeColor:'b-blue', svg:'<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>' },
     { id:'success', name:'Success Letters', desc:'Look up full addresses by postcode', svg:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>' },
     { id:'blocked', name:'Do-Not-Mail', desc:'Your suppression / do-not-contact list', svg:'<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>' },
