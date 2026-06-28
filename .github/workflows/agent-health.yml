@@ -2,11 +2,17 @@ name: Health check
 
 # Pings the live site + key APIs daily and opens an issue ONLY when something is
 # down — or when OS Places finally goes live (HTTP 200). No AI keys needed: this
-# is pure HTTP checking, so it's free and silent on healthy days.
+# is pure HTTP checking, so it's free and silent on healthy days. When the
+# Manager asks for a check it replies in that thread instead, every time.
 on:
   schedule:
     - cron: '0 8 * * *'        # every day 08:00 UTC
   workflow_dispatch:
+    inputs:
+      issue:
+        description: 'Internal: issue number to reply on (the Manager sets this; leave blank for a standalone alert)'
+        required: false
+        default: ''
 
 permissions:
   issues: write
@@ -25,8 +31,19 @@ jobs:
           AGENT_ROLE: health
           SITE_URL: ${{ vars.SITE_URL }}
         run: node scripts/agent.js
-      - name: Open an issue (only if something needs attention)
-        if: steps.agent.outputs.has_problem == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Report (reply in the thread, or open an issue only if attention is needed)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh issue create --title "${{ steps.agent.outputs.report_title }}" --body-file "${{ steps.agent.outputs.report_file }}"
+          ISSUE: ${{ github.event.inputs.issue }}
+          HAS_PROBLEM: ${{ steps.agent.outputs.has_problem }}
+          EVENT: ${{ github.event_name }}
+          TITLE: ${{ steps.agent.outputs.report_title }}
+          FILE: ${{ steps.agent.outputs.report_file }}
+        run: |
+          if [ -n "$ISSUE" ]; then
+            gh issue comment "$ISSUE" --body-file "$FILE"
+          elif [ "$HAS_PROBLEM" = "true" ] || [ "$EVENT" = "workflow_dispatch" ]; then
+            gh issue create --title "$TITLE" --body-file "$FILE"
+          else
+            echo "All healthy — nothing to report."
+          fi

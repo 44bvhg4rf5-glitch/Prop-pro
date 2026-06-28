@@ -1,10 +1,12 @@
 name: Manager
 
 # The Manager sits above the whole team. You give it a task; it writes a plan,
-# decides which specialist agents should handle it, posts the plan as a GitHub
-# Issue, and then LAUNCHES those agents for you (each opens its own report).
+# decides which specialist agents should handle it, opens ONE plan issue, and
+# then LAUNCHES those agents for you — each replies in that same issue thread,
+# so everything stays in one conversation.
 # Free: GitHub Actions + Groq. No tokens to set up — GITHUB_TOKEN is allowed to
 # trigger the other workflows' workflow_dispatch events.
+# (Prefer chatting by issue? Open an issue titled "Manager: ..." instead.)
 on:
   workflow_dispatch:
     inputs:
@@ -34,14 +36,22 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/agent.js
       - name: Post the plan as an issue
+        id: plan
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh issue create --title "${{ steps.agent.outputs.report_title }}" --body-file "${{ steps.agent.outputs.report_file }}"
+          TITLE: ${{ steps.agent.outputs.report_title }}
+          FILE: ${{ steps.agent.outputs.report_file }}
+        run: |
+          url=$(gh issue create --title "$TITLE" --body-file "$FILE")
+          echo "Created $url"
+          # The agents will reply on this plan issue, keeping it all in one thread.
+          echo "number=$(printf '%s' "$url" | sed -E 's#.*/##')" >> "$GITHUB_OUTPUT"
       - name: Launch the assigned agents
         if: steps.agent.outputs.dispatch_json != '' && steps.agent.outputs.dispatch_json != '[]'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISPATCH: ${{ steps.agent.outputs.dispatch_json }}
+          ISSUE: ${{ steps.plan.outputs.number }}
         run: |
           first=1
           echo "$DISPATCH" | jq -c '.[]' | while read -r item; do
@@ -50,12 +60,12 @@ jobs:
             file="agent-${agent}.yml"
             # Stagger launches so the agents don't all hit the AI provider at once (avoids 429s).
             if [ "$first" = "1" ]; then first=0; else sleep 25; fi
-            echo "Launching $agent ($file) ..."
+            echo "Launching $agent ($file) on issue #$ISSUE ..."
             case "$agent" in
               research|competitor|content|rnd)
-                gh workflow run "$file" --ref main -f topic="$topic" || echo "::warning::could not launch $agent" ;;
+                gh workflow run "$file" --ref main -f topic="$topic" -f issue="$ISSUE" || echo "::warning::could not launch $agent" ;;
               health|security)
-                gh workflow run "$file" --ref main || echo "::warning::could not launch $agent" ;;
+                gh workflow run "$file" --ref main -f issue="$ISSUE" || echo "::warning::could not launch $agent" ;;
               *)
                 echo "::warning::unknown agent $agent — skipped" ;;
             esac
