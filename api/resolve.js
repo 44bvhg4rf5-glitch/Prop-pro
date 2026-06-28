@@ -343,9 +343,14 @@ export default async function handler(req, res) {
   }
 
   // The exact postcode's real addresses — the tight set (one building / a few
-  // houses) we resolve precisely against.
+  // houses) we resolve precisely against. Prefer filtering the candidates we
+  // already fetched (no extra call); only hit the register if they lack it.
   let pcUnits = [];
-  if (FULL_POSTCODE.test(postcodeIn)) pcUnits = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' ')).catch(() => []);
+  if (FULL_POSTCODE.test(postcodeIn)) {
+    const target = postcodeIn.replace(/\s+/, ' ').toUpperCase();
+    pcUnits = candidates.filter((c) => (c.postcode || '').toUpperCase().replace(/\s+/, ' ') === target);
+    if (!pcUnits.length) pcUnits = await epcPostcodeAll(postcodeIn.replace(/\s+/, ' ')).catch(() => []);
+  }
 
   // House pinpoint via the map pin: reverse-geocode the pin to the nearest real
   // address and match its number to a house on the postcode — one cheap call
