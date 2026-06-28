@@ -155,16 +155,19 @@ async function managerReport() {
     return { body: `## No task given yet\n\nRun this agent again and type what you want done in the **task** box. I'll turn it into a plan, assign the right specialist agents and launch them for you.\n\n### The team I manage\n${rosterLines}`, problem: false, dispatch: [] };
   }
   const roster = ROSTER.map((a) => `- ${a.role}: ${a.does}`).join('\n');
-  const system = "You are the Manager agent for PropMail Pro — you sit above a team of specialist AI agents and turn the owner's request into an actionable plan, delegating to the right agents. Be concise, practical and honest. Only assign agents that genuinely fit the request. You do not do the specialist work yourself — you plan and delegate. Flag clearly anything only a human developer can do.";
-  const user = `THE OWNER'S REQUEST:\n${task}\n\nYOUR TEAM (you may delegate ONLY to these):\n${roster}\n\nWrite a Markdown plan with these sections:\n## Goal\n(restate what the owner wants, 1-2 lines)\n## Plan\n(numbered steps)\n## Delegation\n(a table: | Agent | What to focus on | — only agents from the team that genuinely help)\n## What you'll receive\n(what to expect back, and anything only a human/developer must do)\n\nThen, on the VERY LAST line, output ONLY a fenced JSON object naming which agents to launch NOW and the topic to give each, e.g.\n\`\`\`json\n{"dispatch":[{"agent":"research","topic":"..."}]}\n\`\`\`\nUse an empty array if no agent should run automatically. Give a focused topic string to each agent you launch.`;
+  const system = "You are the Manager agent for PropMail Pro — you sit above a team of specialist AI agents and turn the owner's request into an actionable plan, delegating to the right agents. Be concise, practical and honest. Assign AT MOST 3 agents, and only the ones BEST SUITED to the request — fewer is better, and one well-chosen agent beats three loosely-related ones. You do not do the specialist work yourself — you plan and delegate. Flag clearly anything only a human developer can do.";
+  const user = `THE OWNER'S REQUEST:\n${task}\n\nYOUR TEAM (you may delegate ONLY to these):\n${roster}\n\nWrite a Markdown plan with these sections:\n## Goal\n(restate what the owner wants, 1-2 lines)\n## Plan\n(numbered steps)\n## Delegation\n(a table: | Agent | What to focus on | — pick ONLY the best-suited agents, AT MOST 3; if one agent covers it, assign just that one)\n## What you'll receive\n(what to expect back, and anything only a human/developer must do)\n\nThen, on the VERY LAST line, output ONLY a fenced JSON object naming which agents to launch NOW (AT MOST 3 — the best-suited only) and the topic to give each, e.g.\n\`\`\`json\n{"dispatch":[{"agent":"research","topic":"..."}]}\n\`\`\`\nUse an empty array if no agent should run automatically. Give a focused topic string to each agent you launch.`;
   const r = await runLLM({ system, user, maxTokens: 2200 });
   if (r.error) return { body: `**The manager could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)`, problem: false, dispatch: [] };
   const parsed = extractJson(r.text) || {};
   const valid = new Set(ROSTER.map((a) => a.role));
+  const seen = new Set();
+  // Keep only known agents, drop duplicates, and hard-cap at the 3 best the
+  // Manager chose — so one broad request can never drain the free AI budget.
   const dispatch = (Array.isArray(parsed.dispatch) ? parsed.dispatch : [])
     .map((d) => ({ agent: String((d && d.agent) || '').toLowerCase().trim(), topic: String((d && d.topic) || '').slice(0, 300) }))
-    .filter((d) => valid.has(d.agent))
-    .slice(0, 6);
+    .filter((d) => valid.has(d.agent) && !seen.has(d.agent) && seen.add(d.agent))
+    .slice(0, 3);
   // Strip the trailing JSON block so the human-readable plan stays clean.
   let body = stripPreamble(r.text).replace(/```json[\s\S]*?```\s*$/, '').trim();
   const queued = dispatch.length
