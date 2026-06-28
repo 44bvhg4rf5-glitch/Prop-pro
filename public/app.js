@@ -1459,9 +1459,12 @@ async function runLiveSearch(){
             p.addressSource = r.source || 'EPC register'; p.addressConfirmed = false; p.addressFound = true; p.addressLikely = true;
           }
         }
-        // Building / street block: real mailable owner addresses for this listing.
+        // Building / street block: show the ONE building address for this listing
+        // (the full unit list stays available behind a tap for bulk mailing).
         if (r && r.buildingResolved && Array.isArray(r.units) && r.units.length) {
-          p.block = { level: r.blockLevel, name: (r.building && r.building.name) || '', address: (r.building && r.building.address) || '', units: r.units };
+          const addr = (r.building && r.building.address) || '';
+          p.block = { level: r.blockLevel, name: (r.building && r.building.name) || '', address: addr, units: r.units };
+          if (addr) { p.displayAddress = addr; p.fullAddress = addr; }
           p.addressFound = true;
         }
         done++;
@@ -2052,23 +2055,21 @@ function applyManualNumber(i){
 function setAddrFilter(f){ window.addrFilter = f; renderLiveResults(); }
 function toggleBlock(i){ window._blockOpen = window._blockOpen || {}; window._blockOpen[i] = !window._blockOpen[i]; renderLiveResults(); }
 
-// The real full addresses (Number, Street, Postcode) resolved for a listing —
-// shown plainly so you see actual mailable addresses, not just a block name.
+// ONE best address per property (the headline already shows it). For a block we
+// keep the full unit list one tap away — collapsed by default — so the list is
+// there for deliberate whole-building mailing but never clutters the view.
 function resolvedAddrHTML(p, i){
-  if(p.block && p.block.units && p.block.units.length){
+  if(p.block && p.block.units && p.block.units.length > 1){
     const u = p.block.units;
     const open = window._blockOpen && window._blockOpen[i];
-    const show = open ? u.length : Math.min(u.length, 6);
-    const headMap = { building:'REAL FLATS IN THIS BUILDING', postcode:'REAL HOMES AT THIS POSTCODE', street:'REAL HOMES ON THIS STREET' };
-    const head = (headMap[p.block.level] || headMap.street) + ' — ' + u.length + ' full address' + (u.length===1?'':'es');
-    return '<div style="background:rgba(5,150,105,.05);border:1px solid rgba(5,150,105,.22);border-radius:8px;padding:9px 11px;margin:2px 0 9px">'
-      + '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--green);margin-bottom:6px">'+head+'</div>'
-      + u.slice(0, show).map(a=>'<div style="font-size:12px;color:var(--text);padding:3px 0;'+(0?'':'')+'border-top:1px solid rgba(0,0,0,.05)">'+esc(a)+'</div>').join('')
-      + (u.length>6 ? '<button onclick="event.stopPropagation();toggleBlock('+i+')" style="margin-top:7px;font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit">'+(open?'▴ Show fewer':'▾ Show all '+u.length+' full addresses')+'</button>' : '')
-      + '</div>';
-  }
-  if((p.addressConfirmed || p.addressLikely) && (p.fullAddress||p.displayAddress)){
-    return '<div style="font-size:13px;color:var(--text);font-weight:700;margin:2px 0 9px"><i class=ic-check style="color:var(--green)"></i> '+esc(p.fullAddress||p.displayAddress)+'</div>';
+    const noun = p.block.level==='street' ? 'street' : 'block';
+    const toggle = '<button onclick="event.stopPropagation();toggleBlock('+i+')" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 0">'
+      + (open ? '▾ Hide the '+u.length+' addresses' : '▸ '+(u.length-1)+' more in this '+noun+' (optional — for whole-'+noun+' mailing)') + '</button>';
+    const list = open
+      ? '<div style="background:rgba(5,150,105,.05);border:1px solid rgba(5,150,105,.22);border-radius:8px;padding:8px 10px;margin-top:5px">'
+        + u.map(a=>'<div style="font-size:12px;color:var(--text);padding:2px 0">'+esc(a)+'</div>').join('') + '</div>'
+      : '';
+    return '<div style="margin:1px 0 8px">'+toggle+list+'</div>';
   }
   return '';
 }
@@ -2211,7 +2212,15 @@ function selectNoneResults(){ props.forEach(p=>p.selected=false); renderLiveResu
 // ── Queue a single property immediately ──
 function quickQueueOne(i){
   const p = props[i]; if(!p) return;
-  if(!p.addressConfirmed){ toast('Confirm the exact address first — tap "Confirm exact address"','warn'); confirmAddress(i); return; }
+  // One letter to the single best address: the confirmed exact address, or the
+  // building's address for a block (no need to pick a unit).
+  if(!p.addressConfirmed && !p.block){ toast('Confirm the exact address first — tap "Confirm exact address"','warn'); confirmAddress(i); return; }
+  if(!p.addressConfirmed && p.block){
+    const addr = p.block.address;
+    p.address = addr; p.displayAddress = addr; p.fullAddress = addr;
+    const pcM = addr.match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i); if(pcM) p.postcode = pcM[0].toUpperCase();
+    p.addressConfirmed = true; p.addressSource = 'Building ('+p.block.level+')';
+  }
   const tplEl = document.getElementById('f-tpl');
   const tpl   = [...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro')) || templates[0];
   queue.push({id:Date.now()+Math.random(), prop:p, tpl, status:'pend', at:new Date(), auto:false});
