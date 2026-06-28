@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <title>DayTrack</title>
+  <meta name="theme-color" content="#0f1020">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DayTrack">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+  <main id="app">
+    <!-- Top bar with date navigation -->
+    <header class="topbar">
+      <button class="navbtn" id="prevDay" aria-label="Previous day">‹</button>
+      <div class="datewrap">
+        <div class="datebig" id="dateLabel">Today</div>
+        <div class="datesub" id="dateSub"></div>
+      </div>
+      <button class="navbtn" id="nextDay" aria-label="Next day">›</button>
+    </header>
+
+    <!-- ── TODAY ── -->
+    <section class="view" id="view-today">
+      <div class="scorerow">
+        <div class="bigscore">
+          <div class="ringwrap"><svg viewBox="0 0 120 120" class="ring"><circle class="ring-bg" cx="60" cy="60" r="52"/><circle class="ring-fg" id="dayRing" cx="60" cy="60" r="52"/></svg>
+            <div class="ringtext"><span id="dayScore">0</span><small>day score</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="dot" style="background:#22d3ee"></span><h2>Productivity</h2><span class="badge" id="prodBadge">0%</span></div>
+        <input type="range" min="0" max="100" value="0" id="prodSlider" class="slider">
+        <div class="rangelabels"><span>Low</span><span>Focused</span></div>
+        <div class="tasks">
+          <div class="task-add">
+            <input type="text" id="taskInput" placeholder="Add a work task…" maxlength="80">
+            <button id="addTask" class="addbtn">＋</button>
+          </div>
+          <ul id="taskList" class="tasklist"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="dot" style="background:#34d399"></span><h2>Health</h2><span class="badge" id="healthBadge">0%</span></div>
+        <div class="health-grid">
+          <div class="stepper">
+            <label>Sleep <small>hrs</small></label>
+            <div class="steprow"><button data-h="sleep" data-d="-0.5">−</button><span id="sleepVal">0</span><button data-h="sleep" data-d="0.5">＋</button></div>
+          </div>
+          <div class="stepper">
+            <label>Water <small>glasses</small></label>
+            <div class="steprow"><button data-h="water" data-d="-1">−</button><span id="waterVal">0</span><button data-h="water" data-d="1">＋</button></div>
+          </div>
+          <div class="stepper">
+            <label>Exercise <small>min</small></label>
+            <div class="steprow"><button data-h="exercise" data-d="-5">−</button><span id="exerciseVal">0</span><button data-h="exercise" data-d="5">＋</button></div>
+          </div>
+          <div class="stepper mood">
+            <label>Mood</label>
+            <div class="moodrow" id="moodRow">
+              <button data-mood="1">😞</button><button data-mood="2">😐</button><button data-mood="3">🙂</button><button data-mood="4">😀</button><button data-mood="5">🤩</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card tappable" id="foodCard">
+        <div class="card-head"><span class="dot" style="background:#fbbf24"></span><h2>Food</h2><span class="badge" id="calBadge">0 kcal</span></div>
+        <div class="calbar"><div class="calbar-fill" id="calFill"></div></div>
+        <div class="calmeta"><span id="calEaten">0 eaten</span><span id="calRemain">goal 2000</span></div>
+        <div class="hint">Tap to add what you've eaten →</div>
+      </div>
+    </section>
+
+    <!-- ── FOOD ── -->
+    <section class="view" id="view-food" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Calories today</h2><span class="badge" id="foodCalBadge">0 / 2000</span></div>
+        <div class="calbar"><div class="calbar-fill" id="foodCalFill"></div></div>
+      </div>
+      <div class="card">
+        <h2 class="mb">Add food</h2>
+        <div class="foodform">
+          <input type="text" id="foodName" placeholder="What did you eat?" maxlength="60">
+          <input type="number" id="foodCals" placeholder="kcal" inputmode="numeric" min="0" max="9000">
+        </div>
+        <div class="mealpick" id="mealPick">
+          <button data-meal="Breakfast" class="active">Breakfast</button>
+          <button data-meal="Lunch">Lunch</button>
+          <button data-meal="Dinner">Dinner</button>
+          <button data-meal="Snack">Snack</button>
+        </div>
+        <button id="addFood" class="primary">Add food</button>
+        <div class="quickadd" id="quickAdd"></div>
+      </div>
+      <div class="card" id="mealsCard">
+        <h2 class="mb">Logged</h2>
+        <div id="mealsList"></div>
+      </div>
+    </section>
+
+    <!-- ── TRENDS ── -->
+    <section class="view" id="view-trends" hidden>
+      <div class="card">
+        <h2 class="mb">Last 7 days</h2>
+        <div class="avgrow">
+          <div class="avg"><span id="avgProd">0%</span><small>avg productivity</small></div>
+          <div class="avg"><span id="avgHealth">0%</span><small>avg health</small></div>
+          <div class="avg"><span id="avgCals">0</span><small>avg kcal</small></div>
+        </div>
+      </div>
+      <div class="card"><h3 class="chart-title">Productivity</h3><div class="chart" id="chartProd"></div></div>
+      <div class="card"><h3 class="chart-title">Health</h3><div class="chart" id="chartHealth"></div></div>
+      <div class="card"><h3 class="chart-title">Calories</h3><div class="chart" id="chartCals"></div></div>
+    </section>
+
+    <!-- ── SETTINGS ── -->
+    <section class="view" id="view-settings" hidden>
+      <div class="card">
+        <h2 class="mb">Settings</h2>
+        <label class="field">Your name<input type="text" id="setName" placeholder="optional"></label>
+        <label class="field">Daily calorie goal<input type="number" id="setCalGoal" inputmode="numeric" min="500" max="9000"></label>
+        <label class="field">Sleep target (hrs)<input type="number" id="setSleep" inputmode="decimal" step="0.5"></label>
+        <label class="field">Water target (glasses)<input type="number" id="setWater" inputmode="numeric"></label>
+        <label class="field">Exercise target (min)<input type="number" id="setExercise" inputmode="numeric"></label>
+        <button id="saveSettings" class="primary">Save</button>
+      </div>
+      <div class="card">
+        <h2 class="mb">Your data</h2>
+        <p class="muted">Everything lives only on this device. Nothing is sent anywhere.</p>
+        <div class="btnrow">
+          <button id="exportData" class="ghost">Export backup</button>
+          <button id="importData" class="ghost">Import backup</button>
+        </div>
+        <button id="clearData" class="danger">Erase all data</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+      <div class="card"><p class="muted center">DayTrack · v1 · made just for you</p></div>
+    </section>
+  </main>
+
+  <!-- Bottom tab nav -->
+  <nav class="tabbar">
+    <button class="tab active" data-view="today"><span class="ti">◎</span>Today</button>
+    <button class="tab" data-view="food"><span class="ti">🍽</span>Food</button>
+    <button class="tab" data-view="trends"><span class="ti">📈</span>Trends</button>
+    <button class="tab" data-view="settings"><span class="ti">⚙</span>Settings</button>
+  </nav>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js?v=1"></script>
+</body>
+</html>

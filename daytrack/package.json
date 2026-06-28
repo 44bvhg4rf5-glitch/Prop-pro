@@ -1,0 +1,12 @@
+{
+  "name": "daytrack",
+  "version": "1.0.0",
+  "description": "DayTrack — a private personal daily tracker (productivity, health, food & calories). Installable PWA, all data stored on your device.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "icons": "node scripts/gen-icons.mjs"
+  },
+  "private": true,
+  "license": "MIT"
+}
