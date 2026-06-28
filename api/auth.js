@@ -48,9 +48,12 @@ export default async function handler(req, res) {
     const b = await readJson();
     const addr = email(b.email);
     const generic = { ok: true, sent: emailConfigured() };
-    if (authConfigured() && emailConfigured() && addr) {
+    // Rate-limit by the submitted email BEFORE looking it up, so the endpoint
+    // can't be used to probe or spam accounts (existing or not), and the reply
+    // is always identical so it never reveals whether an email is registered.
+    if (authConfigured() && emailConfigured() && addr && !(await resetThrottled(addr))) {
       const acc = await getAccountByEmail(addr);
-      if (acc && !(await resetThrottled(addr))) {
+      if (acc) {
         const token = await createResetToken(acc.id);
         const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
         const link = 'https://' + host + '/?reset=' + token;

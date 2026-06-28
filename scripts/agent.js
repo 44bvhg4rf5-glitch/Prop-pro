@@ -26,7 +26,7 @@ async function securityReport() {
     if (corpus.length > 38000) break; // keep the request under the model's payload limit (was hitting HTTP 413)
   }
   const system = 'You are a senior application-security engineer reviewing the BACKEND of a Node.js + vanilla-JS web app (an estate-agent tool on Vercel). Report only concrete, real issues — never invent problems. Consider: injection, XSS / output encoding, authentication & session handling, API-key / secret exposure, SSRF via server-side fetch, CORS / origin checks, missing input validation, rate-limiting & abuse, and UK data-protection (GDPR) concerns. Be specific about the file and the exact risk, and give a practical fix.';
-  const user = `Review this backend source and write a Markdown report with these sections:\n\n## Summary\n(2-4 lines on overall security posture)\n\n## Findings\n(For each: **[High/Medium/Low]** \`file\` — the risk — the fix. If you find nothing real, say so plainly.)\n\n## Already done well\n(Good security practices visible in the code.)\n\nSOURCE:\n${corpus}`;
+  const user = `Review this backend source and write ONLY a Markdown report with exactly these sections — do NOT repeat, quote or paste any of the source code back; output only your analysis:\n\n## Summary\n(2-4 lines on overall security posture)\n\n## Findings\n(For each: **[High/Medium/Low]** \`file\` — the risk — the fix. Verify each issue against the code before reporting it; if you find nothing real, say so plainly.)\n\n## Already done well\n(Good security practices visible in the code.)\n\nSOURCE (for your analysis only — never echo it back):\n${corpus}`;
   const r = await runLLM({ system, user, maxTokens: 2200 });
   return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${r.text}\n\n_Reviewed by: ${r.provider || 'AI'}_`;
 }
@@ -42,12 +42,30 @@ async function researchReport() {
   return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${r.text}\n\n_Researched by: ${r.provider || 'AI'}${searchConfigured() ? ' + live web search' : ''}_`;
 }
 
-const isResearch = ROLE === 'research';
-const body = isResearch ? await researchReport() : await securityReport();
-const dir = `reports/${isResearch ? 'research' : 'security'}`;
+// Competitor watch — monitors the main rival (Spectre) and UK proptech for new
+// features/pricing/news, and flags what PropMail Pro should respond to.
+async function competitorReport() {
+  const topic = TOPIC || 'Spectre (spectre.uk.com) estate-agent prospecting software new features, pricing and announcements; and other UK estate-agent prospecting / direct-mail / propensity-to-sell tools';
+  let web = { results: [], answer: '' };
+  if (searchConfigured()) web = await webSearch(topic, { maxResults: 7 }).catch(() => ({ results: [], answer: '' }));
+  const sources = web.results.map((x, i) => `[${i + 1}] ${x.title} — ${x.url}\n${x.content}`).join('\n\n');
+  const system = 'You are a competitive-intelligence analyst for PropMail Pro, an estate-agent prospecting tool whose main rival is Spectre. Brief the owner on what competitors are doing and what PropMail Pro should do about it. Cite live sources like [1]. Be specific and honest; flag only real, evidenced changes.';
+  const user = `Watch the competition (mainly Spectre) using these results.\n\n${sources ? 'LIVE WEB RESULTS:\n' + sources : '(No live web search configured — say so.)'}\n\nWrite a Markdown briefing:\n## What competitors are doing\n## Where PropMail Pro is ahead / behind\n## Recommended responses (what to build or change)\n## Sources`;
+  const r = await runLLM({ system, user, maxTokens: 2200, search: true });
+  return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${r.text}\n\n_Watched by: ${r.provider || 'AI'}${searchConfigured() ? ' + live web search' : ''}_`;
+}
+
+const ROLES = {
+  research: { fn: researchReport, dir: 'research', title: '🔎 Research' },
+  competitor: { fn: competitorReport, dir: 'competitor', title: '🛰️ Competitor watch' },
+  security: { fn: securityReport, dir: 'security', title: '🔒 Security' },
+};
+const role = ROLES[ROLE] || ROLES.security;
+const body = await role.fn();
+const dir = `reports/${role.dir}`;
 fs.mkdirSync(dir, { recursive: true });
 const file = `${dir}/${today}.md`;
-const title = `${isResearch ? '🔎 Research' : '🔒 Security'} report — ${today}`;
+const title = `${role.title} report — ${today}`;
 fs.writeFileSync(file, `# ${title}\n\n${body}\n`);
 if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `report_file=${file}\nreport_title=${title}\n`);
 console.log(`Wrote ${file}`);
