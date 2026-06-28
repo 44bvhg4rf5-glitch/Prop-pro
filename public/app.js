@@ -1443,7 +1443,7 @@ async function runLiveSearch(){
       // left out of the "found" view entirely (no work for the user).
       const byId = {}; toResolve.forEach(p => { byId[p.id] = p; });
       const payload = toResolve.map(p => ({ id: p.id, displayAddress: p.displayAddress || p.address, type: p.type, lat: p.lat, lon: p.lon, haCode: p.haCode, url: p.rmUrl || p.portalUrl || p.url || '', listDate: p.listedAt ? new Date(p.listedAt).toISOString() : '' }));
-      const CHUNK = 120; let doneC = 0;
+      const CHUNK = 45; let doneC = 0;
       for (let c = 0; c < payload.length; c += CHUNK) {
         const chunk = payload.slice(c, c + CHUNK);
         let d = {};
