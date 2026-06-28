@@ -60,7 +60,7 @@ async function epcPostcode(pc) {
       const k = full.toLowerCase();
       const certDate = r.registrationDate || r.lodgementDate || '';
       const ex = seen.get(k);
-      if (full && (!ex || certDate > ex.certDate)) seen.set(k, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: p, certDate });
+      if (full && (!ex || certDate > ex.certDate)) seen.set(k, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: p, certDate, cert: r.certificateNumber || '' });
     }
     out = [...seen.values()];
   } catch { out = []; }
@@ -75,6 +75,25 @@ async function nearby(lat, lon, area) {
   let pcs = _memRev.get(k);
   if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
   return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 5);
+}
+
+// One certificate's floor area (sq ft), cached — used to match a flat to the
+// listing's published size. Only ever called for an already-chosen building.
+const SQFT = 10.7639;
+const _memCert = new Map();
+async function certSqft(cert) {
+  if (!cert) return null;
+  if (_memCert.has(cert)) return _memCert.get(cert);
+  let v = null;
+  try {
+    const KEY = process.env.EPC_API_KEY || '';
+    const { json } = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cert)}`, KEY);
+    const body = (json && json.data) ? json.data : json;
+    const m2 = parseFloat(body && body.total_floor_area);
+    if (!Number.isNaN(m2) && m2 > 0) v = Math.round(m2 * SQFT);
+  } catch { /* ignore */ }
+  _memCert.set(cert, v);
+  return v;
 }
 
 const FLAT = /flat|apartment|maisonette|studio/i;
@@ -139,6 +158,19 @@ async function resolveOne(p) {
     const fresherByDays = a.certDate && b.certDate ? daysBetween(a.certDate, b.certDate) : 0;
     const nearList = listDate && a.certDate ? daysBetween(a.certDate, listDate) <= 120 : false;
     if (fresherByDays >= 30 && (nearList || !listDate)) exact = a; // uniquely fresh = the marketed unit
+  }
+  // Floor-area match: when the listing publishes a size, the flat whose certified
+  // floor area matches it (and clearly differs from the others) is the one listed.
+  const listSqft = parseInt(p.sizeSqft || 0, 10) || 0;
+  if (!exact && listSqft > 0 && chosen.length > 1) {
+    const sized = [];
+    for (const u of chosen.slice(0, 25)) { const s = await certSqft(u.cert); if (s) sized.push({ u, s, diff: Math.abs(s - listSqft) }); }
+    sized.sort((x, y) => x.diff - y.diff);
+    if (sized.length > 1) {
+      const best = sized[0], next = sized[1];
+      const relBest = best.diff / listSqft;
+      if (relBest <= 0.08 && next.diff >= best.diff + Math.max(60, listSqft * 0.12)) exact = best.u; // tight + clearly unique
+    }
   }
 
   if (exact) {
