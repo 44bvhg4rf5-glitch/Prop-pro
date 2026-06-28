@@ -3,39 +3,48 @@ import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 
 export const config = { maxDuration: 60 };
 
-// Batch address resolver — built for a whole search at once (200+ listings).
-// Key wins vs resolving one-by-one from the browser:
-//  · ONE server call processes every listing, sharing in-process caches, so a
-//    postcode/building is looked up once no matter how many listings share it.
-//  · Gets the exact postcode from the map pin's NEARBY postcodes (free, fast,
-//    reliable) instead of fetching each Rightmove page (slow, gets rate-limited).
-//  · Returns ONLY precise results (exact house / building / exact-postcode) —
-//    never a bare street name.
+// Batch address resolver. Processes a whole search in one server call, sharing
+// caches so each postcode is looked up once. The core signal: a property gets a
+// FRESH EPC certificate when it's put on the market, so among the buildings on a
+// street the one with the newest certificates is the one being marketed — which
+// pins the right building (not a wrong neighbour) and often the exact flat.
+// Returns ONLY precise results, never a bare street name.
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const tcAddr = (s) => (s || '').toLowerCase().replace(/\b[\w']+\b/g, (w) => /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1));
 const leadNum = (s) => ((String(s || '').trim().match(/^(\d+[a-z]?)/i) || [])[1] || '').toLowerCase();
+const ROADS = 'road|street|avenue|lane|close|drive|way|gardens?|grove|crescent|place|terrace|hill|park|rise|walk|row|green|square|vale|parade|broadway';
 function streetOf(s) {
   const seg = (s || '').split(',')[0];
   return norm(seg).replace(/^\d+[a-z]?\s+/, '').replace(/^(flat|apartment|apt|unit|plot)\s+\w+\s+/, '');
 }
-const ROAD_WORD = /\b(road|street|avenue|lane|close|drive|way|gardens?|grove|crescent|place|terrace|hill|park|rise|walk|row|green|square|vale|parade|broadway)\b/i;
 const BLD_WORD = /\b(house|court|lodge|apartments?|point|mansions?|heights|towers?|building|lofts?|wharf|hall|manor|residence|development|villas?|mews|chase|gate|quarter|works|mill)\b/i;
 function buildingNameOf(display) {
   let seg = (display || '').split(',')[0].trim().replace(/^\s*(flat|apartment|apt|unit|room|studio)\s+[\w-]+\s*/i, '').trim();
   if (!seg || seg.length < 3) return '';
   const last = seg.split(/\s+/).slice(-1)[0];
-  if (ROAD_WORD.test(last) && !BLD_WORD.test(seg)) return '';
+  if (new RegExp('\\b(' + ROADS + ')\\b', 'i').test(last) && !BLD_WORD.test(seg)) return '';
   return seg;
 }
+const stripFlat = (s) => (s || '').replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
+// A stable key for the BUILDING an address belongs to ("Flat 4, 403 Pinner Road,
+// Harrow, HA1 4HN" → "403 pinner road"), so we can group a postcode's flats by
+// their building and score each building's certificate freshness.
+function buildingKey(full) {
+  const s = stripFlat(full);
+  const m = s.match(new RegExp('(\\d+[a-z]?)\\s+([a-z][a-z\'’ ]*?\\s(?:' + ROADS + '))', 'i'));
+  if (m) return norm(m[1] + ' ' + m[2]);
+  const nb = s.match(new RegExp('([a-z][a-z\'’ ]*?\\b(?:' + BLD_WORD.source.replace(/\\b|\(|\)/g, '') + '))', 'i'));
+  return norm(nb ? nb[1] : s.split(',')[0]);
+}
 
-const _mem = new Map(); // shared across every listing in the batch
-async function epcPostcodeAll(pc) {
+const _mem = new Map();
+async function epcPostcode(pc) {
   const KEY = process.env.EPC_API_KEY || '';
   if (!KEY) return [];
   const mk = pc.toUpperCase().replace(/\s+/g, '');
   if (_mem.has(mk)) return _mem.get(mk);
-  if (storeConfigured()) { const c = await getJSON('pcall:' + mk, null); if (c) { _mem.set(mk, c); return c; } }
+  if (storeConfigured()) { const c = await getJSON('pce:' + mk, null); if (c) { _mem.set(mk, c); return c; } }
   let out = [];
   try {
     const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=500`;
@@ -48,61 +57,91 @@ async function epcPostcodeAll(pc) {
       const p = (r.postcode || '').replace(/\+/g, ' ');
       const full = tcAddr([...lines, r.postTown, p].filter(Boolean).join(', '));
       const k = full.toLowerCase();
-      if (full && !seen.has(k)) seen.set(k, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: p });
+      const certDate = r.registrationDate || r.lodgementDate || '';
+      const ex = seen.get(k);
+      if (full && (!ex || certDate > ex.certDate)) seen.set(k, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: p, certDate });
     }
-    out = [...seen.values()].sort((a, b) => a.fullAddress.localeCompare(b.fullAddress, undefined, { numeric: true }));
+    out = [...seen.values()];
   } catch { out = []; }
   _mem.set(mk, out);
-  if (storeConfigured() && out.length) await setJSON('pcall:' + mk, out).catch(() => {});
+  if (storeConfigured() && out.length) await setJSON('pce:' + mk, out).catch(() => {});
   return out;
 }
 
 const _memRev = new Map();
-async function nearbyPostcodes(lat, lon, area) {
+async function nearby(lat, lon, area) {
   const k = lat.toFixed(4) + ',' + lon.toFixed(4);
   let pcs = _memRev.get(k);
   if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
-  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 8);
+  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 10);
 }
 
 const FLAT = /flat|apartment|maisonette|studio/i;
+const daysBetween = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
+
 async function resolveOne(p) {
   const disp = p.displayAddress || p.address || '';
   if (p.lat == null || p.lon == null) return null;
   const seg0 = disp.split(',')[0].trim();
-  const hasNum = /\d/.test(seg0) || /^(flat|apartment|apt|unit)/i.test(seg0);
-  const num = leadNum(seg0) || ((seg0.match(/\b(\d+[a-z]?)\b/) || [])[1] || '').toLowerCase();
+  const num = leadNum(seg0);
   const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
   const building = isFlat ? buildingNameOf(disp) : '';
   const street = streetOf(disp);
   const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
-  const pcs = await nearbyPostcodes(p.lat, p.lon, area);
+  const listDate = (p.listDate || '').slice(0, 10);
+  const pcs = await nearby(p.lat, p.lon, area);
 
+  // Gather addresses on this street/building across the nearby postcodes.
+  let matches = [];
   for (const pc of pcs) {
-    const units = await epcPostcodeAll(pc);
+    const units = await epcPostcode(pc);
     if (!units.length) continue;
-    let set = null, level = null;
-    if (building) { const m = units.filter((u) => norm(u.fullAddress).includes(norm(building))); if (m.length) { set = m; level = 'building'; } }
-    if (!set && street) { const m = units.filter((u) => norm(u.fullAddress).includes(street)); if (m.length) { set = m; level = isFlat ? 'building' : 'postcode'; } }
-    if (!set) continue;
-
-    // The listing publishes a number → exact address.
-    if (hasNum && num) {
-      const m = set.find((u) => leadNum(u.line1) === num || leadNum(u.fullAddress) === num);
-      if (m) return { id: p.id, level: 'exact', address: m.fullAddress, postcode: m.postcode, units: [m.fullAddress] };
-    }
-    if (isFlat) {
-      const first = set[0].fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '');
-      return { id: p.id, level: 'building', address: first, postcode: set[0].postcode, building: tcAddr(building || street), units: set.map((u) => u.fullAddress) };
-    }
-    // House with no number on the listing → the homes on this exact postcode.
-    // Only treat as precise when it's a short block (a few houses), else skip.
-    if (set.length <= 8) {
-      return { id: p.id, level: 'postcode', address: [tcAddr(street), set[0].postcode].filter(Boolean).join(', '), postcode: set[0].postcode, building: tcAddr(street), units: set.map((u) => u.fullAddress) };
-    }
-    return null;
+    if (building) { const m = units.filter((u) => norm(u.fullAddress).includes(norm(building))); if (m.length) { matches = m; break; } }
+    else if (street) { units.forEach((u) => { if (norm(u.fullAddress).includes(street)) matches.push(u); }); }
   }
-  return null;
+  if (!matches.length) return null;
+
+  // Group by building and score each by certificate freshness.
+  const groups = new Map();
+  for (const u of matches) { const k = buildingKey(u.fullAddress); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+  const arr = [...groups.values()].map((us) => ({ us, latest: us.reduce((m, u) => (u.certDate > m ? u.certDate : m), '') }));
+  arr.sort((a, b) => b.latest.localeCompare(a.latest));
+
+  let chosen, why;
+  if (building) { chosen = arr[0].us; why = 'building named on the listing'; }
+  else {
+    const top = arr[0];
+    // Need a real recency signal to pick between buildings on a street; if the
+    // freshest building isn't clearly fresher than the next, it's ambiguous —
+    // skip rather than risk the wrong building.
+    if (arr.length > 1) {
+      const gapDays = daysBetween(top.latest, arr[1].latest);
+      if (!top.latest || gapDays < 45) return null; // ambiguous — don't guess
+    }
+    chosen = top.us; why = 'freshest EPC on the street (being marketed)';
+  }
+  chosen.sort((a, b) => b.certDate.localeCompare(a.certDate));
+
+  // Pinpoint the exact unit within the chosen building.
+  // 1) listing publishes the number; 2) only one unit; 3) one unit's cert is
+  // clearly the freshest AND lines up with the listing date.
+  let exact = null;
+  if (num) exact = chosen.find((u) => leadNum(u.line1) === num || leadNum(stripFlat(u.fullAddress)) === num);
+  if (!exact && chosen.length === 1) exact = chosen[0];
+  if (!exact && chosen.length > 1) {
+    const a = chosen[0], b = chosen[1];
+    const fresherByDays = a.certDate && b.certDate ? daysBetween(a.certDate, b.certDate) : 0;
+    const nearList = listDate && a.certDate ? daysBetween(a.certDate, listDate) <= 120 : false;
+    if (fresherByDays >= 30 && (nearList || !listDate)) exact = a; // uniquely fresh = the marketed unit
+  }
+
+  if (exact) {
+    return { id: p.id, level: 'exact', deliverable: true, address: exact.fullAddress, postcode: exact.postcode, units: [exact.fullAddress], why };
+  }
+  // Right building, but can't single out the flat — return the building + its
+  // real units (deliverable only by mailing the block). Not counted as "exact".
+  const addr = stripFlat(chosen[0].fullAddress);
+  return { id: p.id, level: 'building', deliverable: false, address: addr, postcode: chosen[0].postcode, building: tcAddr(building || street), units: chosen.map((u) => u.fullAddress), why };
 }
 
 async function mapLimit(items, limit, fn) {
@@ -123,8 +162,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 60) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-
   const results = (await mapLimit(listings, 6, resolveOne)).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  sendJson(res, 200, { requested: listings.length, resolved: results.length, results });
+  sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
 }
