@@ -1,0 +1,13 @@
+{
+  "name": "command-dashboard",
+  "version": "1.0.0",
+  "description": "Personal Command dashboard — morning briefs, Claude + Gemini chat, and agent activity. Fully standalone; deploys as its own project.",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ioredis": "^5.11.1"
+  }
+}

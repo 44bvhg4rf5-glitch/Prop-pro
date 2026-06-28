@@ -33,8 +33,9 @@ export default async function handler(req, res) {
     messages: messages.length ? messages : [{ role: 'user', content: '' }],
     maxTokens: payload.max_tokens || 1024,
     search: wantsSearch,
+    provider: typeof payload.provider === 'string' ? payload.provider : '',
   });
 
   if (r.error) { sendJson(res, 502, { error: { type: 'upstream_error', message: r.error } }); return; }
-  sendJson(res, 200, { content: [{ type: 'text', text: r.text || '' }], stop_reason: 'end_turn' });
+  sendJson(res, 200, { content: [{ type: 'text', text: r.text || '' }], stop_reason: 'end_turn', provider: r.provider || null });
 }
