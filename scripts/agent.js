@@ -43,7 +43,7 @@ function stripPreamble(text) {
 // it already clearly mentions property/estate-agency.
 function anchorProperty(topic) {
   const t = String(topic || '').trim();
-  return /\b(estate agent|estate agency|property|properties|propert|housing|house price|rightmove|zoopla|instruction|conveyanc|letting|landlord|mortgage|spectre)\b/i.test(t)
+  return /\b(estate agent|estate agency|property|properties|propert|housing|house price|rightmove|zoopla|instruction|conveyanc|letting|landlord|mortgage)\b/i.test(t)
     ? t : `${t} — UK residential property / estate-agent market`;
 }
 
@@ -61,11 +61,14 @@ async function researchReport() {
 // Competitor watch — monitors the main rival (Spectre) and UK proptech for new
 // features/pricing/news, and flags what PropMail Pro should respond to.
 async function competitorReport() {
-  const topic = TOPIC || 'Spectre (spectre.uk.com) estate-agent prospecting software new features, pricing and announcements; and other UK estate-agent prospecting / direct-mail / propensity-to-sell tools';
+  const topic = TOPIC || 'new features, pricing and announcements; and other UK estate-agent prospecting / direct-mail / propensity-to-sell tools';
+  // "Spectre" is a common word (a game hero, a CPU bug, a Rolls-Royce). Always
+  // pin the search to the real rival — the estate-agent tool at spectre.uk.com.
+  const query = `spectre.uk.com UK estate-agent prospecting software — ${topic}`;
   let web = { results: [], answer: '' };
-  if (searchConfigured()) web = await webSearch(topic, { maxResults: 7 }).catch(() => ({ results: [], answer: '' }));
+  if (searchConfigured()) web = await webSearch(query, { maxResults: 7 }).catch(() => ({ results: [], answer: '' }));
   const sources = web.results.map((x, i) => `[${i + 1}] ${x.title} — ${x.url}\n${x.content}`).join('\n\n');
-  const system = 'You are a competitive-intelligence analyst for PropMail Pro, an estate-agent prospecting tool whose main rival is Spectre. Brief the owner on what competitors are doing and what PropMail Pro should do about it. Cite live sources like [1]. Be specific and honest; flag only real, evidenced changes.';
+  const system = "You are a competitive-intelligence analyst for PropMail Pro, a UK estate-agent prospecting tool whose main rival is Spectre — specifically the estate-agency software at spectre.uk.com. IGNORE anything about other things called 'Spectre' (the Dota 2 hero, the Spectre/Meltdown CPU vulnerability, the Rolls-Royce Spectre car, James Bond, etc.) — those are NOT the competitor. If a source is not about UK estate-agent / property software, do not use it; if you have no relevant sources, say so plainly rather than reporting irrelevant ones. Brief the owner on what real estate-agent competitors are doing and what PropMail Pro should do about it. Cite live sources like [1]. Flag only real, evidenced changes.";
   const user = `Watch the competition (mainly Spectre) using these results.\n\n${sources ? 'LIVE WEB RESULTS:\n' + sources : '(No live web search configured — say so.)'}\n\nWrite a Markdown briefing:\n## What competitors are doing\n## Where PropMail Pro is ahead / behind\n## Recommended responses (what to build or change)\n## Sources`;
   const r = await runLLM({ system, user, maxTokens: 2200, search: true });
   return r.error ? `**The agent could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${stripPreamble(r.text)}\n\n_Watched by: ${r.provider || 'AI'}${searchConfigured() ? ' + live web search' : ''}_`;
