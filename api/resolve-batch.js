@@ -245,7 +245,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 10 }; // cap free OpenStreetMap fallbacks per request
+  const ctx = { ovBudget: 4 }; // cap free OpenStreetMap fallbacks per request
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
