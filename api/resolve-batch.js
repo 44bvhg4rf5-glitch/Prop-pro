@@ -74,7 +74,7 @@ async function nearby(lat, lon, area) {
   const k = lat.toFixed(4) + ',' + lon.toFixed(4);
   let pcs = _memRev.get(k);
   if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
-  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 5);
+  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 8);
 }
 
 // One certificate's floor area (sq ft), cached — used to match a flat to the
