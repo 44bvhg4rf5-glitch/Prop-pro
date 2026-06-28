@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260627-flatpin">
+  <link rel="stylesheet" href="styles.css?v=20260627-radar">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -116,6 +116,7 @@
   <div class="nav-group">
     <div class="nl">Strategy</div>
     <button class="ni" id="nav-marketing" onclick="showPanel('marketing')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M9 11a3 3 0 1 0 6 0a3 3 0 0 0-6 0"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></span><span>Marketing AI</span><span class="nb nb-b">NEW</span></button>
+    <button class="ni" id="nav-radar" onclick="showPanel('radar')"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l6-3"/><circle cx="12" cy="12" r="1"/></svg></span><span>Seller Radar</span><span class="nb nb-b">NEW</span></button>
     <button class="ni" id="nav-performance" onclick="showPanel('performance')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span><span>Performance</span><span class="nb nb-g">ROI</span></button>
     <button class="ni" id="nav-investor" onclick="showPanel('investor')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg></span><span>Investor Board</span><span class="nb nb-g">ROI</span></button>
     <button class="ni" id="nav-advisor" onclick="showPanel('advisor')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/></svg></span><span>AI Advisor</span><span class="nb nb-b" id="advisor-badge" style="display:none">NEW</span></button>
@@ -601,6 +602,19 @@
     </div>
     <div id="user-list"></div>
   </div>
+</div>
+
+<!-- ═══ SELLER RADAR (propensity to sell) ═══ -->
+<div class="panel" id="panel-radar">
+  <div class="page-hdr">
+    <div><div class="page-title">Seller Radar</div><div class="page-sub">Predicts who's most likely to sell — before they list. Scores every owner by how long they've held (the ~7-13 year move cycle) from public Land Registry data, and flags purchase anniversaries for off-market letters.</div></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+    <input id="radar-area" type="text" placeholder="Postcode (HA1 3TF) or outcode (HA1)" style="flex:1;min-width:220px;padding:11px 13px;border:1.5px solid var(--border2);border-radius:9px;font-size:14px;font-family:inherit">
+    <button onclick="runRadar()" id="radar-btn" style="padding:11px 18px;background:var(--blue);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Scan for sellers</button>
+  </div>
+  <div id="radar-summary" style="display:none;gap:10px;margin-bottom:14px"></div>
+  <div id="radar-results"></div>
 </div>
 
 <!-- ═══ MARKETING AI ═══ -->
@@ -1564,6 +1578,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260627-flatpin"></script>
+<script src="app.js?v=20260627-radar"></script>
 </body>
 </html>
