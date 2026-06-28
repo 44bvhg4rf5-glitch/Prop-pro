@@ -139,10 +139,18 @@ function scoreEvidence(cands, { listingSqft, pin, isFlat }) {
     if (!multiFlat && havePin && top._distM != null) reasons.push(`${top._distM} m from the listing's map pin (nearest of ${cands.length})`);
     if (cands.length === 1) { reasons.push('The only address of this type on this postcode'); confidence = 'high'; }
     else if (isFlat) {
-      // Flats in a block are near-identical in size and the listing never says
-      // which flat — so no signal can pick one. Always leave it to the user.
-      confidence = 'low';
-      reasons.push('Several flats here look alike — pick the right one or read the flat number on the listing');
+      // Flats usually look alike, but when the listing publishes a floor area AND
+      // one flat's certified size matches tightly while the others clearly differ,
+      // that singles out the exact flat. Otherwise fall back to the building.
+      const gap = (top._score || 0) - (second ? (second._score || 0) : 0);
+      const relTop = (haveSize && top.sizeSqft) ? Math.abs(top.sizeSqft - listingSqft) / Math.max(listingSqft, 1) : 1;
+      if (haveSize && relTop <= 0.08 && gap >= 0.22) {
+        confidence = 'medium';
+        reasons.push(`Floor area ${fmtN(top.sizeSqft)} sq ft matches this flat and clearly differs from the others (verify against the listing)`);
+      } else {
+        confidence = 'low';
+        reasons.push('Several flats here look alike — building address used; verify the exact flat on the listing');
+      }
     } else {
       const gap = (top._score || 0) - (second ? (second._score || 0) : 0);
       const sizeClose = haveSize && top.sizeSqft && Math.abs(top.sizeSqft - listingSqft) / Math.max(listingSqft, 1) <= 0.12;
@@ -380,11 +388,12 @@ export default async function handler(req, res) {
 
   // 4. Building-level resolution. We can't know the exact flat (listing hides
   // it), but we CAN list every real home in the building/postcode — all genuine
-  // mailable owner addresses. Skipped when a house was pinpointed above.
-  const housePinpointed = !isFlat && (evidence.confidence === 'high' || evidence.confidence === 'medium');
+  // mailable owner addresses. Skipped when we pinpointed a single address above
+  // (a house, or a flat that floor area singled out).
+  const pinpointed = (evidence.confidence === 'high' || evidence.confidence === 'medium');
 
   let buildingResolved = false, building = null, units = [], blockLevel = null;
-  if (!housePinpointed && pcUnits.length) {
+  if (!pinpointed && pcUnits.length) {
     const cb = isFlat ? (buildingNameOf(streetIn) || commonBuilding(pcUnits)) : '';
     units = pcUnits.map((c) => c.fullAddress);
     blockLevel = (isFlat || cb) ? 'building' : 'postcode'; // exact postcode of flats = the building
@@ -393,7 +402,7 @@ export default async function handler(req, res) {
     const addr = cb ? src.fullAddress.replace(/^\s*(flat|apartment|apt|unit|room)\s+[\w-]+,?\s*/i, '') : [label, postcodeIn].filter(Boolean).join(', ');
     building = { name: label, address: addr, unitCount: units.length, postcode: postcodeIn };
     buildingResolved = true;
-  } else if (!housePinpointed && candidates.length) {
+  } else if (!pinpointed && candidates.length) {
     const bn = isFlat ? (buildingNameOf(streetIn) || buildingNameOf(hint)) : '';
     let u = [];
     if (bn) u = candidates.filter((c) => norm(c.fullAddress).includes(norm(bn)));
