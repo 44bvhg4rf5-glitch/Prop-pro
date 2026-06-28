@@ -9,7 +9,30 @@ and **food & calories** — with a 7‑day trends view.
 - 💸 **Free** — no Apple Developer account, no App Store, no accounts, no subscriptions.
 - 🧩 **No dependencies** — plain HTML/CSS/JS plus a tiny built‑in Node server.
 
-## Run it on your home network
+## No computer? Host it free from your iPad (recommended)
+
+If you only have an iPhone/iPad, you don't need to run anything. Host the app
+once on **GitHub Pages** (free), then install it from Safari. Everything below
+is done in your iPad's browser.
+
+1. Go to your repository on github.com → **Settings** → **Pages**.
+2. Under **Build and deployment** → **Source**, choose **Deploy from a branch**.
+3. Set **Branch** to `claude/private-iphone-app-zbnn0n` and folder to **/ (root)**, then **Save**.
+4. Wait ~1 minute. Your app will be live at:
+   ```
+   https://44bvhg4rf5-glitch.github.io/Prop-pro/daytrack/
+   ```
+5. Open that address in **Safari** on your iPhone/iPad, then **Add to Home Screen** (see below).
+
+Now it's a permanent web app — no computer, nothing to keep running. It also
+works offline once installed, and your logged data stays on each device.
+
+> Privacy note: the web address is public (anyone who has the exact link could
+> open a blank copy of the app), but your data is **not** — it never leaves your
+> device, so nobody else sees what you log. If you'd rather the link itself be
+> private too, that needs a login system; ask and it can be added.
+
+## Run it on your home network (alternative — needs a computer)
 
 1. On your computer (same Wi‑Fi as your phone), start the server:
    ```bash
