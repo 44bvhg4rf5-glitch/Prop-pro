@@ -69,17 +69,12 @@ async function epcPostcode(pc) {
   return out;
 }
 
-// Exact postcode from the listing page (the accurate source — the pin is too
-// offset to trust). Cached per URL so a whole search fetches each page once.
-const _memPage = new Map();
-async function pageData(url) {
-  if (!url) return null;
-  if (_memPage.has(url)) return _memPage.get(url);
-  if (storeConfigured()) { const c = await getJSON('rm:' + url, null); if (c) { _memPage.set(url, c); return c; } }
-  const d = await rightmoveProperty(url).catch(() => null);
-  _memPage.set(url, d); if (_memPage.size > 4000) _memPage.clear();
-  if (d && storeConfigured()) await setJSON('rm:' + url, d).catch(() => {});
-  return d;
+const _memRev = new Map();
+async function nearby(lat, lon, area) {
+  const k = lat.toFixed(4) + ',' + lon.toFixed(4);
+  let pcs = _memRev.get(k);
+  if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
+  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 12);
 }
 
 const FLAT = /flat|apartment|maisonette|studio/i;
@@ -87,43 +82,45 @@ const daysBetween = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
 
 async function resolveOne(p) {
   const disp = p.displayAddress || p.address || '';
+  if (p.lat == null || p.lon == null) return null;
   const seg0 = disp.split(',')[0].trim();
   const num = leadNum(seg0);
   const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
   const building = isFlat ? buildingNameOf(disp) : '';
   const street = streetOf(disp);
   const listDate = (p.listDate || '').slice(0, 10);
+  const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
+  const pcs = await nearby(p.lat, p.lon, area);
 
-  // The accurate postcode comes from the listing page; without it we don't guess.
-  const pg = await pageData(p.url);
-  const pc = pg && FULL_POSTCODE.test(pg.postcode || '') ? pg.postcode.toUpperCase() : '';
-  if (!pc) return null;
-
-  const units = await epcPostcode(pc);
-  if (!units.length) return null;
-  // On the exact postcode, keep the addresses on the listing's street/building.
-  let matches = units;
-  if (building) { const m = units.filter((u) => norm(u.fullAddress).includes(norm(building))); if (m.length) matches = m; }
-  else if (street) { const m = units.filter((u) => norm(u.fullAddress).includes(street)); if (m.length) matches = m; }
-  if (!matches.length) return null;
-
-  // Group by building and score each by certificate freshness.
-  const groups = new Map();
-  for (const u of matches) { const k = buildingKey(u.fullAddress); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
-  const arr = [...groups.values()].map((us) => ({ us, latest: us.reduce((m, u) => (u.certDate > m ? u.certDate : m), '') }));
-  arr.sort((a, b) => b.latest.localeCompare(a.latest));
+  // Look at every nearby postcode, and within EACH (never mixing postcodes) group
+  // the street/building matches by building. Each building is a candidate, scored
+  // by its newest EPC certificate — the marketed property has the freshest cert.
+  const cands = [];
+  for (const pc of pcs) {
+    const units = await epcPostcode(pc);
+    if (!units.length) continue;
+    let m;
+    if (building) m = units.filter((u) => norm(u.fullAddress).includes(norm(building)));
+    else if (street) m = units.filter((u) => norm(u.fullAddress).includes(street));
+    else continue;
+    if (!m || !m.length) continue;
+    const groups = new Map();
+    for (const u of m) { const k = buildingKey(u.fullAddress); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+    for (const us of groups.values()) cands.push({ us, latest: us.reduce((x, u) => (u.certDate > x ? u.certDate : x), '') });
+    if (building && cands.length) break; // a named building is unambiguous
+  }
+  if (!cands.length) return null;
+  cands.sort((a, b) => b.latest.localeCompare(a.latest));
 
   let chosen, why;
-  if (building) { chosen = arr[0].us; why = 'building named on the listing'; }
+  if (building) { chosen = cands[0].us; why = 'building named on the listing'; }
   else {
-    const top = arr[0];
-    // Need a real recency signal to pick between buildings on a street; if the
-    // freshest building isn't clearly fresher than the next, it's ambiguous —
-    // skip rather than risk the wrong building.
-    if (arr.length > 1) {
-      const gapDays = daysBetween(top.latest, arr[1].latest);
-      if (!top.latest || gapDays < 45) return null; // ambiguous — don't guess
-    }
+    const top = cands[0];
+    // Street-only: only trust the freshest building when it's CLEARLY freshest
+    // and the cert lines up with the listing going live — else skip (no guess).
+    const gapDays = cands.length > 1 ? daysBetween(top.latest, cands[1].latest) : 999;
+    const nearList = listDate && top.latest ? daysBetween(top.latest, listDate) <= 180 : false;
+    if (!top.latest || gapDays < 45 || (listDate && !nearList)) return null;
     chosen = top.us; why = 'freshest EPC on the street (being marketed)';
   }
   chosen.sort((a, b) => b.certDate.localeCompare(a.certDate));
