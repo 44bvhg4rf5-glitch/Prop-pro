@@ -74,7 +74,7 @@ async function nearby(lat, lon, area) {
   const k = lat.toFixed(4) + ',' + lon.toFixed(4);
   let pcs = _memRev.get(k);
   if (!pcs) { pcs = await reverseGeocode(lat, lon); _memRev.set(k, pcs); }
-  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 12);
+  return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 4);
 }
 
 const FLAT = /flat|apartment|maisonette|studio/i;
@@ -163,9 +163,9 @@ export default async function handler(req, res) {
   else if (typeof req.body === 'string') raw = req.body;
   else raw = await readBody(req);
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
-  const listings = Array.isArray(body.listings) ? body.listings.slice(0, 140) : [];
+  const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const results = (await mapLimit(listings, 4, resolveOne)).filter(Boolean);
+  const results = (await mapLimit(listings, 6, resolveOne)).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
 }
