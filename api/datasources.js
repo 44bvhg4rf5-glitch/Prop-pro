@@ -14,6 +14,14 @@ function getJson(url, headers) {
     }).on('error', (e) => resolve({ status: 0, error: e.message }));
   });
 }
+function getJsonRaw(url, headers) {
+  return new Promise((resolve) => {
+    https.get(url, { headers: headers || {} }, (r) => {
+      let b = ''; r.on('data', (c) => (b += c));
+      r.on('end', () => { let j = null; try { j = JSON.parse(b); } catch {} resolve({ status: r.statusCode, json: j, raw: b }); });
+    }).on('error', (e) => resolve({ status: 0, raw: e.message }));
+  });
+}
 function postJson(host, path, body, headers) {
   return new Promise((resolve) => {
     const data = typeof body === 'string' ? body : JSON.stringify(body);
@@ -36,10 +44,12 @@ export default async function handler(req, res) {
   // 1. OS Places — postcode endpoint (Royal Mail PAF: every delivery address).
   const OS = process.env.OS_PLACES_KEY || '';
   if (OS) {
-    let r = await getJson(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
-    for (let i = 0; i < 2 && r.status === 429; i++) { await new Promise((s) => setTimeout(s, 1200)); r = await getJson(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' }); }
+    const r = await getJsonRaw(`https://api.os.uk/search/places/v1/postcode?postcode=${encodeURIComponent(postcode)}&dataset=DPA&maxresults=100&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
     const rows = (r.json && r.json.results) || [];
-    out.os_places_postcode = { status: r.status, count: rows.length, sample: rows.slice(0, 4).map((x) => x.DPA && x.DPA.ADDRESS) };
+    out.os_places_postcode = { status: r.status, count: rows.length, sample: rows.slice(0, 4).map((x) => x.DPA && x.DPA.ADDRESS), error: r.status !== 200 ? (r.raw || '').slice(0, 300) : undefined, keyTail: OS.slice(-4) };
+    // Also try the /find endpoint (different rate bucket) for comparison.
+    const rf = await getJsonRaw(`https://api.os.uk/search/places/v1/find?query=${encodeURIComponent(postcode)}&maxresults=5&key=${encodeURIComponent(OS)}`, { Accept: 'application/json' });
+    out.os_places_find = { status: rf.status, error: rf.status !== 200 ? (rf.raw || '').slice(0, 200) : undefined };
   } else out.os_places_postcode = { status: 'no key' };
 
   // 2. OpenStreetMap Overpass — crowdsourced house numbers near the pin.
