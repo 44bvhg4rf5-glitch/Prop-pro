@@ -9,8 +9,11 @@
 // Output: agency-output.json (and a readable summary to stdout).
 
 import fs from 'fs';
+import path from 'path';
 import { runAgency } from '../lib/agency.js';
 import { llmConfigured } from '../lib/llm.js';
+
+function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'run'; }
 
 const niche = process.argv[2] || 'problem-solving kitchen gadgets';
 const product = process.argv[3] || '';
@@ -32,9 +35,19 @@ const result = await runAgency({ niche, product, goal }, (step) => {
   console.log(`     ${mark} ${step.emoji || ''} ${step.name}${extra}`);
 });
 
+// Always write the latest run to a stable path…
 const outPath = 'agency-output.json';
 fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
+
+// …and archive a dated copy so weekly cron runs build a history you can look
+// back on (which niches/angles you tried, and when).
+const archiveDir = process.env.AGENCY_ARCHIVE_DIR || 'agency-runs';
+const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-'); // YYYY-MM-DD-HH-MM
+const archivePath = path.join(archiveDir, `${stamp}-${slug(niche)}.json`);
+fs.mkdirSync(archiveDir, { recursive: true });
+fs.writeFileSync(archivePath, JSON.stringify({ ...result, ranAt: new Date().toISOString() }, null, 2));
 console.log(`\n  ✅ Content drop written to ${outPath}`);
+console.log(`  🗂  Archived this run to ${archivePath}`);
 
 // Quick human-readable peek at the scripts so you can act without opening JSON.
 const scripts = (result.out.scriptwriter && result.out.scriptwriter.scripts) || [];

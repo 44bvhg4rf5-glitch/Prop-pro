@@ -1,6 +1,6 @@
 import { readBody, sendJson, guardOrigin } from '../lib/helpers.js';
 import { llmConfigured } from '../lib/llm.js';
-import { agentList, runStep, AGENTS } from '../lib/agency.js';
+import { agentList, runStep, runRemix, AGENTS } from '../lib/agency.js';
 
 // ViralForge endpoint — the autonomous TikTok content agency.
 //
@@ -30,6 +30,19 @@ export default async function handler(req, res) {
   else raw = await readBody(req);
   let payload = {};
   try { payload = JSON.parse(raw); } catch { /* ignore */ }
+
+  // Remix mode — spin variations of a video that already popped. Driven by its
+  // own seed (the winning video), so it runs before the pipeline's niche check.
+  if (payload.remix) {
+    const w = payload.remix;
+    if (!w.winner_title && !w.winner_hook) {
+      sendJson(res, 400, { error: { message: 'Give the Remix Specialist a winning video (its title and/or hook) to riff on.' } });
+      return;
+    }
+    const result = await runRemix(w);
+    sendJson(res, 200, result);
+    return;
+  }
 
   const seed = payload.seed || {};
   if (!seed.niche || !String(seed.niche).trim()) {

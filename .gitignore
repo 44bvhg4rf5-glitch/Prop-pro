@@ -2,3 +2,7 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# ViralForge run outputs (generated content drops + dated archives)
+agency-output.json
+agency-runs/

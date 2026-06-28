@@ -111,6 +111,36 @@
 
   <div class="pipe" id="pipe"></div>
 
+  <div class="brief" id="remixPanel" style="margin-top: 24px;">
+    <h2>🔁 Remix a winner</h2>
+    <p style="color: var(--muted); font-size: 13.5px; margin: -6px 0 14px;">Got a video that popped? Don't move on — feed it to the Remix Specialist and milk it with 10 fresh variations.</p>
+    <div class="row">
+      <div class="field" style="flex: 2 1 280px;">
+        <label>Winning video — title / what it was</label>
+        <input id="rxTitle" placeholder="e.g. 'POV: you find the gadget that ends soggy chips'">
+      </div>
+      <div class="field" style="flex: 2 1 280px;">
+        <label>Its hook (first line)</label>
+        <input id="rxHook" placeholder="e.g. 'Stop wasting money on air fryers'">
+      </div>
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <div class="field" style="flex: 2 1 280px;">
+        <label>Why you think it worked (optional)</label>
+        <input id="rxWhy" placeholder="e.g. controversial opinion + fast demo">
+      </div>
+      <div class="field">
+        <label>Stats (optional)</label>
+        <input id="rxStats" placeholder="e.g. 240k views, 18 sales">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="run" id="rxBtn">🔁 Spin 10 variations</button>
+      <span class="status" id="rxStatus"></span>
+    </div>
+    <div id="rxBody"></div>
+  </div>
+
   <div class="footer">ViralForge runs on your existing free AI key — no extra cost. Film the batch once, post daily, double down on what pops.</div>
 </div>
 
@@ -247,7 +277,43 @@ function renderResult(a, j) {
   body.innerHTML = html || `<pre class="raw">${esc(JSON.stringify(d, null, 2))}</pre>`;
 }
 
+async function runRemix() {
+  const remix = {
+    niche: document.getElementById('niche').value.trim(),
+    winner_title: document.getElementById('rxTitle').value.trim(),
+    winner_hook: document.getElementById('rxHook').value.trim(),
+    why_it_worked: document.getElementById('rxWhy').value.trim(),
+    stats: document.getElementById('rxStats').value.trim(),
+  };
+  if (!remix.winner_title && !remix.winner_hook) { alert('Give the remixer the winning video — its title and/or hook.'); return; }
+  const btn = document.getElementById('rxBtn');
+  const status = document.getElementById('rxStatus');
+  const body = document.getElementById('rxBody');
+  btn.disabled = true;
+  status.innerHTML = '<span class="spin"></span> Spinning variations…';
+  body.innerHTML = '';
+  try {
+    const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ remix }) });
+    const j = await r.json();
+    if (!j.ok || !j.data) { status.textContent = ''; body.innerHTML = `<div class="card">⚠️ ${esc((j.error && j.error.message) || j.error || 'Could not remix — try again.')}</div>`; btn.disabled = false; return; }
+    const d = j.data;
+    let html = '';
+    if (d.why_it_worked) html += `<div class="card"><h4>Why it worked</h4><div class="kv">${esc(d.why_it_worked)}</div></div>`;
+    (d.variations || []).forEach((v, i) => {
+      html += `<div class="card"><h4>${i + 1}. ${esc(v.angle)} <span class="chip">${esc(v.format)}</span> <span class="chip">${esc(v.lever_changed)}</span></h4>` +
+        `<div class="kv"><b>New hook:</b> ${esc(v.new_hook)}</div>` +
+        (v.script_beats || []).map(b => `<div class="shot">${esc(b)}</div>`).join('') + `</div>`;
+    });
+    if (d.double_down) html += `<div class="card"><h4>🎯 Double down on</h4><div class="kv">${esc(d.double_down)}</div></div>`;
+    if (d.keep_doing || d.stop_doing) html += `<div class="card"><h4>Keep / stop</h4>${d.keep_doing ? `<div class="kv">✅ ${esc(d.keep_doing)}</div>` : ''}${d.stop_doing ? `<div class="kv">🛑 ${esc(d.stop_doing)}</div>` : ''}</div>`;
+    body.innerHTML = html || `<pre class="raw">${esc(j.text || '')}</pre>`;
+    status.textContent = '✅ 10 variations ready — film the 2–3 closest to the original first.';
+  } catch (e) { status.textContent = ''; body.innerHTML = `<div class="card">⚠️ Network error.</div>`; }
+  btn.disabled = false;
+}
+
 document.getElementById('runBtn').onclick = run;
+document.getElementById('rxBtn').onclick = runRemix;
 document.getElementById('copyBtn').onclick = () => {
   navigator.clipboard.writeText(JSON.stringify(lastResults, null, 2));
   document.getElementById('copyBtn').textContent = '✓ Copied';

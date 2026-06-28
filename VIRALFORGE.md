@@ -20,6 +20,10 @@ real marketing team passing work down the line.
 | 6 | 📅 **Scheduler** | A 7-day calendar with one batch-film session + best post times |
 | 7 | 📊 **Optimizer** | Scores each video 1–10, gives A/B tests & a "when it pops" playbook |
 
+Plus one on-demand agent that sits **outside** the weekly pipeline:
+
+| — | 🔁 **Remix Specialist** | Feed it a video that popped; it spins 10 fresh variations that keep the winning core and change one lever each. Riding a winner is the highest-ROI move on TikTok. |
+
 ## Run it
 
 ### In the browser (live dashboard)
@@ -35,7 +39,18 @@ Type a niche, hit **Run the agency**, and watch each agent fill in its card.
 GEMINI_API_KEY=...  node scripts/agency.js "problem-solving kitchen gadgets"
 # writes agency-output.json + prints the scripts and calendar
 ```
-Cron this weekly for a fresh content drop with no hands on keyboard.
+Cron this weekly for a fresh content drop with no hands on keyboard. Every run
+also auto-archives a dated copy to `agency-runs/` (override with
+`AGENCY_ARCHIVE_DIR`), so you build a history of every niche and angle you've
+tried.
+
+### Remix a winner
+In the dashboard, scroll to **🔁 Remix a winner**, paste the winning video's
+title + hook, and get 10 variations. Or hit the API directly:
+```bash
+curl -X POST localhost:3000/api/agency -H 'Content-Type: application/json' \
+  -d '{"remix":{"niche":"kitchen gadgets","winner_title":"...","winner_hook":"..."}}'
+```
 
 ## Cost
 
