@@ -287,35 +287,42 @@ async function resolveOne(p, ctx) {
   let r = await tryConfirm(p, pcs, listSqft, ctx);
   if (r) return r;
 
-  // 2) Enrich from the listing's own detail page — the EXACT postcode collapses
-  // the candidate pool to ONE postcode, where the proof tiers confirm far more
-  // often. Budgeted + cached; degrades to Likely on any miss.
+  // 2) Enrich from the listing's own detail page — it carries the EXACT full
+  // postcode (cards omit it), plus size + type. We use it to (a) re-run the
+  // confirm tiers scoped to that single postcode and (b) draw the Likely
+  // best-estimate from the RIGHT postcode. Budgeted + cached; degrades on miss.
+  let det = null;
   if (p.url && ctx && ctx.detailBudget > 0) {
     ctx.detailBudget--;
-    const d = await listingDetail(p.url).catch(() => null);
-    if (d && d.postcode) {
+    det = await listingDetail(p.url).catch(() => null);
+    if (det && det.postcode) {
       // Option 2: the detail page's own displayAddress sometimes states a
       // house/flat number the card hid — prefer it when it carries a number so
       // Tier 1 can confirm it; otherwise keep the card's address.
-      const detailNum = leadNum((d.displayAddress || '').split(',')[0].trim());
-      const disp = detailNum ? d.displayAddress : (p.displayAddress || p.address || d.displayAddress);
-      const r2 = await tryConfirm({ ...p, displayAddress: disp, type: d.type || p.type }, [d.postcode], d.sqft || listSqft, ctx);
+      const detailNum = leadNum((det.displayAddress || '').split(',')[0].trim());
+      const disp2 = detailNum ? det.displayAddress : (p.displayAddress || p.address || det.displayAddress);
+      const r2 = await tryConfirm({ ...p, displayAddress: disp2, type: det.type || p.type }, [det.postcode], det.sqft || listSqft, ctx);
       if (r2) { r2.confidence = 'high'; r2.why += ' (exact postcode from the listing page)'; return r2; }
     }
   }
 
-  // 3) LIKELY — best estimate from nearby EPC, clearly flagged to verify.
+  // 3) LIKELY — best estimate from EPC, clearly flagged to verify. Prefer the
+  // detail page's exact postcode (narrows to the right block), the listing's
+  // own size/type, falling back to the map pin's nearby postcodes.
   // A property gets a fresh EPC when it's marketed, so the EPC lodged CLOSEST to
   // the listing date is the most likely listing; we sanity-check the top
   // candidate's property type so we never estimate a flat for a house.
-  const disp = p.displayAddress || p.address || '';
+  const likelyPcs = (det && det.postcode) ? [det.postcode] : pcs;
+  const eSqft = (det && det.sqft) ? det.sqft : listSqft;
+  const eType = (det && det.type) ? det.type : (p.type || '');
+  const disp = p.displayAddress || p.address || (det && det.displayAddress) || '';
   const seg0 = disp.split(',')[0].trim();
-  const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
+  const isFlat = FLAT.test(eType) || /^(flat|apartment)/i.test(seg0);
   const building = isFlat ? buildingNameOf(disp) : '';
   const street = streetOf(disp);
   if (!street && !building) return null;
   const epc = [];
-  for (const pc of pcs) { for (const u of await epcPostcode(pc)) { if (building ? norm(u.fullAddress).includes(norm(building)) : norm(u.fullAddress).includes(street)) epc.push(u); } }
+  for (const pc of likelyPcs) { for (const u of await epcPostcode(pc)) { if (building ? norm(u.fullAddress).includes(norm(building)) : norm(u.fullAddress).includes(street)) epc.push(u); } }
   if (epc.length) {
     const listDate = (p.listDate || '').slice(0, 10);
     const groups = new Map();
@@ -338,7 +345,7 @@ async function resolveOne(p, ctx) {
         checks++; ctx.certBudget--;
         const d = await certDetails(c.us[0].cert);
         if (!d) { pick = pick || c; continue; }
-        if (epcTypeMatches(p.type, d)) { pick = c; typed = !!d.ptype; break; }
+        if (epcTypeMatches(eType, d)) { pick = c; typed = !!d.ptype; break; }
       }
       pick = pick || cands[0];
       const near = listDate && pick.latest && daysBetween(pick.latest, listDate) <= 150;
@@ -355,12 +362,12 @@ async function resolveOne(p, ctx) {
       // Pick the unit: floor-area-closest when the listing has a size (bounded
       // cert lookups), otherwise the freshest certificate in the building.
       let unit = chosen[0];
-      if (listSqft > 0 && chosen.length > 1 && ctx && ctx.certBudget > 0) {
+      if (eSqft > 0 && chosen.length > 1 && ctx && ctx.certBudget > 0) {
         let best = null, n = 0;
         for (const u of chosen) {
           if (n >= 8 || ctx.certBudget <= 0) break; n++; ctx.certBudget--;
           const d = await certDetails(u.cert);
-          if (d && d.sqft) { const diff = Math.abs(d.sqft - listSqft); if (!best || diff < best.diff) best = { u, diff }; }
+          if (d && d.sqft) { const diff = Math.abs(d.sqft - eSqft); if (!best || diff < best.diff) best = { u, diff }; }
         }
         if (best) { unit = best.u; why += ' + closest floor area'; }
       }
