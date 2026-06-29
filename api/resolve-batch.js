@@ -89,8 +89,10 @@ async function certSqft(cert) {
   let v = null;
   try {
     const KEY = process.env.EPC_API_KEY || '';
-    const { json } = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cert)}`, KEY);
-    const body = (json && json.data) ? json.data : json;
+    const url = `${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cert)}`;
+    let r = await fetchJson(url, KEY);
+    if (r.status === 429) { await new Promise((s) => setTimeout(s, 500)); r = await fetchJson(url, KEY); } // ride out a rate limit
+    const body = (r.json && r.json.data) ? r.json.data : r.json;
     const m2 = parseFloat(body && body.total_floor_area);
     if (!Number.isNaN(m2) && m2 > 0) v = Math.round(m2 * SQFT);
   } catch { /* ignore */ }
@@ -204,9 +206,13 @@ async function resolveOne(p, ctx) {
   // ── TIER 2 — floor area uniquely identifies the dwelling. When the listing
   // publishes a size, the one whose certified floor area matches it (and is
   // clearly closer than any other) is the listed property. ──
-  if (listSqft > 0 && epc.length) {
+  if (listSqft > 0 && epc.length && epc.length <= 25) {
     const sized = [];
-    for (const u of epc.slice(0, 40)) { const s = await certSqft(u.cert); if (s) sized.push({ u, s, diff: Math.abs(s - listSqft) }); }
+    for (const u of epc) {
+      if (ctx && ctx.certBudget <= 0) break;        // bound total floor-area lookups per request (avoid timeouts)
+      if (ctx) ctx.certBudget--;
+      const s = await certSqft(u.cert); if (s) sized.push({ u, s, diff: Math.abs(s - listSqft) });
+    }
     sized.sort((a, b) => a.diff - b.diff);
     if (sized.length) {
       const best = sized[0], next = sized[1];
@@ -258,7 +264,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 4, ctBudget: 20 }; // cap free OpenStreetMap + Council Tax fetches per request
+  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 350 }; // cap free lookups per request (Council Tax + EPC floor-area)
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
