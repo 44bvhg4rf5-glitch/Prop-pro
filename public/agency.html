@@ -68,6 +68,38 @@
   .banner { background: #ff2c5515; border: 1px solid var(--accent); color: #ffb3c1; padding: 12px 14px; border-radius: 10px; margin-bottom: 18px; font-size: 13.5px; display: none; }
   .toolbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 10px; }
   .toolbar button { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 12.5px; }
+  /* Per-video status + actions on each kit card */
+  .kithead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .kithead h4 { margin: 0; flex: 1 1 auto; }
+  .statusbtn { border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 600; background: #ffffff10; color: var(--muted); white-space: nowrap; }
+  .statusbtn[data-s="todo"] { background: #ffffff10; color: var(--muted); }
+  .statusbtn[data-s="filmed"] { background: var(--warn)22; color: var(--warn); border-color: var(--warn); }
+  .statusbtn[data-s="done"] { background: var(--good)22; color: var(--good); border-color: var(--good); }
+  .filmbtn { background: linear-gradient(90deg, var(--accent), #ff5a78); color: #fff; border: none; border-radius: 20px; padding: 5px 14px; cursor: pointer; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .progressbar { height: 8px; background: var(--panel2); border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
+  .progressbar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent2), var(--good)); width: 0; transition: width .4s; }
+  /* Film Mode — full-screen teleprompter */
+  #film { position: fixed; inset: 0; background: #05050a; z-index: 100; display: none; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  #film.on { display: flex; }
+  .filmtop { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .filmtop .ftitle { flex: 1; font-weight: 700; font-size: 15px; }
+  .filmtop button { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
+  .filmdots { display: flex; gap: 6px; justify-content: center; padding: 14px; flex-wrap: wrap; }
+  .filmdots span { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .filmdots span.on { background: var(--accent2); }
+  .filmdots span.past { background: var(--good); }
+  .filmstage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px 24px; gap: 16px; overflow-y: auto; }
+  .filmkind { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent2); font-weight: 700; }
+  .filmvisual { color: var(--muted); font-size: 16px; max-width: 700px; }
+  .filmline { font-size: clamp(26px, 6vw, 52px); font-weight: 800; line-height: 1.25; max-width: 800px; color: var(--text); }
+  .filmline.smaller { font-size: clamp(20px, 4.5vw, 34px); font-weight: 700; }
+  .filmtip { color: var(--muted); font-size: 13px; }
+  .filmnav { display: flex; gap: 12px; padding: 18px 20px; border-top: 1px solid var(--line); }
+  .filmnav button { flex: 1; border: none; border-radius: 14px; padding: 18px; font-size: 17px; font-weight: 700; cursor: pointer; }
+  .filmnav .prev { background: var(--panel2); color: var(--text); border: 1px solid var(--line); flex: 0 0 90px; }
+  .filmnav .next { background: linear-gradient(90deg, var(--accent2), #4af); color: #03121a; }
+  .filmnav .finish { background: linear-gradient(90deg, var(--good), #59d98a); color: #04210f; }
+  .filmcopy { background: #ffffff14; border: 1px solid var(--line); color: var(--accent2); border-radius: 10px; padding: 8px 16px; cursor: pointer; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -147,6 +179,26 @@
   <div class="footer">ViralForge runs on your existing free AI key — no extra cost. Film the batch once, post daily, double down on what pops.</div>
 </div>
 
+<!-- Film Mode: full-screen, phone-friendly teleprompter for making one video -->
+<div id="film">
+  <div class="filmtop">
+    <div class="ftitle" id="filmTitle"></div>
+    <button id="filmClose">✕ Exit</button>
+  </div>
+  <div class="filmdots" id="filmDots"></div>
+  <div class="filmstage">
+    <div class="filmkind" id="filmKind"></div>
+    <div class="filmvisual" id="filmVisual"></div>
+    <div class="filmline" id="filmLine"></div>
+    <button class="filmcopy" id="filmCopy" style="display:none;">⧉ Copy this line</button>
+    <div class="filmtip" id="filmTip"></div>
+  </div>
+  <div class="filmnav">
+    <button class="prev" id="filmPrev">‹</button>
+    <button class="next" id="filmNext">Next ›</button>
+  </div>
+</div>
+
 <script>
 const PIPE = document.getElementById('pipe');
 const banner = document.getElementById('banner');
@@ -154,6 +206,15 @@ let AGENTS = [];
 let lastResults = {};
 let lastOut = {};
 let lastKitMd = '';
+let lastKits = [];
+
+// Per-video status, persisted locally so progress survives reloads & days.
+const STATUS_ORDER = ['todo', 'filmed', 'done'];
+const STATUS_LABEL = { todo: '○ To make', filmed: '◐ Filmed', done: '✓ Posted' };
+function statusKey(title) { return 'vf_status_' + title; }
+function getStatus(title) { try { return localStorage.getItem(statusKey(title)) || 'todo'; } catch { return 'todo'; } }
+function setStatus(title, s) { try { localStorage.setItem(statusKey(title), s); } catch {} }
+function cycleStatus(title) { const cur = getStatus(title); const next = STATUS_ORDER[(STATUS_ORDER.indexOf(cur) + 1) % STATUS_ORDER.length]; setStatus(title, next); return next; }
 
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
@@ -260,16 +321,30 @@ function copyText(text, el) {
   setTimeout(() => el.textContent = old, 1400);
 }
 
+function updateProgress() {
+  const bar = document.getElementById('kitProgress');
+  if (!bar || !lastKits.length) return;
+  const done = lastKits.filter(k => getStatus(k.title) === 'done').length;
+  bar.querySelector('i').style.width = Math.round((done / lastKits.length) * 100) + '%';
+  bar.nextElementSibling.textContent = `${done}/${lastKits.length} posted`;
+}
+
 function renderKits(kits) {
+  lastKits = kits;
   const kitsDiv = document.getElementById('kits');
   if (!kits.length) { kitsDiv.innerHTML = '<div class="brief" style="margin-top:24px;">No scripts to package yet.</div>'; return; }
   const wrap = el('div', 'brief');
   wrap.style.marginTop = '24px';
   let html = `<div class="toolbar"><button id="dlMd">⬇ Download all (.md)</button></div>` +
     `<h2 style="margin-top:0;">📦 Production Kits — ${kits.length} videos, ready to make</h2>` +
-    `<p style="color:var(--muted);font-size:13.5px;margin:-6px 0 14px;">Each kit is paste-ready: voiceover → ElevenLabs/CapCut TTS, shot list → film/generate, on-screen text → CapCut overlays.</p>`;
+    `<p style="color:var(--muted);font-size:13.5px;margin:-6px 0 10px;">Tap <b style="color:var(--accent)">🎬 Film Mode</b> to make a video step-by-step on your phone. Tap the status chip to track progress.</p>` +
+    `<div class="progressbar" id="kitProgress"><i></i></div><div class="sub" style="text-align:right;">0/${kits.length} posted</div>`;
   kits.forEach((k, i) => {
-    html += `<div class="card"><h4>${i + 1}. ${esc(k.title)} ${k.pillar ? `<span class="chip">${esc(k.pillar)}</span>` : ''} ${k.duration_seconds ? `<span class="chip">${esc(k.duration_seconds)}s</span>` : ''}</h4>`;
+    const st = getStatus(k.title);
+    html += `<div class="card">`;
+    html += `<div class="kithead"><h4>${i + 1}. ${esc(k.title)} ${k.pillar ? `<span class="chip">${esc(k.pillar)}</span>` : ''} ${k.duration_seconds ? `<span class="chip">${esc(k.duration_seconds)}s</span>` : ''}</h4>` +
+      `<button class="statusbtn" data-i="${i}" data-s="${st}">${STATUS_LABEL[st]}</button>` +
+      `<button class="filmbtn" data-i="${i}">🎬 Film Mode</button></div>`;
     html += `<div class="kv"><b>Hook:</b> ${esc(k.primary_hook)}</div>`;
     if (k.hook_options && k.hook_options.length) html += `<div class="sub">A/B: ${k.hook_options.map(h => `“${esc(h)}”`).join(' · ')}</div>`;
     html += `<div style="margin:10px 0 4px;display:flex;align-items:center;gap:8px;"><b style="font-size:13px;">🗣️ Voiceover</b> <button class="cpv" data-i="${i}" style="background:var(--panel);border:1px solid var(--line);color:var(--accent2);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:12px;">⧉ Copy for TTS</button></div>`;
@@ -290,12 +365,74 @@ function renderKits(kits) {
   wrap.querySelectorAll('.cpc').forEach(b => b.onclick = () => {
     const k = kits[+b.dataset.i]; copyText([k.caption, (k.hashtags || []).join(' ')].filter(Boolean).join('\n\n'), b);
   });
+  // Status chips cycle To make → Filmed → Posted; Film buttons open the teleprompter.
+  wrap.querySelectorAll('.statusbtn').forEach(b => b.onclick = () => {
+    const k = kits[+b.dataset.i]; const next = cycleStatus(k.title);
+    b.dataset.s = next; b.textContent = STATUS_LABEL[next]; updateProgress();
+  });
+  wrap.querySelectorAll('.filmbtn').forEach(b => b.onclick = () => openFilm(+b.dataset.i));
   wrap.querySelector('#dlMd').onclick = () => {
     const blob = new Blob([lastKitMd], { type: 'text/markdown' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'viralforge-production-kit.md'; a.click(); URL.revokeObjectURL(a.href);
   };
+  updateProgress();
 }
+
+// ── Film Mode: a step-by-step teleprompter for making one video ──
+let filmSteps = [], filmIdx = 0, filmKitIndex = -1;
+
+function buildFilmSteps(k) {
+  const steps = [];
+  steps.push({ kind: 'Hook — first 1–2 seconds', visual: 'Look at the camera. This line decides if they keep watching.', line: k.primary_hook, copy: k.primary_hook, tip: 'Say it with energy. A/B options: ' + (k.hook_options || []).map(h => `“${h}”`).join('  ·  ') });
+  (k.shot_list || []).forEach((sh) => {
+    steps.push({ kind: `Shot ${sh.n} of ${k.shot_list.length}`, visual: sh.visual, line: sh.say || '(no line — just film this)', copy: sh.say || '', smaller: !sh.say, tip: 'Film this shot, then tap Next.' });
+  });
+  if (k.cta) steps.push({ kind: 'Call to action', visual: 'End strong — tell them what to do.', line: k.cta, copy: k.cta, tip: '' });
+  steps.push({ kind: 'Post it', visual: 'Add captions in CapCut, then post with:', line: k.caption || '(your caption)', copy: [k.caption, (k.hashtags || []).join(' ')].filter(Boolean).join('\n\n'), smaller: true, tip: (k.hashtags || []).join(' ') + (k.pinned_comment ? `  ·  📌 ${k.pinned_comment}` : '') });
+  return steps;
+}
+
+function openFilm(i) {
+  filmKitIndex = i; filmSteps = buildFilmSteps(lastKits[i]); filmIdx = 0;
+  document.getElementById('filmTitle').textContent = `🎬 ${lastKits[i].title}`;
+  document.getElementById('film').classList.add('on');
+  renderFilmStep();
+}
+function closeFilm() { document.getElementById('film').classList.remove('on'); }
+
+function renderFilmStep() {
+  const s = filmSteps[filmIdx];
+  document.getElementById('filmKind').textContent = s.kind;
+  document.getElementById('filmVisual').textContent = s.visual || '';
+  const lineEl = document.getElementById('filmLine');
+  lineEl.textContent = s.line; lineEl.className = 'filmline' + (s.smaller ? ' smaller' : '');
+  document.getElementById('filmTip').textContent = s.tip || '';
+  const copyBtn = document.getElementById('filmCopy');
+  if (s.copy) { copyBtn.style.display = 'inline-block'; copyBtn.onclick = () => copyText(s.copy, copyBtn); copyBtn.textContent = '⧉ Copy this line'; }
+  else copyBtn.style.display = 'none';
+  // dots
+  document.getElementById('filmDots').innerHTML = filmSteps.map((_, j) =>
+    `<span class="${j === filmIdx ? 'on' : (j < filmIdx ? 'past' : '')}"></span>`).join('');
+  // nav
+  document.getElementById('filmPrev').disabled = filmIdx === 0;
+  document.getElementById('filmPrev').style.opacity = filmIdx === 0 ? 0.4 : 1;
+  const next = document.getElementById('filmNext');
+  if (filmIdx === filmSteps.length - 1) { next.textContent = '✓ Mark as filmed'; next.className = 'next finish'; }
+  else { next.textContent = 'Next ›'; next.className = 'next'; }
+}
+function filmNext() {
+  if (filmIdx < filmSteps.length - 1) { filmIdx++; renderFilmStep(); return; }
+  // Last step → mark filmed and close.
+  const k = lastKits[filmKitIndex];
+  if (getStatus(k.title) === 'todo') setStatus(k.title, 'filmed');
+  closeFilm();
+  // Refresh the status chip + progress without a full rebuild.
+  const chip = document.querySelector(`.statusbtn[data-i="${filmKitIndex}"]`);
+  if (chip) { const st = getStatus(k.title); chip.dataset.s = st; chip.textContent = STATUS_LABEL[st]; }
+  updateProgress();
+}
+function filmPrev() { if (filmIdx > 0) { filmIdx--; renderFilmStep(); } }
 
 function renderResult(a, j) {
   const body = document.getElementById('body-' + a.id);
@@ -379,6 +516,15 @@ async function runRemix() {
 document.getElementById('runBtn').onclick = run;
 document.getElementById('kitBtn').onclick = buildKits;
 document.getElementById('rxBtn').onclick = runRemix;
+document.getElementById('filmClose').onclick = closeFilm;
+document.getElementById('filmNext').onclick = filmNext;
+document.getElementById('filmPrev').onclick = filmPrev;
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('film').classList.contains('on')) return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); filmNext(); }
+  else if (e.key === 'ArrowLeft') { filmPrev(); }
+  else if (e.key === 'Escape') { closeFilm(); }
+});
 document.getElementById('copyBtn').onclick = () => {
   navigator.clipboard.writeText(JSON.stringify(lastResults, null, 2));
   document.getElementById('copyBtn').textContent = '✓ Copied';

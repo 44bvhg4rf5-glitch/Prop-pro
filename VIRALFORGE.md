@@ -69,6 +69,17 @@ dashboard gives per-script **Copy for TTS** / **Copy caption** buttons and a
 **Download all (.md)** button; the CLI writes
 `agency-runs/<date>-<niche>-PRODUCTION-KIT.md`.
 
+### 🎬 Film Mode (make it on your phone, hands-free)
+Each Production Kit card has a **Film Mode** button that opens a full-screen,
+phone-friendly **teleprompter**: it walks you through one video a single step at
+a time — Hook → each Shot → CTA → Post — in big readable text, with a **Copy this
+line** button and tap/arrow-key/spacebar navigation. Prop your phone, read the
+line, tap Next. Finishing marks the video **Filmed**.
+
+Every video also has a **status chip** (To make → Filmed → Posted) saved in your
+browser, plus a **progress bar** — so you always know what's left, even across
+days. No login, no backend; it's all local.
+
 ### Recommended free tool stack
 | Job | Tool (free-first) |
 |-----|-------------------|
