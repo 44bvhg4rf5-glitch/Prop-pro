@@ -270,28 +270,53 @@ async function resolveOne(p, ctx) {
   }
 
   // ── LIKELY (best estimate — clearly flagged for the user to verify) ──
-  // We couldn't CONFIRM it, but a property gets a fresh EPC when it's marketed,
-  // so the freshest certificate on the street / in the building is the most
-  // likely listing. We only do this when there's a real freshness signal (one
-  // building clearly the freshest, or freshest near the listing date), and we
-  // always return a SPECIFIC unit — never a bare street/block name.
+  // A property gets a fresh EPC when it's marketed, so the EPC lodged CLOSEST to
+  // the listing date is the most likely listing (sharper than "most recent
+  // overall"), and we sanity-check the top candidate's property TYPE so we never
+  // estimate a flat when the listing is a house. Always a SPECIFIC unit.
   if (epc.length) {
     const listDate = (p.listDate || '').slice(0, 10);
     const groups = new Map();
     for (const u of epc) { const k = buildingKey(u.fullAddress); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
-    const cands = [...groups.values()].map((us) => ({ us, latest: us.reduce((x, u) => (u.certDate > x ? u.certDate : x), '') })).sort((a, b) => b.latest.localeCompare(a.latest));
-    let chosen = null;
-    if (building) chosen = cands[0].us;                       // named building → that building
-    else if (cands.length === 1) chosen = cands[0].us;        // one building on the street
-    else if (cands.length > 1) {
-      const top = cands[0], gap = daysBetween(top.latest, cands[1].latest);
-      const nearList = listDate && top.latest ? daysBetween(top.latest, listDate) <= 200 : false;
-      if (top.latest && (gap >= 20 || nearList)) chosen = top.us;   // a genuine freshness signal
+    const cands = [...groups.values()].map((us) => { us.sort((a, b) => b.certDate.localeCompare(a.certDate)); return { us, latest: us[0].certDate || '' }; });
+    // Rank by EPC-date closeness to the listing date (marketing signal); if we
+    // have no listing date, fall back to the freshest certificate.
+    if (listDate) cands.sort((a, b) => (a.latest && b.latest) ? (daysBetween(a.latest, listDate) - daysBetween(b.latest, listDate)) : b.latest.localeCompare(a.latest));
+    else cands.sort((a, b) => b.latest.localeCompare(a.latest));
+
+    let chosen = null, why = '';
+    if (building) { chosen = cands[0].us; why = 'building named on the listing'; }
+    else if (cands.length === 1) { chosen = cands[0].us; why = 'the only building on this street'; }
+    else {
+      // Walk the ranked candidates; verify TYPE with a bounded number of cert
+      // lookups and take the first whose type matches the listing (or unknown).
+      let pick = null, checks = 0, typed = false;
+      for (const c of cands) {
+        if (checks >= 3 || !ctx || ctx.certBudget <= 0) break;
+        checks++; ctx.certBudget--;
+        const d = await certDetails(c.us[0].cert);
+        if (!d) { pick = pick || c; continue; }
+        if (epcTypeMatches(p.type, d)) { pick = c; typed = !!d.ptype; break; }
+      }
+      pick = pick || cands[0];
+      chosen = pick.us;
+      const near = listDate && pick.latest && daysBetween(pick.latest, listDate) <= 150;
+      why = [near ? 'EPC lodged near the listing date' : 'freshest EPC on the street', typed ? 'property type matches' : ''].filter(Boolean).join(' + ');
     }
     if (chosen && chosen.length) {
-      chosen.sort((a, b) => b.certDate.localeCompare(a.certDate));
-      const unit = chosen[0];                                 // freshest unit = most likely
-      return { id: p.id, level: 'likely', deliverable: false, confidence: 'likely', address: tc(unit.fullAddress), postcode: unit.postcode, units: [tc(unit.fullAddress)], why: 'best estimate from the freshest EPC near the listing — verify before posting' };
+      // Pick the unit: floor-area-closest when the listing has a size (bounded
+      // cert lookups), otherwise the freshest certificate in the building.
+      let unit = chosen[0];
+      if (listSqft > 0 && chosen.length > 1 && ctx && ctx.certBudget > 0) {
+        let best = null, n = 0;
+        for (const u of chosen) {
+          if (n >= 8 || ctx.certBudget <= 0) break; n++; ctx.certBudget--;
+          const d = await certDetails(u.cert);
+          if (d && d.sqft) { const diff = Math.abs(d.sqft - listSqft); if (!best || diff < best.diff) best = { u, diff }; }
+        }
+        if (best) { unit = best.u; why += ' + closest floor area'; }
+      }
+      return { id: p.id, level: 'likely', deliverable: false, confidence: 'likely', address: tc(unit.fullAddress), postcode: unit.postcode, units: [tc(unit.fullAddress)], why: 'best estimate — ' + (why || 'freshest EPC near the listing') + ' (verify before posting)' };
     }
   }
 
@@ -317,7 +342,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 350 }; // cap free lookups per request (Council Tax + EPC floor-area)
+  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450 }; // cap free lookups per request (Council Tax + EPC details)
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
