@@ -2345,6 +2345,84 @@ function autoSendAll(){ queueAllResults(); }
 function autoSendSel(){ queueAllSelected(); }
 
 // ── Pre-Market Radar (new-EPC monitor) ──
+// ── Touting Radar (listing-lifecycle leads) ──
+let toutingLeads = [];
+const TT_STYLE = {
+  fallthrough: { c:'#dc2626', bg:'rgba(220,38,38,.12)', label:'Fell through' },
+  withdrawn:   { c:'#d97706', bg:'rgba(217,119,6,.12)',  label:'Withdrawn' },
+  reduced:     { c:'#2563eb', bg:'rgba(37,99,235,.12)',  label:'Reduced' },
+  longdom:     { c:'#6b7280', bg:'rgba(107,114,128,.12)',label:'Long on market' },
+  new:         { c:'#16a34a', bg:'rgba(22,163,74,.12)',  label:'New listing' },
+};
+async function initTouting(){
+  const box = document.getElementById('tt-results');
+  if(box) box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)"><i class=ic-flame></i> Loading touting leads…</div>';
+  try{
+    const r = await fetch('/api/touting');
+    const d = await r.json().catch(()=>({}));
+    if(d.configured===false){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+(d.note||'Storage not configured.')+'</div>'; return; }
+    // Merge the event feed with the computed long-on-market leads, hottest first.
+    toutingLeads = [...(d.leads||[]), ...(d.longDom||[])].sort((a,b)=>(b.score||0)-(a.score||0));
+    const m = d.meta||{};
+    const fell = (d.leads||[]).filter(x=>x.signal==='fallthrough').length;
+    const hot = toutingLeads.filter(x=>(x.score||0)>=65).length;
+    const he=document.getElementById('tt-hot'); if(he) he.textContent=hot;
+    const fe=document.getElementById('tt-fell'); if(fe) fe.textContent=fell;
+    const me=document.getElementById('tt-meta');
+    if(me) me.textContent = m.lastScan ? ('Last scan '+new Date(m.lastScan).toLocaleString()+' · '+(m.tracked||0)+' listings tracked') : 'No scan yet — press “Run scan now” to seed the radar.';
+    renderTouting();
+  }catch(e){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
+}
+function renderTouting(){
+  const box = document.getElementById('tt-results'); if(!box) return;
+  const f = document.getElementById('tt-filter')?.value || '';
+  const list = (toutingLeads||[]).filter(x=>!f || x.signal===f);
+  if(!list.length){ box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">No leads yet for this signal. The radar fills in as the daily scans run.</div>'; return; }
+  box.innerHTML = list.slice(0,300).map((x,i)=>{
+    const s = TT_STYLE[x.signal] || TT_STYLE.new;
+    const extra = x.signal==='reduced' && x.dropPct ? ('−'+x.dropPct+'%') : (x.signal==='longdom' && x.dom ? (Math.round(x.dom/7)+'w on market') : '');
+    const price = x.price ? ('£'+Number(x.price).toLocaleString()) : '';
+    const meta = [x.postcode, x.district, x.agent, price, extra].filter(Boolean).join(' · ');
+    const link = x.url ? '<a href="'+x.url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Listing</a>' : '';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +'<span style="flex-shrink:0;min-width:96px;text-align:center;font-size:11px;font-weight:700;color:'+s.c+';background:'+s.bg+';padding:5px 8px;border-radius:7px">'+s.label+'</span>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(x.addr||'(address pending)')+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+meta+'</div>'
+      +'</div>'
+      +link
+      +'<button onclick="queueTouting('+i+')" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue</button>'
+    +'</div>';
+  }).join('');
+}
+async function runToutingScan(){
+  const btn = document.getElementById('tt-scan-btn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class=ic-refresh></i> Scanning…'; }
+  try{
+    const r = await fetch('/api/touting?scan=1');
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok || d.error){ toast('<i class=ic-alert></i> '+(d.error||('Scan failed ('+r.status+')')), 'err'); }
+    else { toast('<i class=ic-flame></i> Scan done — '+(d.lastEvents||0)+' new signals from '+(d.scanned||0)+' listings', 'ok'); await initTouting(); }
+  }catch(e){ toast('<i class=ic-alert></i> '+e.message, 'err'); }
+  finally{ if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-flame></i> Run scan now'; } }
+}
+function queueTouting(i){
+  const f = document.getElementById('tt-filter')?.value || '';
+  const list = (toutingLeads||[]).filter(x=>!f || x.signal===f);
+  const it = list[i]; if(!it) return;
+  const tpl = [...templates,...(uploadedTpls||[])][0] || templates[0];
+  const sLabel = (TT_STYLE[it.signal]||{}).label || it.signal;
+  const prop = { address:it.addr, displayAddress:it.addr, fullAddress:it.addr,
+    postcode:it.postcode, district:it.district, haCode:it.district, type:it.propType||'Property', beds:it.beds||0,
+    portal:'Touting', source:'Touting · '+sLabel, isRealUrl:!!it.url, rmUrl:it.url||'' };
+  queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false });
+  if(typeof logContact==='function') logContact(prop, tpl, 'Touting · '+sLabel);
+  if(typeof updQBadge==='function') updQBadge();
+  if(typeof updQStats==='function') updQStats();
+  if(typeof updateKPIs==='function') updateKPIs();
+  toast('<i class=ic-mailbox></i> Letter queued — '+(it.addr||it.postcode), 'ok');
+}
+
 let premarketItems = [];
 async function initPremarket(){
   const days = document.getElementById('pm-days')?.value || '14';
@@ -3055,6 +3133,7 @@ function showPanel(n){
   if (n === 'account') renderAccountPanel();
   if (n === 'marketing') loadMarketing();
   if (n === 'performance') initPerf();
+  if (n === 'touting') initTouting();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
   if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
