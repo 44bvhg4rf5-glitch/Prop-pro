@@ -1509,6 +1509,7 @@ async function runLiveSearch(){
     // Default the view to "only show properties with a full address".
     if (window.addrFilter === undefined) window.addrFilter = 'found';
     renderLiveResults();
+    syncOwners(props);   // automatically check each resolved address against owner records → Match / No match
     const foundTotal = props.filter(p => p.addressFound).length;
     const confN = props.filter(p => p.addressConfirmed).length;
     const likeN = props.filter(p => p.addressLikely).length;
@@ -2182,6 +2183,7 @@ function renderLiveResults(){
                    ? '<span style="font-size:11px;font-weight:700;color:#6D28D9;background:rgba(124,58,237,.1);padding:2px 9px;border-radius:4px"><i class=ic-home></i> '+({building:'Building',postcode:'Block',street:'Street'}[p.block.level]||'Block')+': '+p.block.units.length+' owner address'+(p.block.units.length===1?'':'es')+'</span>'
                    : '<button onclick="event.stopPropagation();confirmAddress('+i+')" style="font-size:11px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit"><i class=ic-hand></i> Confirm exact address</button>')))
           +(p.portal?'<span style="font-size:10px;font-weight:700;color:'+(p.portal==='OnTheMarket'?'#E63946':'#004F9A')+';background:rgba(0,0,0,.04);padding:2px 8px;border-radius:4px">'+p.portal+'</span>':'')
+          +ownerBadge(p)
           +'<span style="font-size:11px;color:var(--muted)">'+p.haCode+' · '+p.district+'</span>'
           +(p.agent?'<span style="font-size:11px;color:var(--muted)">'+p.agent+'</span>':'')
           +(p.addedDate?'<span style="font-size:11px;color:var(--muted)">Listed: '+p.addedDate+'</span>':'')
@@ -2339,6 +2341,34 @@ function clrResults(){ props=[]; document.getElementById('results-area').style.d
 function selAll(){ selectAllResults(); }
 function doCSV(){ exportCSV(); }
 
+// Owner sync — automatically checks each resolved address against FREE public
+// records (Companies House + planning) and tags every result Match / No-match.
+async function syncOwners(props){
+  const found = (props||[]).filter(p => (p.addressConfirmed||p.addressLikely) && p.postcode && p.ownerMatch===undefined);
+  if(!found.length) return;
+  found.forEach(p => p.ownerMatch='checking');
+  renderLiveResults();
+  const CH = 12;
+  for(let i=0;i<found.length;i+=CH){
+    const chunk = found.slice(i,i+CH);
+    const items = chunk.map(p => ({ id:p.id, line1:(p.fullAddress||p.displayAddress||'').split(',')[0], postcode:p.postcode }));
+    try{
+      const r = await fetch('/api/owner-batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items})});
+      const d = await r.json().catch(()=>({}));
+      const byId={}; (d.results||[]).forEach(x=>byId[x.id]=x);
+      chunk.forEach(p=>{ const x=byId[p.id]; if(x){ p.ownerMatch=!!x.match; p.owners=x.owners||[]; p.ownerName=(x.owners&&x.owners[0]&&x.owners[0].name)||''; } else if(p.ownerMatch==='checking'){ p.ownerMatch=false; } });
+    }catch(e){ chunk.forEach(p=>{ if(p.ownerMatch==='checking') p.ownerMatch=false; }); }
+    renderLiveResults();
+  }
+  const matched = found.filter(p=>p.ownerMatch===true).length;
+  if(typeof toast==='function') toast('<i class=ic-user></i> Owner check: '+matched+' of '+found.length+' matched to a named owner', matched?'ok':'warn');
+}
+function ownerBadge(p){
+  if(p.ownerMatch===undefined) return '';
+  if(p.ownerMatch==='checking') return '<span style="font-size:11px;font-weight:600;color:var(--muted);background:rgba(0,0,0,.05);padding:2px 9px;border-radius:4px"><i class=ic-clock></i> Owner…</span>';
+  if(p.ownerMatch===true) return '<span title="'+esc((p.owners||[]).map(o=>o.name+(o.role?' ('+o.role+')':'')).join('; '))+'" style="font-size:11px;font-weight:700;color:#9A6C12;background:rgba(201,146,26,.14);padding:2px 9px;border-radius:4px"><i class=ic-user></i> Owner match'+(p.ownerName?': '+esc(p.ownerName):'')+'</span>';
+  return '<span title="No named owner in free public records — try a Land Registry title" style="font-size:11px;font-weight:600;color:var(--muted);background:rgba(0,0,0,.05);padding:2px 9px;border-radius:4px"><i class=ic-user></i> No owner match</span>';
+}
 function renderResults(){ renderLiveResults(); }
 function printSel(){ queueAllSelected(); }
 function autoSendAll(){ queueAllResults(); }
