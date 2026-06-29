@@ -13,6 +13,16 @@ export const config = { maxDuration: 45 };
 // Free, exact, GDPR-safe (no named individuals). Accepts a postcode or lat/lon.
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const outcodeOf = (pc) => (String(pc).toUpperCase().match(/^[A-Z]{1,2}\d[\dA-Z]?/) || [])[0] || '';
+// Reduce a messy listing street ("College Road Harrow HA1") to its core
+// ("college road") so it matches the register's street field. Strips house
+// number, trailing postcode and town, and cuts at the road-type word.
+const ROADS = 'road|street|avenue|lane|close|drive|way|gardens?|grove|crescent|place|terrace|hill|park|rise|walk|row|green|square|vale|parade|broadway|court|mews|chase|gate|view|rd|st|ave';
+function streetCore(s) {
+  let x = norm(s).replace(/^\d+[a-z]?\s+/, '').replace(/\b[a-z]{1,2}\d[a-z\d]?(\s*\d[a-z]{2})?\b/g, '').trim();
+  const m = x.match(new RegExp('^(.*\\b(?:' + ROADS + '))\\b'));
+  if (m) return m[1].trim();
+  return x.replace(/\b(harrow|wembley|pinner|stanmore|edgware|northwood|ruislip|middlesex|london)\b/g, '').replace(/\s+/g, ' ').trim();
+}
 const RENTED_TENURE = new Set([2, 3]);   // EPC tenure: 2 = rented (social), 3 = rented (private); 1 = owner-occupied
 const tcAddr = (s) => (s || '').toLowerCase().replace(/\b[\w']+\b/g, (w) => /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1));
 
@@ -61,7 +71,7 @@ export default async function handler(req, res) {
   const audience = (u.searchParams.get('audience') || 'homeowner').toLowerCase() === 'landlord' ? 'landlord' : 'homeowner';
   const wide = u.searchParams.get('wide') !== '0';
   const lat = parseFloat(u.searchParams.get('lat')), lon = parseFloat(u.searchParams.get('lon'));
-  const wantStreet = norm(street);
+  const wantStreet = streetCore(street);
 
   // Resolve the postcode set to scan: from the given postcode (+ nearby for the
   // wider street) or by reverse-geocoding the listing's pin.
