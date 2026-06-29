@@ -111,6 +111,9 @@
   a{color:var(--accent)}
   .hint{font-size:13px;color:var(--dim);background:var(--panel2);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
   code{background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:13px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(82px + env(safe-area-inset-bottom));background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 16px;display:flex;gap:16px;align-items:center;z-index:20;box-shadow:0 8px 28px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;max-width:92%;font-size:14px}
+  .toast.show{opacity:1;pointer-events:auto}
+  .toast button{background:none;color:var(--accent);font-weight:700;font-size:15px;padding:2px 4px}
 </style>
 </head>
 <body>
@@ -217,6 +220,7 @@
     <button data-v="agents"><span class="ic">🤖</span>Agents</button>
     <button data-v="setup"><span class="ic">⚙️</span>Setup</button>
   </nav>
+  <div class="toast" id="toast"></div>
 </div>
 
 <script>
@@ -313,10 +317,34 @@ function addTask(text){
   saveStore(); renderTasks();
 }
 function toggleTask(id){ TASKS = TASKS.map(t=> t.id===id ? {...t, done:!t.done} : t); saveStore(); renderTasks(); }
-function deleteTask(id){ TASKS = TASKS.filter(t=> t.id!==id); saveStore(); renderTasks(); }
+
+/* Undo support: snapshot before any removal so an accidental delete/clear is reversible. */
+let undoSnapshot = null, toastTimer = null;
+function showToast(msg, withUndo){
+  const t = $('#toast');
+  t.innerHTML = esc(msg) + (withUndo ? ' <button id="undoBtn">Undo</button>' : '');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.classList.remove('show'); undoSnapshot = null; }, withUndo ? 7000 : 2500);
+  if(withUndo) $('#undoBtn').onclick = ()=>{
+    if(undoSnapshot){ TASKS = undoSnapshot; saveStore(); renderTasks(); }
+    undoSnapshot = null; t.classList.remove('show'); clearTimeout(toastTimer);
+  };
+}
+function deleteTask(id){
+  undoSnapshot = TASKS.slice();
+  TASKS = TASKS.filter(t=> t.id!==id); saveStore(); renderTasks();
+  showToast('Task deleted', true);
+}
 $('#addTask').onclick = ()=>{ addTask($('#newTask').value); $('#newTask').value=''; $('#newTask').focus(); };
 $('#newTask').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#addTask').click(); });
-$('#clearDone').onclick = ()=>{ TASKS = TASKS.filter(t=>!t.done); saveStore(); renderTasks(); };
+$('#clearDone').onclick = ()=>{
+  const done = TASKS.filter(t=>t.done).length;
+  if(!done){ showToast('No completed tasks to clear', false); return; }
+  undoSnapshot = TASKS.slice();
+  TASKS = TASKS.filter(t=>!t.done); saveStore(); renderTasks();
+  showToast(done+' completed task'+(done>1?'s':'')+' cleared', true);
+};
 $('#taskList').addEventListener('click', e=>{
   const li = e.target.closest('li'); if(!li) return;
   const act = e.target.dataset.act; if(!act) return;
