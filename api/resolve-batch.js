@@ -299,9 +299,15 @@ async function resolveOne(p, ctx) {
         if (epcTypeMatches(p.type, d)) { pick = c; typed = !!d.ptype; break; }
       }
       pick = pick || cands[0];
-      chosen = pick.us;
       const near = listDate && pick.latest && daysBetween(pick.latest, listDate) <= 150;
-      why = [near ? 'EPC lodged near the listing date' : 'freshest EPC on the street', typed ? 'property type matches' : ''].filter(Boolean).join(' + ');
+      const gap = cands[1] && pick.latest && cands[1].latest ? daysBetween(pick.latest, cands[1].latest) : 999;
+      // Only surface a best-estimate when there's a REAL signal — near the listing
+      // date, a clearly freshest cert, or a type match. Otherwise it's a near-random
+      // guess among similar houses, so withhold it rather than show a weak pick.
+      if (near || typed || gap >= 30) {
+        chosen = pick.us;
+        why = [near ? 'EPC lodged near the listing date' : 'freshest EPC on the street', typed ? 'property type matches' : ''].filter(Boolean).join(' + ');
+      }
     }
     if (chosen && chosen.length) {
       // Pick the unit: floor-area-closest when the listing has a size (bounded
