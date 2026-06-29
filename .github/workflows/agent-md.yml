@@ -34,7 +34,7 @@ jobs:
       - name: Run the Managing Director (self-directed weekly review)
         id: agent
         env:
-          AGENT_ROLE: manager
+          AGENT_ROLE: md
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/agent.js
