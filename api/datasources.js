@@ -1,5 +1,5 @@
 import https from 'https';
-import { sendJson, guardOrigin } from '../lib/helpers.js';
+import { sendJson, guardOrigin, EPC_BASE, fetchJson } from '../lib/helpers.js';
 import { councilTaxAddresses } from '../lib/counciltax.js';
 
 export const config = { maxDuration: 30 };
@@ -41,6 +41,16 @@ export default async function handler(req, res) {
   const postcode = (u.searchParams.get('postcode') || 'HA1 3WU').toUpperCase().trim();
   const lat = parseFloat(u.searchParams.get('lat') || '51.579'), lon = parseFloat(u.searchParams.get('lon') || '-0.338');
   const out = {};
+
+  // TEMP diagnostic: inspect the raw EPC domestic-search schema for a postcode.
+  if (u.searchParams.get('epcfields')) {
+    const KEY = process.env.EPC_API_KEY || '';
+    const url = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(postcode).replace(/%20/g, '+')}&page_size=3`;
+    const { status, json } = await fetchJson(url, KEY);
+    const rec = (status === 200 && json && Array.isArray(json.data)) ? json.data[0] : null;
+    sendJson(res, 200, { status, keys: rec ? Object.keys(rec) : [], sample: rec || null });
+    return;
+  }
 
   // 1. OS Places — postcode endpoint (Royal Mail PAF: every delivery address).
   const OS = process.env.OS_PLACES_KEY || '';
