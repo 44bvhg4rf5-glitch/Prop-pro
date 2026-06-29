@@ -3,6 +3,7 @@ import { sendJson, guardOrigin, readBody, reverseGeocode, EPC_BASE, fetchJson, F
 import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 import { rightmoveProperty } from '../lib/sources.js';
 import { councilTaxAddresses, councilTaxCached } from '../lib/counciltax.js';
+import { listingDetail } from '../lib/listingDetail.js';
 
 export const config = { maxDuration: 60 };
 
@@ -189,20 +190,19 @@ async function councilTaxFor(pc, ctx) {
 //   1) the listing already states the number/flat (confirm it on Council Tax),
 //   2) its published floor area uniquely matches one EPC certificate,
 //   3) there is genuinely only one candidate address.
-async function resolveOne(p, ctx) {
+// CONFIRM the exact property from a given set of postcodes + size, via the three
+// proof tiers. Returns a confirmed result or null. Called first with the map
+// pin's nearby postcodes, then (on a miss) scoped to the EXACT postcode read off
+// the listing's own detail page.
+async function tryConfirm(p, pcs, listSqft, ctx) {
   const disp = p.displayAddress || p.address || '';
-  if (p.lat == null || p.lon == null) return null;
   const seg0 = disp.split(',')[0].trim();
   // The number the listing itself states (often empty — Rightmove usually hides it).
   const num = leadNum(seg0) || ((seg0.match(/\b(?:flat|apartment|apt|unit)\s+([0-9]+[a-z]?)/i) || [])[1] || '').toLowerCase();
   const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
   const building = isFlat ? buildingNameOf(disp) : '';
   const street = streetOf(disp);
-  const listSqft = parseInt(p.sizeSqft || 0, 10) || 0;
-  const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
-  if (!street && !building) return null;
-  const pcs = await nearby(p.lat, p.lon, area);
-  if (!pcs.length) return null;
+  if ((!street && !building) || !pcs || !pcs.length) return null;
   const tc = (a) => tcAddr(a).replace(/\bAt\b/g, 'at');
 
   // The authoritative set of REAL dwellings on this street (house) or in this
@@ -269,11 +269,53 @@ async function resolveOne(p, ctx) {
     return { id: p.id, level: 'exact', deliverable: true, confidence: 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], why: 'the only address found on this street (EPC)' };
   }
 
-  // ── LIKELY (best estimate — clearly flagged for the user to verify) ──
+  return null;
+}
+
+// Resolve ONE listing: confirm via the map pin's postcodes; on a miss, enrich
+// from the listing's detail page (EXACT postcode) and retry confirm; else fall
+// back to a flagged best-estimate (Likely).
+async function resolveOne(p, ctx) {
+  if (p.lat == null || p.lon == null) return null;
+  const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
+  const listSqft = parseInt(p.sizeSqft || 0, 10) || 0;
+  const pcs = await nearby(p.lat, p.lon, area);
+  if (!pcs.length) return null;
+  const tc = (a) => tcAddr(a).replace(/\bAt\b/g, 'at');
+
+  // 1) Confirm using the map pin's nearby postcodes.
+  let r = await tryConfirm(p, pcs, listSqft, ctx);
+  if (r) return r;
+
+  // 2) Enrich from the listing's own detail page — the EXACT postcode collapses
+  // the candidate pool to ONE postcode, where the proof tiers confirm far more
+  // often. Budgeted + cached; degrades to Likely on any miss.
+  if (p.url && ctx && ctx.detailBudget > 0) {
+    ctx.detailBudget--;
+    const d = await listingDetail(p.url).catch(() => null);
+    if (d && d.postcode) {
+      // Option 2: the detail page's own displayAddress sometimes states a
+      // house/flat number the card hid — prefer it when it carries a number so
+      // Tier 1 can confirm it; otherwise keep the card's address.
+      const detailNum = leadNum((d.displayAddress || '').split(',')[0].trim());
+      const disp = detailNum ? d.displayAddress : (p.displayAddress || p.address || d.displayAddress);
+      const r2 = await tryConfirm({ ...p, displayAddress: disp, type: d.type || p.type }, [d.postcode], d.sqft || listSqft, ctx);
+      if (r2) { r2.confidence = 'high'; r2.why += ' (exact postcode from the listing page)'; return r2; }
+    }
+  }
+
+  // 3) LIKELY — best estimate from nearby EPC, clearly flagged to verify.
   // A property gets a fresh EPC when it's marketed, so the EPC lodged CLOSEST to
-  // the listing date is the most likely listing (sharper than "most recent
-  // overall"), and we sanity-check the top candidate's property TYPE so we never
-  // estimate a flat when the listing is a house. Always a SPECIFIC unit.
+  // the listing date is the most likely listing; we sanity-check the top
+  // candidate's property type so we never estimate a flat for a house.
+  const disp = p.displayAddress || p.address || '';
+  const seg0 = disp.split(',')[0].trim();
+  const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
+  const building = isFlat ? buildingNameOf(disp) : '';
+  const street = streetOf(disp);
+  if (!street && !building) return null;
+  const epc = [];
+  for (const pc of pcs) { for (const u of await epcPostcode(pc)) { if (building ? norm(u.fullAddress).includes(norm(building)) : norm(u.fullAddress).includes(street)) epc.push(u); } }
   if (epc.length) {
     const listDate = (p.listDate || '').slice(0, 10);
     const groups = new Map();
@@ -348,7 +390,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450 }; // cap free lookups per request (Council Tax + EPC details)
+  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450, detailBudget: 18 }; // cap free lookups per request (Council Tax + EPC details + listing detail pages)
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
