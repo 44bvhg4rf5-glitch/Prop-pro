@@ -1485,11 +1485,14 @@ async function runLiveSearch(){
         } catch (e) { /* chunk failed — those stay unresolved */ }
         (d.results || []).forEach(res => {
           const p = byId[res.id]; if (!p) return;
+          // Precision-first: only accept a confirmed, single, deliverable address.
+          // Anything the engine couldn't pin down is left unresolved (never shown
+          // as a bare street/block name or a guessed flat).
+          if (res.level !== 'exact' || !res.deliverable) return;
           if (res.postcode) p.postcode = res.postcode;
           p.displayAddress = res.address; p.fullAddress = res.address; p.address = res.address;
-          p.addressFound = true;
-          if (res.level === 'exact') { p.addressConfirmed = true; p.addressSource = 'Register (exact)'; }
-          else { p.block = { level: res.level, name: res.building || '', address: res.address, units: res.units || [res.address] }; }
+          p.addressFound = true; p.addressConfirmed = true; p.addressSource = 'Register (exact)';
+          p.addressVerified = !!res.verified; p.addressWhy = res.why || ''; p.block = null;
         });
         doneC += chunk.length;
         const foundSoFar = props.filter(x => x.addressFound).length;
@@ -1502,7 +1505,7 @@ async function runLiveSearch(){
     renderLiveResults();
     const foundTotal = props.filter(p => p.addressFound).length;
     const pct = found ? Math.round(foundTotal / found * 100) : 0;
-    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings resolved to a precise full address (${pct}%) — ${props.filter(p=>p.addressConfirmed).length} exact, ${props.filter(p=>p.block).length} building/block`, 'ok');
+    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings resolved to a precise, deliverable address (${pct}%). The rest couldn't be pinned to a specific property from free data, so they're hidden rather than shown as a street or block name.`, 'ok');
     toast(`<i class=ic-check></i> ${foundTotal} of ${found} resolved to a full address (${pct}%)`, 'ok');
     updateKPIs();
     return;
