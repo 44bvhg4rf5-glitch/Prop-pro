@@ -2535,18 +2535,22 @@ function renderSold(){
 async function queueStreetLetters(i, btn){
   const s=soldItems[i]; if(!s) return;
   if(!s.postcode){ toast('No postcode for this sale','warn'); return; }
-  if(btn){ btn.disabled=true; btn.textContent='Finding neighbours…'; }
+  if(btn){ btn.disabled=true; btn.textContent='Finding the street…'; }
   try{
-    const qs=new URLSearchParams({ postcode:s.postcode, street:s.street, district:s.district });
-    const r=await fetch('/api/epc?'+qs.toString());
+    // Complete street from the Council Tax register (every home, not only those
+    // with an EPC), addressed to "The Homeowner" — free, full coverage, GDPR-safe.
+    const qs=new URLSearchParams({ postcode:s.postcode, street:s.street||'', exclude:s.paon||'' });
+    const r=await fetch('/api/street-farm?'+qs.toString());
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){ toast('Could not find neighbours: '+(d.error||r.status),'warn'); }
-    const neighbours=(d.candidates||[]).filter(c=>contactKey(c.fullAddress)!==contactKey(s.fullAddress));
+    if(!r.ok){ toast('Could not find neighbours: '+(d.error||r.status),'warn'); if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter the street'; } return; }
+    const neighbours=(d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(s.fullAddress));
     const tpl=[...templates,...(uploadedTpls||[])].find(t=>/sold/i.test(t.name)) || templates[0];
     let n=0;
     neighbours.forEach(c=>{
-      const prop={ address:c.fullAddress, displayAddress:c.fullAddress, fullAddress:c.fullAddress,
+      const toAddr='The Homeowner, '+c.address;
+      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr,
         postcode:c.postcode||s.postcode, district:s.district, haCode:s.district, type:'Property', beds:0,
+        addressee:'The Homeowner', addressConfirmed:true, addressSource:'Council Tax (street farm)',
         portal:'Sold Board', source:'Sold in street', isRealUrl:true,
         rmUrl:'https://www.rightmove.co.uk/house-prices/'+encodeURIComponent(s.postcode)+'.html',
         soldRef:s.fullAddress, soldPrice:s.price };
@@ -2557,9 +2561,9 @@ async function queueStreetLetters(i, btn){
     if(typeof updQStats==='function') updQStats();
     if(typeof updateKPIs==='function') updateKPIs();
     renderSold();
-    toast(n ? ('<i class=ic-mailbox></i> Queued '+n+' "sold in your street" letters near '+s.street) : 'No neighbour addresses found for that street', n?'ok':'warn');
+    toast(n ? ('<i class=ic-mailbox></i> Queued '+n+' "sold in your street" letters to The Homeowner'+(s.street?' on '+s.street:'')) : 'No neighbour addresses found for that street', n?'ok':'warn');
   }catch(e){ toast('Could not fetch neighbours: '+e.message,'warn'); }
-  if(btn){ btn.disabled=false; btn.textContent='<i class=ic-mailbox></i> Letter the street'; }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter the street'; }
 }
 
 // ── Campaign Tracker (CRM-lite, stored in this browser) ──
