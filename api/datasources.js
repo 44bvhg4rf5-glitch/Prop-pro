@@ -1,5 +1,5 @@
 import https from 'https';
-import { sendJson, guardOrigin } from '../lib/helpers.js';
+import { sendJson, guardOrigin, EPC_BASE, fetchJson } from '../lib/helpers.js';
 import { councilTaxAddresses } from '../lib/counciltax.js';
 
 export const config = { maxDuration: 30 };
@@ -41,6 +41,20 @@ export default async function handler(req, res) {
   const postcode = (u.searchParams.get('postcode') || 'HA1 3WU').toUpperCase().trim();
   const lat = parseFloat(u.searchParams.get('lat') || '51.579'), lon = parseFloat(u.searchParams.get('lon') || '-0.338');
   const out = {};
+
+  // TEMP diagnostic: fetch one EPC certificate and show its field names so we can
+  // read property-type / built-form / floor-area correctly.
+  if (u.searchParams.get('certprobe')) {
+    const KEY = process.env.EPC_API_KEY || '';
+    const s = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(postcode).replace(/%20/g, '+')}&page_size=1`, KEY);
+    const cert = s.json && s.json.data && s.json.data[0] && s.json.data[0].certificateNumber;
+    const c = cert ? await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cert)}`, KEY) : { json: null };
+    const b = (c.json && c.json.data) ? c.json.data : c.json;
+    const keys = b ? Object.keys(b) : [];
+    const typeKeys = keys.filter((k) => /type|form|floor|area|room|bed/i.test(k));
+    sendJson(res, 200, { cert, keys, typeFields: Object.fromEntries(typeKeys.map((k) => [k, b[k]])) });
+    return;
+  }
 
 
   // 1. OS Places — postcode endpoint (Royal Mail PAF: every delivery address).
