@@ -1,0 +1,29 @@
+name: Touting radar scan
+
+# Daily lifecycle snapshot + diff. Hits the live /api/touting?scan=1 endpoint,
+# which pulls the HA index (Sold STC included), diffs it against yesterday's
+# stored snapshot and records fall-throughs, withdrawals, price reductions and
+# new instructions as touting leads. Needs:
+#   • repo/Actions variable  SITE_URL          (e.g. https://prop-pro-theta.vercel.app)
+#   • repo/Actions secret    TOUTING_SCAN_KEY  (same value set in Vercel env)
+on:
+  schedule:
+    - cron: '0 7 * * *'        # every day 07:00 UTC, before the 08:00 health check
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily touting scan
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          SCAN_KEY: ${{ secrets.TOUTING_SCAN_KEY }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$SCAN_KEY" ]; then
+            echo "SITE_URL or TOUTING_SCAN_KEY not set — skipping."; exit 0
+          fi
+          code=$(curl -sS -o /tmp/touting.json -w '%{http_code}' \
+            "$SITE_URL/api/touting?scan=1&key=$SCAN_KEY" || echo 000)
+          echo "HTTP $code"; cat /tmp/touting.json || true
+          [ "$code" = "200" ]
