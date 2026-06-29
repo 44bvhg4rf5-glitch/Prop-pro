@@ -63,7 +63,7 @@ async function epcPostcode(pc) {
       const k = full.toLowerCase();
       const certDate = r.registrationDate || r.lodgementDate || '';
       const ex = seen.get(k);
-      if (full && (!ex || certDate > ex.certDate)) seen.set(k, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: p, certDate, cert: r.certificateNumber || '' });
+      if (full && (!ex || certDate > ex.certDate)) seen.set(k, { line1: tcAddr(r.addressLine1 || lines[0] || ''), fullAddress: full, postcode: p, certDate, cert: r.certificateNumber || '', band: (r.currentEnergyEfficiencyBand || '').trim().toUpperCase() });
     }
     out = [...seen.values()];
   } catch { out = []; }
@@ -251,6 +251,21 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
     }
   }
 
+  // ── TIER E — EPC rating + EPC date stated on the listing. OnTheMarket hides
+  // the postcode and size but publishes the property's EPC band and date; the
+  // dwelling on this street whose register entry has that band AND was lodged on
+  // that date is the property. A free, direct match (no certificate fetch).
+  if (p.epcBand && p.epcDate && epc.length) {
+    let cand = epc.filter((u) => u.band && u.band === p.epcBand && u.certDate && daysBetween(u.certDate, p.epcDate) <= 31);
+    if (cand.length > 1) { const tight = cand.filter((u) => daysBetween(u.certDate, p.epcDate) <= 4); if (tight.length) cand = tight; }
+    if (cand.length === 1) {
+      const u = cand[0];
+      const gap = daysBetween(u.certDate, p.epcDate);
+      const ok = ct.some((r) => ctSame(r, addrParts(u.fullAddress)));
+      return { id: p.id, level: 'exact', deliverable: true, confidence: (ok || gap <= 4) ? 'high' : 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], verified: ok, why: 'EPC rating + date on the listing match the register' + (ok ? ', confirmed on the Council Tax register' : '') };
+    }
+  }
+
   // ── TIER M — "marketed sale" EPC lodged around the listing date. A seller
   // gets a FRESH EPC (transaction type "marketed sale") when they put the home
   // on the market, so the marketed-sale EPC of the right type lodged CLOSEST to
@@ -367,17 +382,23 @@ async function resolveOne(p, ctx) {
   if (p.url && ctx && ctx.detailBudget > 0) {
     ctx.detailBudget--;
     det = await listingDetail(p.url).catch(() => null);
-    if (det && det.postcode) {
+    if (det) {
       // Option 2: the detail page's own displayAddress sometimes states a
       // house/flat number the card hid — prefer it when it carries a number so
       // Tier 1 can confirm it; otherwise keep the card's address.
       const detailNum = leadNum((det.displayAddress || '').split(',')[0].trim());
       const disp2 = detailNum ? det.displayAddress : (p.displayAddress || p.address || det.displayAddress);
-      const r2 = await tryConfirm({ ...p, displayAddress: disp2, type: det.type || p.type }, [det.postcode], det.sqft || listSqft, ctx);
+      // Enrich the listing with everything the detail page added: exact type and
+      // (OnTheMarket) the EPC band + date that drive Tier E.
+      const ep = { ...p, displayAddress: disp2, type: det.type || p.type, epcBand: det.epcBand || p.epcBand || '', epcDate: det.epcDate || p.epcDate || '' };
+      // Rightmove gives the EXACT postcode (scope to it); OnTheMarket doesn't, so
+      // fall back to the map pin's nearby postcodes.
+      const pcs2 = det.postcode ? [det.postcode] : pcs;
+      const r2 = await tryConfirm(ep, pcs2, det.sqft || listSqft, ctx);
       // Keep the tier's own confidence (a marketed-sale match that isn't also
       // Council-Tax-verified stays 'medium') — the exact postcode improves
       // precision but does not by itself justify promoting medium → high.
-      if (r2) { r2.why += ' (exact postcode from the listing page)'; return r2; }
+      if (r2) { if (det.postcode) r2.why += ' (exact postcode from the listing page)'; return r2; }
     }
   }
 
