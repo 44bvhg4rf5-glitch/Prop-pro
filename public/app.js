@@ -2566,6 +2566,69 @@ async function queueStreetLetters(i, btn){
   if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter the street'; }
 }
 
+// ── Let Board (rental landlord farming — the reverse of Sold-Street farming) ──
+let letItems = [];
+async function initLet(){
+  const dist=document.getElementById('let-district')?.value||'';
+  const box=document.getElementById('let-results');
+  if(box) box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)"><i class=ic-search></i> Loading recently Let Agreed rentals…</div>';
+  try{
+    const qs=new URLSearchParams({ channel:'rent', includeSSTC:'true', pages:'3' });
+    if(dist) qs.set('district',dist); else qs.set('district','HA1');
+    const r=await fetch('/api/listings?'+qs.toString());
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('HTTP '+r.status))+'</div>'; return; }
+    letItems=(d.properties||[]).filter(p=>/let agreed/i.test(p.liveStatus||'')&&(p.lat!=null));
+    const c=document.getElementById('let-count'); if(c) c.textContent=letItems.length;
+    renderLet();
+  }catch(e){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
+}
+function renderLet(){
+  const box=document.getElementById('let-results'); if(!box) return;
+  if(!letItems.length){ box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No “Let Agreed” rentals in this district right now. Try another HA district.</div>'; return; }
+  box.innerHTML=letItems.slice(0,300).map((s,i)=>{
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +'<span style="flex-shrink:0;font-size:10px;font-weight:800;color:#9A6C12;background:rgba(201,146,26,.14);padding:3px 8px;border-radius:5px">LET AGREED</span>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(s.displayAddress||s.address||'')+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+[s.priceLabel,(s.beds?s.beds+' bed':''),s.type,s.haCode,s.agent].filter(Boolean).join(' · ')+'</div>'
+      +'</div>'
+      +(s.url?'<a href="'+s.url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Listing</a>':'')
+      +'<button onclick="queueLandlordStreet('+i+',this)" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter landlords nearby</button>'
+    +'</div>';
+  }).join('');
+}
+async function queueLandlordStreet(i, btn){
+  const s=letItems[i]; if(!s) return;
+  if(btn){ btn.disabled=true; btn.textContent='Finding landlords…'; }
+  try{
+    const street=(s.displayAddress||s.address||'').split(',')[0].replace(/^\s*\d+[a-z]?\s+/i,'').trim();
+    const qs=new URLSearchParams({ audience:'landlord', street });
+    if(s.postcode) qs.set('postcode',s.postcode); else { qs.set('lat',s.lat); qs.set('lon',s.lon); }
+    const r=await fetch('/api/street-farm?'+qs.toString());
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ toast('Could not find landlords: '+(d.error||r.status),'warn'); if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter landlords nearby'; } return; }
+    const neighbours=(d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(s.displayAddress||s.address));
+    const tpl=[...templates,...(uploadedTpls||[])].find(t=>/let|landlord|rent/i.test(t.name)) || templates[0];
+    let n=0;
+    neighbours.forEach(c=>{
+      const toAddr='The Landlord, '+c.address;
+      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr,
+        postcode:c.postcode||s.postcode||'', district:s.haCode, haCode:s.haCode, type:'Property', beds:0,
+        addressee:'The Landlord', addressConfirmed:true, addressSource:'EPC tenure (landlord farm)',
+        portal:'Let Board', source:'Let in street', isRealUrl:!!s.url, rmUrl:s.url||'',
+        letRef:s.displayAddress||s.address };
+      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false, sold:false });
+      if(typeof logContact==='function') logContact(prop, tpl, 'Let in street'); n++;
+    });
+    if(typeof updQBadge==='function') updQBadge();
+    if(typeof updQStats==='function') updQStats();
+    if(typeof updateKPIs==='function') updateKPIs();
+    toast(n?('<i class=ic-mailbox></i> Queued '+n+' landlord letters near '+street):'No rented homes found on that street (no EPC tenure match)', n?'ok':'warn');
+  }catch(e){ toast('Could not fetch landlords: '+e.message,'warn'); }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter landlords nearby'; }
+}
+
 // ── Campaign Tracker (CRM-lite, stored in this browser) ──
 let contacts = {};
 // Drip sequence: ordered letters at day-offsets from the first contact.
@@ -3170,6 +3233,7 @@ function showPanel(n){
   if (n === 'touting') initTouting();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
+  if (n === 'let' && !letItems.length) initLet();
   if (n === 'campaigns') { loadContacts(); loadGroups(); runDueSequences(false); renderCampaigns(); }
   if (n === 'schedule')  { loadContacts(); loadGroups(); loadPrintSchedule(); runDueSequences(true); renderSchedule(); }
   if (n === 'ha')        loadTargeting();
