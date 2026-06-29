@@ -154,113 +154,87 @@ async function councilTaxFor(pc, ctx) {
   return r.rows || [];
 }
 
+// PRECISION-FIRST resolver. We only return an address when free public data can
+// actually IDENTIFY the specific listed property — never a bare street/block name,
+// never a guessed flat. When the data can't single it out, we withhold it.
+// The three things that genuinely identify a property:
+//   1) the listing already states the number/flat (confirm it on Council Tax),
+//   2) its published floor area uniquely matches one EPC certificate,
+//   3) there is genuinely only one candidate address.
 async function resolveOne(p, ctx) {
   const disp = p.displayAddress || p.address || '';
   if (p.lat == null || p.lon == null) return null;
   const seg0 = disp.split(',')[0].trim();
-  const num = leadNum(seg0);
+  // The number the listing itself states (often empty — Rightmove usually hides it).
+  const num = leadNum(seg0) || ((seg0.match(/\b(?:flat|apartment|apt|unit)\s+([0-9]+[a-z]?)/i) || [])[1] || '').toLowerCase();
   const isFlat = FLAT.test(p.type || '') || /^(flat|apartment)/i.test(seg0);
   const building = isFlat ? buildingNameOf(disp) : '';
   const street = streetOf(disp);
-  const listDate = (p.listDate || '').slice(0, 10);
-  const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
-  const pcs = await nearby(p.lat, p.lon, area);
-
-  // Look at every nearby postcode, and within EACH (never mixing postcodes) group
-  // the street/building matches by building. Each building is a candidate, scored
-  // by its newest EPC certificate — the marketed property has the freshest cert.
-  const cands = [];
-  for (const pc of pcs) {
-    const units = await epcPostcode(pc);
-    if (!units.length) continue;
-    let m;
-    if (building) m = units.filter((u) => norm(u.fullAddress).includes(norm(building)));
-    else if (street) m = units.filter((u) => norm(u.fullAddress).includes(street));
-    else continue;
-    if (!m || !m.length) continue;
-    const groups = new Map();
-    for (const u of m) { const k = buildingKey(u.fullAddress); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
-    for (const us of groups.values()) cands.push({ us, latest: us.reduce((x, u) => (u.certDate > x ? u.certDate : x), '') });
-    if (building && cands.length) break; // a named building is unambiguous
-  }
-  // Fallback: EPC has nothing on this street here. Try OpenStreetMap (free,
-  // independent) for a building on the listing's street nearest the map pin.
-  // Budgeted so a big search can't overload the public Overpass server.
-  if (!cands.length) {
-    if (!street || !ctx || ctx.ovBudget <= 0) return null;
-    ctx.ovBudget--;
-    const els = await overpassNear(p.lat, p.lon).catch(() => []);
-    const onStreet = els.filter((e) => e.street.includes(street) || street.includes(e.street));
-    if (!onStreet.length) return null;
-    onStreet.forEach((e) => { e._d = distM({ lat: p.lat, lon: p.lon }, e); });
-    onStreet.sort((a, b) => a._d - b._d);
-    const e = onStreet[0];
-    if (e._d > 120) return null; // too far from the pin to trust
-    const addr = tcAddr([e.num + (e.unit ? e.unit : ''), street].join(' ')) + (pcs[0] ? ', ' + pcs[0] : '');
-    const deliverable = !isFlat || !!e.unit; // a house number is deliverable; a flat needs a unit
-    return { id: p.id, level: deliverable ? 'exact' : 'building', deliverable, address: addr, postcode: pcs[0] || '', units: [addr], why: 'OpenStreetMap address nearest the map pin' };
-  }
-  cands.sort((a, b) => b.latest.localeCompare(a.latest));
-
-  let chosen, why;
-  if (building) { chosen = cands[0].us; why = 'building named on the listing'; }
-  else if (cands.length === 1) {
-    // Only one building on the listing's street here — unambiguous, no guess.
-    chosen = cands[0].us; why = 'the only building on this street/postcode';
-  } else {
-    // Several buildings on the street → trust the freshest only when it's CLEARLY
-    // freshest and lines up with the listing going live; else skip (no guess).
-    const top = cands[0];
-    const gapDays = daysBetween(top.latest, cands[1].latest);
-    const nearList = listDate && top.latest ? daysBetween(top.latest, listDate) <= 180 : false;
-    if (!top.latest || gapDays < 45 || (listDate && !nearList)) return null;
-    chosen = top.us; why = 'freshest EPC on the street (being marketed)';
-  }
-  chosen.sort((a, b) => b.certDate.localeCompare(a.certDate));
-
-  // Pinpoint the exact unit within the chosen building.
-  // 1) listing publishes the number; 2) only one unit; 3) one unit's cert is
-  // clearly the freshest AND lines up with the listing date.
-  let exact = null;
-  if (num) exact = chosen.find((u) => leadNum(u.line1) === num || leadNum(stripFlat(u.fullAddress)) === num);
-  if (!exact && chosen.length === 1) exact = chosen[0];
-  if (!exact && chosen.length > 1) {
-    const a = chosen[0], b = chosen[1];
-    const fresherByDays = a.certDate && b.certDate ? daysBetween(a.certDate, b.certDate) : 0;
-    const nearList = listDate && a.certDate ? daysBetween(a.certDate, listDate) <= 120 : false;
-    if (fresherByDays >= 30 && (nearList || !listDate)) exact = a; // uniquely fresh = the marketed unit
-  }
-  // Floor-area match: when the listing publishes a size, the flat whose certified
-  // floor area matches it (and clearly differs from the others) is the one listed.
   const listSqft = parseInt(p.sizeSqft || 0, 10) || 0;
-  if (!exact && listSqft > 0 && chosen.length > 1) {
-    const sized = [];
-    for (const u of chosen.slice(0, 25)) { const s = await certSqft(u.cert); if (s) sized.push({ u, s, diff: Math.abs(s - listSqft) }); }
-    sized.sort((x, y) => x.diff - y.diff);
-    if (sized.length > 1) {
-      const best = sized[0], next = sized[1];
-      const relBest = best.diff / listSqft;
-      if (relBest <= 0.08 && next.diff >= best.diff + Math.max(60, listSqft * 0.12)) exact = best.u; // tight + clearly unique
+  const area = String(p.haCode || '').toUpperCase().replace(/\d.*$/, '');
+  if (!street && !building) return null;
+  const pcs = await nearby(p.lat, p.lon, area);
+  if (!pcs.length) return null;
+  const tc = (a) => tcAddr(a).replace(/\bAt\b/g, 'at');
+
+  // The authoritative set of REAL dwellings on this street (house) or in this
+  // building (flat), from Council Tax across the nearby postcodes. This is our
+  // denominator: it tells us whether a pick is genuinely unique or just a guess.
+  const ct = [];
+  for (const pc of pcs) {
+    for (const r of await councilTaxFor(pc, ctx)) {
+      if (building ? norm(r.address).includes(norm(building)) : ctStreetMatch(r.street, street)) ct.push({ ...r, postcode: pc });
     }
   }
 
-  if (exact) {
-    // Cross-check against the Council Tax register: if the dwelling is listed
-    // there too, mark it confirmed (extra confidence, never used to reject).
-    const ctRows = await councilTaxFor(exact.postcode, ctx);
-    const verified = ctRows.length ? ctRows.some((r) => ctSame(r, addrParts(exact.fullAddress))) : undefined;
-    return { id: p.id, level: 'exact', deliverable: true, address: exact.fullAddress, postcode: exact.postcode, units: [exact.fullAddress], verified, why: verified ? why + '; confirmed on the Council Tax register' : why };
+  // ── TIER 1 — the listing states the number/flat → confirm it on Council Tax. ──
+  if (num) {
+    const hit = ct.find((r) => r.buildingNo === num || r.flat === num);
+    if (hit) return { id: p.id, level: 'exact', deliverable: true, confidence: 'high', address: tc(hit.address), postcode: hit.postcode, units: [tc(hit.address)], verified: true, why: 'number stated on the listing, confirmed on the Council Tax register' };
   }
-  // Right building, but can't single out the flat — return the building + its
-  // real units (deliverable only by mailing the block). Not counted as "exact".
-  // Prefer the COMPLETE unit list from Council Tax (every flat in the block),
-  // falling back to the EPC-known units when Council Tax has nothing.
-  const addr = stripFlat(chosen[0].fullAddress);
-  const bparts = addrParts(chosen[0].fullAddress);
-  const ctRows = await councilTaxFor(chosen[0].postcode, ctx);
-  const ctUnits = ctRows.filter((r) => (bparts.no && r.buildingNo === bparts.no && ctStreetMatch(r.street, bparts.street)) || (building && norm(r.address).includes(norm(building))));
-  const units = ctUnits.length ? ctUnits.map((r) => tcAddr(r.address).replace(/\bAt\b/g, 'at')) : chosen.map((u) => u.fullAddress);
-  return { id: p.id, level: 'building', deliverable: false, address: addr, postcode: chosen[0].postcode, building: tcAddr(building || street), units, unitSource: ctUnits.length ? 'councilTax' : 'epc', why: ctUnits.length ? why + `; full unit list from Council Tax (${ctUnits.length})` : why };
+
+  // EPC dwellings on the street/building, for floor-area matching.
+  const epc = [];
+  for (const pc of pcs) {
+    for (const u of await epcPostcode(pc)) {
+      if (building ? norm(u.fullAddress).includes(norm(building)) : norm(u.fullAddress).includes(street)) epc.push(u);
+    }
+  }
+
+  // ── TIER 2 — floor area uniquely identifies the dwelling. When the listing
+  // publishes a size, the one whose certified floor area matches it (and is
+  // clearly closer than any other) is the listed property. ──
+  if (listSqft > 0 && epc.length) {
+    const sized = [];
+    for (const u of epc.slice(0, 40)) { const s = await certSqft(u.cert); if (s) sized.push({ u, s, diff: Math.abs(s - listSqft) }); }
+    sized.sort((a, b) => a.diff - b.diff);
+    if (sized.length) {
+      const best = sized[0], next = sized[1];
+      const tight = best.diff / listSqft <= 0.07;
+      const unique = !next || next.diff >= best.diff + Math.max(70, listSqft * 0.15);
+      if (tight && unique) {
+        const ok = ct.some((r) => ctSame(r, addrParts(best.u.fullAddress)));
+        return { id: p.id, level: 'exact', deliverable: true, confidence: 'high', address: tc(best.u.fullAddress), postcode: best.u.postcode, units: [tc(best.u.fullAddress)], verified: ok, why: 'floor area matches the listing size' + (ok ? ', confirmed on the Council Tax register' : '') };
+      }
+    }
+  }
+
+  // ── TIER 3 — there is only ONE candidate, so nothing is being guessed.
+  // House: the street has a single address across the nearby postcodes.
+  // Flat: the building contains a single dwelling. ──
+  const ctAddrs = [...new Set(ct.map((r) => r.address))];
+  if (ctAddrs.length === 1) {
+    const r = ct.find((x) => x.address === ctAddrs[0]);
+    return { id: p.id, level: 'exact', deliverable: true, confidence: 'high', address: tc(r.address), postcode: r.postcode, units: [tc(r.address)], verified: true, why: 'the only address on this street/postcode (Council Tax)' };
+  }
+  if (!ct.length && !isFlat && epc.length === 1) {
+    const u = epc[0];
+    return { id: p.id, level: 'exact', deliverable: true, confidence: 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], why: 'the only address found on this street (EPC)' };
+  }
+
+  // The specific property can't be identified from free data without guessing —
+  // withhold it. (No bare street/block names, no guessed flats.)
+  return null;
 }
 
 async function mapLimit(items, limit, fn) {

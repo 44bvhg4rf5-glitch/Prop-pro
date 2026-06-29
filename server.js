@@ -14,6 +14,7 @@ import epcMonitor from './api/epc-monitor.js';
 import landregistry from './api/landregistry.js';
 import addresses from './api/addresses.js';
 import resolve from './api/resolve.js';
+import resolveBatch from './api/resolve-batch.js';
 import owner from './api/owner.js';
 import lead from './api/lead.js';
 import results from './api/results.js';
@@ -45,6 +46,7 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/rightmove')) { rightmove(req, res); return; }
   if (req.url.startsWith('/api/landregistry')) { landregistry(req, res); return; }
   if (req.url.startsWith('/api/addresses')) { addresses(req, res); return; }
+  if (req.url.startsWith('/api/resolve-batch')) { resolveBatch(req, res); return; }
   if (req.url.startsWith('/api/resolve')) { resolve(req, res); return; }
   if (req.url.startsWith('/api/owner')) { owner(req, res); return; }
   if (req.url.startsWith('/api/lead')) { lead(req, res); return; }
