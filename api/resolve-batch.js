@@ -291,7 +291,12 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
         const u = best.u;
         const ok = ct.some((r) => ctSame(r, addrParts(u.fullAddress)));
         const szMatch = listSqft > 0 && best.d.sqft && Math.abs(best.d.sqft - listSqft) / listSqft <= 0.13;
-        const conf = (ok || best.dd <= 60 || szMatch) ? 'high' : 'medium';
+        // Confidence reflects WHICH-HOUSE certainty (not just that the address is
+        // real): a very fresh EPC, a floor-area match, or no rival recent
+        // marketed sale at all. A loose date pick stays 'medium' even when the
+        // address checks out on Council Tax.
+        const strong = best.dd <= 60 || szMatch || !next || (next.dd - best.dd) >= 120;
+        const conf = strong ? 'high' : 'medium';
         return { id: p.id, level: 'exact', deliverable: true, confidence: conf, address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], verified: ok, why: 'EPC lodged as a "marketed sale" around the listing date' + (szMatch ? ', floor area matches' : '') + (ok ? ', confirmed on the Council Tax register' : '') };
       }
     }
