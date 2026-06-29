@@ -1508,9 +1508,11 @@ async function runLiveSearch(){
     if (window.addrFilter === undefined) window.addrFilter = 'found';
     renderLiveResults();
     const foundTotal = props.filter(p => p.addressFound).length;
+    const confN = props.filter(p => p.addressConfirmed).length;
+    const likeN = props.filter(p => p.addressLikely).length;
     const pct = found ? Math.round(foundTotal / found * 100) : 0;
-    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings resolved to a precise, deliverable address (${pct}%). The rest couldn't be pinned to a specific property from free data, so they're hidden rather than shown as a street or block name.`, 'ok');
-    toast(`<i class=ic-check></i> ${foundTotal} of ${found} resolved to a full address (${pct}%)`, 'ok');
+    blog(`<i class=ic-check></i> ${foundTotal} of ${found} listings got a full single address (${pct}%): <b>${confN} confirmed</b> (verified correct) and <b>${likeN} likely</b> (best estimate — verify before posting). The rest couldn't be pinned to a specific property, so they're hidden rather than shown as a street or block name.`, 'ok');
+    toast(`<i class=ic-check></i> ${confN} confirmed + ${likeN} likely of ${found}`, 'ok');
     updateKPIs();
     return;
   }
