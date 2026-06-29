@@ -12,6 +12,7 @@ export default async function handler(req, res) {
   const surl = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=8`;
   const s = await fetchJson(surl, KEY);
   const rows = (s.json && Array.isArray(s.json.data)) ? s.json.data : [];
+  const rawSearch = rows.slice(0, 2).map((r) => r); // full raw search rows to inspect available fields
   const out = [];
   for (const r of rows.slice(0, 4)) {
     const cert = r.certificateNumber || '';
@@ -34,5 +35,5 @@ export default async function handler(req, res) {
       construction_age_band: b.construction_age_band,
     });
   }
-  sendJson(res, 200, { postcode: pc, searchStatus: s.status, count: rows.length, certs: out });
+  sendJson(res, 200, { postcode: pc, searchStatus: s.status, count: rows.length, rawSearch, certs: out });
 }
