@@ -4,8 +4,7 @@ name: Research agent
 # Press "Run workflow" and type a topic, or let it run weekly on its default brief.
 # Free: uses GitHub Actions + Groq (+ Tavily web search if the key is set).
 on:
-  schedule:
-    - cron: '0 7 * * 1'        # every Monday 07:00 UTC
+  # No standalone schedule — the Managing Director dispatches this weekly.
   workflow_dispatch:
     inputs:
       topic:

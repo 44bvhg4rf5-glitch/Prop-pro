@@ -4,8 +4,7 @@ name: R&D
 # concrete, costed improvements, then posts the brief as a GitHub Issue.
 # Free: GitHub Actions + Groq (+ Tavily web search if the key is set).
 on:
-  schedule:
-    - cron: '0 7 * * 5'        # every Friday 07:00 UTC
+  # No standalone schedule — the Managing Director dispatches this weekly.
   workflow_dispatch:
     inputs:
       topic:

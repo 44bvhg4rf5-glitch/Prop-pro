@@ -1,0 +1,73 @@
+name: Managing Director (weekly)
+
+# The autonomous head of the AI team. Every Monday it reviews the situation,
+# sets the week's priorities, and dispatches the specialist agents — no input
+# needed. You can also run it on demand. Free: GitHub Actions + Groq/Gemini.
+on:
+  schedule:
+    - cron: '0 6 * * 1'        # every Monday 06:00 UTC — weekly planning meeting
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  actions: write
+
+jobs:
+  md:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gather the recent situation (last issues = what the team did)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ctx=$(gh issue list --state all --limit 12 --json title,createdAt \
+                --jq '.[] | "- " + (.createdAt[0:10]) + "  " + .title' 2>/dev/null || true)
+          {
+            echo "AGENT_CONTEXT<<EOF"
+            echo "$ctx"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+      - name: Run the Managing Director (self-directed weekly review)
+        id: agent
+        env:
+          AGENT_ROLE: manager
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/agent.js
+      - name: Post the weekly plan as an issue
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: ${{ steps.agent.outputs.report_title }}
+          FILE: ${{ steps.agent.outputs.report_file }}
+        run: |
+          url=$(gh issue create --title "$TITLE" --body-file "$FILE")
+          echo "Created $url"
+          echo "number=$(printf '%s' "$url" | sed -E 's#.*/##')" >> "$GITHUB_OUTPUT"
+      - name: Dispatch this week's agents (they reply on the plan issue)
+        if: steps.agent.outputs.dispatch_json != '' && steps.agent.outputs.dispatch_json != '[]'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH: ${{ steps.agent.outputs.dispatch_json }}
+          ISSUE: ${{ steps.plan.outputs.number }}
+        run: |
+          first=1
+          echo "$DISPATCH" | jq -c '.[]' | while read -r item; do
+            agent=$(echo "$item" | jq -r '.agent')
+            topic=$(echo "$item" | jq -r '.topic // ""')
+            file="agent-${agent}.yml"
+            if [ "$first" = "1" ]; then first=0; else sleep 40; fi
+            echo "Launching $agent on issue #$ISSUE ..."
+            case "$agent" in
+              research|competitor|content|rnd)
+                gh workflow run "$file" --ref main -f topic="$topic" -f issue="$ISSUE" || echo "::warning::could not launch $agent" ;;
+              health|security)
+                gh workflow run "$file" --ref main -f issue="$ISSUE" || echo "::warning::could not launch $agent" ;;
+              *)
+                echo "::warning::unknown agent $agent — skipped" ;;
+            esac
+          done

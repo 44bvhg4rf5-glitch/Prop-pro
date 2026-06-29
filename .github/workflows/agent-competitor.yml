@@ -3,8 +3,7 @@ name: Competitor watch
 # Watches the competition (mainly Spectre) and UK proptech for new features and
 # posts a briefing as a GitHub Issue. Free: GitHub Actions + Groq + web search.
 on:
-  schedule:
-    - cron: '0 8 * * 1'        # every Monday 08:00 UTC (staggered after Research to avoid AI rate limits)
+  # No standalone schedule — the Managing Director dispatches this weekly.
   workflow_dispatch:
     inputs:
       topic:
