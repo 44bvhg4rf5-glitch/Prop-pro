@@ -80,13 +80,31 @@ async function nearby(lat, lon, area) {
   return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 8);
 }
 
-// One certificate's details (floor area in sq ft + property type + built form),
-// cached. The EPC SEARCH response lacks these, so they need the certificate.
+// The new EPC API (get-energy-performance-data) returns categorical fields as
+// INTEGER codes, not strings. These maps decode them (derived empirically from
+// known addresses + corroborated: code 6 = "new dwelling" matched a new-build
+// block, code 1 = "marketed sale" matched houses actively for sale). We accept
+// strings too, in case older certificates carry text values.
+const PTYPE_CODE = { 0: 'house', 1: 'bungalow', 2: 'flat', 3: 'maisonette', 4: 'park home' };
+const BFORM_CODE = { 1: 'detached', 2: 'semi-detached', 3: 'mid-terrace', 4: 'end-terrace', 5: 'enclosed mid-terrace', 6: 'enclosed end-terrace', 7: 'park home' };
+const TXN_MARKETED = 1; // transaction_type: an EPC lodged to put the home on the market
+function decodeField(v, map) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'number' || /^\d+$/.test(String(v))) return map[Number(v)] || '';
+  return String(v).toLowerCase();
+}
+
+// One certificate's details (floor area in sq ft + property type + built form +
+// transaction type), cached. The EPC SEARCH response lacks these.
 const SQFT = 10.7639;
 const _memCert = new Map();
-async function certDetails(cert) {
+// ctx-aware: a cached certificate is free; only a real network fetch spends the
+// per-request budget. Returns null if the budget is exhausted and uncached.
+async function certDetails(cert, ctx) {
   if (!cert) return null;
   if (_memCert.has(cert)) return _memCert.get(cert);
+  if (ctx && ctx.certBudget <= 0) return null;
+  if (ctx) ctx.certBudget--;
   let v = null;
   try {
     const KEY = process.env.EPC_API_KEY || '';
@@ -96,10 +114,14 @@ async function certDetails(cert) {
     const b = (r.json && r.json.data) ? r.json.data : r.json;
     if (b) {
       const m2 = parseFloat(b.total_floor_area ?? b.totalFloorArea);
+      const txRaw = b.transaction_type ?? b.transactionType;
+      const txNum = (typeof txRaw === 'number' || /^\d+$/.test(String(txRaw ?? ''))) ? Number(txRaw) : null;
       v = {
         sqft: (!Number.isNaN(m2) && m2 > 0) ? Math.round(m2 * SQFT) : null,
-        ptype: String(b.property_type ?? b.propertyType ?? '').toLowerCase(),
-        bform: String(b.built_form ?? b.builtForm ?? '').toLowerCase(),
+        ptype: decodeField(b.property_type ?? b.propertyType, PTYPE_CODE),
+        bform: decodeField(b.built_form ?? b.builtForm, BFORM_CODE),
+        // marketed-sale flag: true only when we positively recognise the code/text
+        marketed: txNum === TXN_MARKETED || /marketed sale/i.test(String(txRaw ?? '')),
       };
     }
   } catch { /* ignore */ }
@@ -229,6 +251,37 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
     }
   }
 
+  // ── TIER M — "marketed sale" EPC lodged around the listing date. A seller
+  // gets a fresh EPC (transaction type "marketed sale") when they put the home
+  // on the market, so an EPC of the right type lodged within ~8 months of the
+  // listing going live is almost certainly THIS property. Confirm only when one
+  // such candidate stands out — never guess between two recent marketed sales.
+  const listDate = (p.listDate || '').slice(0, 10);
+  if (listDate && epc.length && epc.length <= 40) {
+    // Pre-filter on the lodgement date we already have (free), then fetch only
+    // those certificates to read the transaction type — keeps lookups bounded.
+    const near = epc
+      .map((u) => ({ u, dd: u.certDate ? daysBetween(u.certDate, listDate) : 9999 }))
+      .filter((x) => x.dd <= 245)
+      .sort((a, b) => a.dd - b.dd);
+    const mk = [];
+    let fetched = 0;
+    for (const { u } of near) {
+      if (fetched >= 8 || (ctx && ctx.certBudget <= 0)) break;  // scan the closest few to detect a 2nd marketed sale
+      fetched++;
+      const d = await certDetails(u.cert, ctx);
+      if (d && d.marketed && epcTypeMatches(p.type, d)) mk.push({ u, d });
+    }
+    if (mk.length === 1) {
+      const u = mk[0].u;
+      const ok = ct.some((r) => ctSame(r, addrParts(u.fullAddress)));
+      // If the listing publishes a size, sanity-check it agrees (≤18%) so a
+      // mis-keyed cert can't slip through; if no size, accept the lone match.
+      const szOk = !listSqft || !mk[0].d.sqft || Math.abs(mk[0].d.sqft - listSqft) / listSqft <= 0.18;
+      if (szOk) return { id: p.id, level: 'exact', deliverable: true, confidence: ok ? 'high' : 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], verified: ok, why: 'EPC lodged as a "marketed sale" around the listing date' + (ok ? ', confirmed on the Council Tax register' : '') };
+    }
+  }
+
   // ── TIER 2 — floor area (+ property type) uniquely identifies the dwelling.
   // When the listing publishes a size, fetch each candidate's EPC details, keep
   // only those whose property type / built form match the listing (so identical
@@ -238,8 +291,7 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
     const sized = [];
     for (const u of epc) {
       if (ctx && ctx.certBudget <= 0) break;        // bound total cert lookups per request (avoid timeouts)
-      if (ctx) ctx.certBudget--;
-      const d = await certDetails(u.cert);
+      const d = await certDetails(u.cert, ctx);
       if (d && d.sqft && epcTypeMatches(p.type, d)) sized.push({ u, s: d.sqft, diff: Math.abs(d.sqft - listSqft) });
     }
     sized.sort((a, b) => a.diff - b.diff);
@@ -342,8 +394,8 @@ async function resolveOne(p, ctx) {
       let pick = null, checks = 0, typed = false;
       for (const c of cands) {
         if (checks >= 3 || !ctx || ctx.certBudget <= 0) break;
-        checks++; ctx.certBudget--;
-        const d = await certDetails(c.us[0].cert);
+        checks++;
+        const d = await certDetails(c.us[0].cert, ctx);
         if (!d) { pick = pick || c; continue; }
         if (epcTypeMatches(eType, d)) { pick = c; typed = !!d.ptype; break; }
       }
@@ -365,8 +417,8 @@ async function resolveOne(p, ctx) {
       if (eSqft > 0 && chosen.length > 1 && ctx && ctx.certBudget > 0) {
         let best = null, n = 0;
         for (const u of chosen) {
-          if (n >= 8 || ctx.certBudget <= 0) break; n++; ctx.certBudget--;
-          const d = await certDetails(u.cert);
+          if (n >= 8 || ctx.certBudget <= 0) break; n++;
+          const d = await certDetails(u.cert, ctx);
           if (d && d.sqft) { const diff = Math.abs(d.sqft - eSqft); if (!best || diff < best.diff) best = { u, diff }; }
         }
         if (best) { unit = best.u; why += ' + closest floor area'; }
