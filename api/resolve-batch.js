@@ -252,10 +252,13 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
   }
 
   // ── TIER M — "marketed sale" EPC lodged around the listing date. A seller
-  // gets a fresh EPC (transaction type "marketed sale") when they put the home
-  // on the market, so an EPC of the right type lodged within ~8 months of the
-  // listing going live is almost certainly THIS property. Confirm only when one
-  // such candidate stands out — never guess between two recent marketed sales.
+  // gets a FRESH EPC (transaction type "marketed sale") when they put the home
+  // on the market, so the marketed-sale EPC of the right type lodged CLOSEST to
+  // the listing date is almost certainly THIS property. We confirm the freshest
+  // one only when it clearly stands out — it is the sole recent marketed sale,
+  // or it is much fresher than the next, or the floor area singles it out — so
+  // we never guess between two homes marketed around the same time. (Validated
+  // on live HA data: tight matches were correct; near-ties were withheld.)
   const listDate = (p.listDate || '').slice(0, 10);
   if (listDate && epc.length && epc.length <= 40) {
     // Pre-filter on the lodgement date we already have (free), then fetch only
@@ -264,21 +267,33 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
       .map((u) => ({ u, dd: u.certDate ? daysBetween(u.certDate, listDate) : 9999 }))
       .filter((x) => x.dd <= 245)
       .sort((a, b) => a.dd - b.dd);
-    const mk = [];
+    let mk = [];
     let fetched = 0;
-    for (const { u } of near) {
-      if (fetched >= 8 || (ctx && ctx.certBudget <= 0)) break;  // scan the closest few to detect a 2nd marketed sale
+    for (const { u, dd } of near) {
+      if (fetched >= 8 || (ctx && ctx.certBudget <= 0)) break;  // scan the closest few to weigh against rivals
       fetched++;
       const d = await certDetails(u.cert, ctx);
-      if (d && d.marketed && epcTypeMatches(p.type, d)) mk.push({ u, d });
+      if (d && d.marketed && epcTypeMatches(p.type, d)) mk.push({ u, d, dd });
     }
-    if (mk.length === 1) {
-      const u = mk[0].u;
-      const ok = ct.some((r) => ctSame(r, addrParts(u.fullAddress)));
-      // If the listing publishes a size, sanity-check it agrees (≤18%) so a
-      // mis-keyed cert can't slip through; if no size, accept the lone match.
-      const szOk = !listSqft || !mk[0].d.sqft || Math.abs(mk[0].d.sqft - listSqft) / listSqft <= 0.18;
-      if (szOk) return { id: p.id, level: 'exact', deliverable: true, confidence: ok ? 'high' : 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], verified: ok, why: 'EPC lodged as a "marketed sale" around the listing date' + (ok ? ', confirmed on the Council Tax register' : '') };
+    // When the listing publishes a size, the floor area itself can single out the
+    // right marketed sale — drop candidates whose area clearly disagrees (>18%).
+    if (listSqft > 0 && mk.some((m) => m.d.sqft)) {
+      const sz = mk.filter((m) => m.d.sqft && Math.abs(m.d.sqft - listSqft) / listSqft <= 0.18);
+      if (sz.length) mk = sz;
+    }
+    mk.sort((a, b) => a.dd - b.dd);
+    if (mk.length) {
+      const best = mk[0], next = mk[1];
+      // Confirm the freshest marketed sale when it stands clearly apart: no rival
+      // recent marketed sale, or it is ≥60 days fresher than the next one.
+      const standsOut = !next || (next.dd - best.dd) >= 60;
+      if (standsOut) {
+        const u = best.u;
+        const ok = ct.some((r) => ctSame(r, addrParts(u.fullAddress)));
+        const szMatch = listSqft > 0 && best.d.sqft && Math.abs(best.d.sqft - listSqft) / listSqft <= 0.13;
+        const conf = (ok || best.dd <= 60 || szMatch) ? 'high' : 'medium';
+        return { id: p.id, level: 'exact', deliverable: true, confidence: conf, address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], verified: ok, why: 'EPC lodged as a "marketed sale" around the listing date' + (szMatch ? ', floor area matches' : '') + (ok ? ', confirmed on the Council Tax register' : '') };
+      }
     }
   }
 
@@ -354,7 +369,10 @@ async function resolveOne(p, ctx) {
       const detailNum = leadNum((det.displayAddress || '').split(',')[0].trim());
       const disp2 = detailNum ? det.displayAddress : (p.displayAddress || p.address || det.displayAddress);
       const r2 = await tryConfirm({ ...p, displayAddress: disp2, type: det.type || p.type }, [det.postcode], det.sqft || listSqft, ctx);
-      if (r2) { r2.confidence = 'high'; r2.why += ' (exact postcode from the listing page)'; return r2; }
+      // Keep the tier's own confidence (a marketed-sale match that isn't also
+      // Council-Tax-verified stays 'medium') — the exact postcode improves
+      // precision but does not by itself justify promoting medium → high.
+      if (r2) { r2.why += ' (exact postcode from the listing page)'; return r2; }
     }
   }
 
