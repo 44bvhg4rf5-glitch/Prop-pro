@@ -1485,14 +1485,18 @@ async function runLiveSearch(){
         } catch (e) { /* chunk failed — those stay unresolved */ }
         (d.results || []).forEach(res => {
           const p = byId[res.id]; if (!p) return;
-          // Precision-first: only accept a confirmed, single, deliverable address.
-          // Anything the engine couldn't pin down is left unresolved (never shown
-          // as a bare street/block name or a guessed flat).
-          if (res.level !== 'exact' || !res.deliverable) return;
+          // Two tiers, both a SINGLE specific address (never a bare block name):
+          //  • exact  → CONFIRMED (verified correct)
+          //  • likely → best estimate, flagged for the user to verify
+          if (res.level !== 'exact' && res.level !== 'likely') return;
           if (res.postcode) p.postcode = res.postcode;
           p.displayAddress = res.address; p.fullAddress = res.address; p.address = res.address;
-          p.addressFound = true; p.addressConfirmed = true; p.addressSource = 'Register (exact)';
-          p.addressVerified = !!res.verified; p.addressWhy = res.why || ''; p.block = null;
+          p.addressFound = true; p.addressWhy = res.why || ''; p.block = null;
+          if (res.level === 'exact') {
+            p.addressConfirmed = true; p.addressLikely = false; p.addressSource = 'Register (exact)'; p.addressVerified = !!res.verified;
+          } else {
+            p.addressConfirmed = false; p.addressLikely = true; p.addressSource = 'Best estimate (verify)';
+          }
         });
         doneC += chunk.length;
         const foundSoFar = props.filter(x => x.addressFound).length;
