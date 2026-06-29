@@ -11,6 +11,7 @@
 import fs from 'fs';
 import path from 'path';
 import { runAgency } from '../lib/agency.js';
+import { buildProductionKits, kitsToMarkdown } from '../lib/production.js';
 import { llmConfigured } from '../lib/llm.js';
 
 function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'run'; }
@@ -46,8 +47,15 @@ const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-'); // YY
 const archivePath = path.join(archiveDir, `${stamp}-${slug(niche)}.json`);
 fs.mkdirSync(archiveDir, { recursive: true });
 fs.writeFileSync(archivePath, JSON.stringify({ ...result, ranAt: new Date().toISOString() }, null, 2));
+// Build the paste-ready Production Kit (voiceover blocks, shot lists, posts) and
+// write it as Markdown — this is the file you actually work from to make videos.
+const kits = buildProductionKits(result.out);
+const kitPath = path.join(archiveDir, `${stamp}-${slug(niche)}-PRODUCTION-KIT.md`);
+fs.writeFileSync(kitPath, kitsToMarkdown(kits, `ViralForge — ${niche}`));
+
 console.log(`\n  ✅ Content drop written to ${outPath}`);
 console.log(`  🗂  Archived this run to ${archivePath}`);
+console.log(`  📦 Production Kit (make-the-videos guide) → ${kitPath}`);
 
 // Quick human-readable peek at the scripts so you can act without opening JSON.
 const scripts = (result.out.scriptwriter && result.out.scriptwriter.scripts) || [];

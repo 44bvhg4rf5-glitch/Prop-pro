@@ -52,6 +52,36 @@ curl -X POST localhost:3000/api/agency -H 'Content-Type: application/json' \
   -d '{"remix":{"niche":"kitchen gadgets","winner_title":"...","winner_hook":"..."}}'
 ```
 
+## 📦 Production Kit — from script to "make the video"
+
+Once a run finishes, hit **Build Production Kits** (or it's written automatically
+by the CLI). For each script you get a paste-ready package:
+
+- **Voiceover block** → paste straight into ElevenLabs or CapCut text-to-speech
+- **Shot list** → what to film or generate, in order
+- **On-screen text** → CapCut caption overlays
+- **Hook options** → A/B test the first frame
+- **Caption + hashtags + pinned comment** → the post itself
+- **Production checklist** → the steps to ship it
+
+It's a pure transform (no AI call, no cost) — so it works even with no key. The
+dashboard gives per-script **Copy for TTS** / **Copy caption** buttons and a
+**Download all (.md)** button; the CLI writes
+`agency-runs/<date>-<niche>-PRODUCTION-KIT.md`.
+
+### Recommended free tool stack
+| Job | Tool (free-first) |
+|-----|-------------------|
+| Edit + captions | **CapCut** (free) |
+| Voiceover | **CapCut TTS** / **ElevenLabs** (free tier) |
+| Slideshow / images | **Canva** (free) |
+| AI avatar UGC ads | **Creatify / Arcads / HeyGen** (freemium) |
+| AI b-roll / scenes | **Veo / Kling / Pika** (freemium) |
+
+> Reality check: for dropshipping, **real footage of the product converts best**.
+> Use AI for voiceover, editing, captions, b-roll and hooks — keep the demo real,
+> and label AI-generated media as TikTok requires.
+
 ## Cost
 
 **£0 extra.** ViralForge reuses the app's provider-agnostic LLM layer

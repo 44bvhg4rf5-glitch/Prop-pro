@@ -104,12 +104,15 @@
     </div>
     <div class="actions">
       <button class="run" id="runBtn">▶ Run the agency</button>
+      <button class="ghost" id="kitBtn" style="display:none;">📦 Build Production Kits</button>
       <button class="ghost" id="copyBtn" style="display:none;">⧉ Copy full plan</button>
       <span class="status" id="status"></span>
     </div>
   </div>
 
   <div class="pipe" id="pipe"></div>
+
+  <div id="kits"></div>
 
   <div class="brief" id="remixPanel" style="margin-top: 24px;">
     <h2>🔁 Remix a winner</h2>
@@ -149,6 +152,8 @@ const PIPE = document.getElementById('pipe');
 const banner = document.getElementById('banner');
 let AGENTS = [];
 let lastResults = {};
+let lastOut = {};
+let lastKitMd = '';
 
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
@@ -228,9 +233,68 @@ async function run() {
       setPill(a.id, 'fail', 'failed');
     }
   }
-  status.innerHTML = '✅ Your content drop is ready. Film the batch, then post on the calendar.';
+  lastOut = out;
+  status.innerHTML = '✅ Your content drop is ready. Hit <b>Build Production Kits</b> to get paste-ready packages.';
   btn.disabled = false;
   document.getElementById('copyBtn').style.display = 'inline-block';
+  document.getElementById('kitBtn').style.display = 'inline-block';
+}
+
+async function buildKits() {
+  if (!lastOut.scriptwriter) { alert('Run the agency first.'); return; }
+  const kitsDiv = document.getElementById('kits');
+  const niche = document.getElementById('niche').value.trim();
+  kitsDiv.innerHTML = '<div class="brief" style="margin-top:24px;"><span class="spin"></span> Building production kits…</div>';
+  try {
+    const r = await fetch('/api/agency', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kit: true, out: lastOut, title: niche ? `ViralForge — ${niche}` : 'ViralForge Production Kit' }) });
+    const j = await r.json();
+    lastKitMd = j.markdown || '';
+    renderKits(j.kits || []);
+  } catch (e) { kitsDiv.innerHTML = '<div class="brief" style="margin-top:24px;">⚠️ Could not build kits.</div>'; }
+}
+
+function copyText(text, el) {
+  navigator.clipboard.writeText(text);
+  const old = el.textContent; el.textContent = '✓ Copied';
+  setTimeout(() => el.textContent = old, 1400);
+}
+
+function renderKits(kits) {
+  const kitsDiv = document.getElementById('kits');
+  if (!kits.length) { kitsDiv.innerHTML = '<div class="brief" style="margin-top:24px;">No scripts to package yet.</div>'; return; }
+  const wrap = el('div', 'brief');
+  wrap.style.marginTop = '24px';
+  let html = `<div class="toolbar"><button id="dlMd">⬇ Download all (.md)</button></div>` +
+    `<h2 style="margin-top:0;">📦 Production Kits — ${kits.length} videos, ready to make</h2>` +
+    `<p style="color:var(--muted);font-size:13.5px;margin:-6px 0 14px;">Each kit is paste-ready: voiceover → ElevenLabs/CapCut TTS, shot list → film/generate, on-screen text → CapCut overlays.</p>`;
+  kits.forEach((k, i) => {
+    html += `<div class="card"><h4>${i + 1}. ${esc(k.title)} ${k.pillar ? `<span class="chip">${esc(k.pillar)}</span>` : ''} ${k.duration_seconds ? `<span class="chip">${esc(k.duration_seconds)}s</span>` : ''}</h4>`;
+    html += `<div class="kv"><b>Hook:</b> ${esc(k.primary_hook)}</div>`;
+    if (k.hook_options && k.hook_options.length) html += `<div class="sub">A/B: ${k.hook_options.map(h => `“${esc(h)}”`).join(' · ')}</div>`;
+    html += `<div style="margin:10px 0 4px;display:flex;align-items:center;gap:8px;"><b style="font-size:13px;">🗣️ Voiceover</b> <button class="cpv" data-i="${i}" style="background:var(--panel);border:1px solid var(--line);color:var(--accent2);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:12px;">⧉ Copy for TTS</button></div>`;
+    html += `<pre class="raw" style="color:var(--text);">${esc(k.voiceover_block)}</pre>`;
+    html += `<div class="kv" style="margin-top:8px;"><b>🎬 Shots</b></div>`;
+    (k.shot_list || []).forEach(sh => html += `<div class="shot"><span class="v">${sh.n}. ${esc(sh.visual)}</span>${sh.say ? ` — “${esc(sh.say)}”` : ''}</div>`);
+    if (k.on_screen_text && k.on_screen_text.length) { html += `<div class="kv" style="margin-top:8px;"><b>🔤 On-screen text</b></div><div class="chips">${k.on_screen_text.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>`; }
+    html += `<div style="margin:10px 0 4px;display:flex;align-items:center;gap:8px;"><b style="font-size:13px;">📲 Post</b> <button class="cpc" data-i="${i}" style="background:var(--panel);border:1px solid var(--line);color:var(--accent2);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:12px;">⧉ Copy caption</button></div>`;
+    html += `<div class="kv">${esc(k.caption)}</div><div class="chips">${(k.hashtags || []).map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>`;
+    if (k.pinned_comment) html += `<div class="sub" style="margin-top:6px;">📌 ${esc(k.pinned_comment)}</div>`;
+    html += `</div>`;
+  });
+  wrap.innerHTML = html;
+  kitsDiv.innerHTML = '';
+  kitsDiv.appendChild(wrap);
+  // Wire copy buttons (data carries the kit index).
+  wrap.querySelectorAll('.cpv').forEach(b => b.onclick = () => copyText(kits[+b.dataset.i].voiceover_block, b));
+  wrap.querySelectorAll('.cpc').forEach(b => b.onclick = () => {
+    const k = kits[+b.dataset.i]; copyText([k.caption, (k.hashtags || []).join(' ')].filter(Boolean).join('\n\n'), b);
+  });
+  wrap.querySelector('#dlMd').onclick = () => {
+    const blob = new Blob([lastKitMd], { type: 'text/markdown' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'viralforge-production-kit.md'; a.click(); URL.revokeObjectURL(a.href);
+  };
 }
 
 function renderResult(a, j) {
@@ -313,6 +377,7 @@ async function runRemix() {
 }
 
 document.getElementById('runBtn').onclick = run;
+document.getElementById('kitBtn').onclick = buildKits;
 document.getElementById('rxBtn').onclick = runRemix;
 document.getElementById('copyBtn').onclick = () => {
   navigator.clipboard.writeText(JSON.stringify(lastResults, null, 2));

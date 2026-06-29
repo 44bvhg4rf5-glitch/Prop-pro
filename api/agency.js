@@ -1,6 +1,7 @@
 import { readBody, sendJson, guardOrigin } from '../lib/helpers.js';
 import { llmConfigured } from '../lib/llm.js';
 import { agentList, runStep, runRemix, AGENTS } from '../lib/agency.js';
+import { buildProductionKits, kitsToMarkdown } from '../lib/production.js';
 
 // ViralForge endpoint — the autonomous TikTok content agency.
 //
@@ -19,17 +20,27 @@ export default async function handler(req, res) {
     return;
   }
   if (req.method !== 'POST') { sendJson(res, 405, { error: { message: 'Method not allowed' } }); return; }
-  if (!llmConfigured()) {
-    sendJson(res, 503, { error: { type: 'configuration_error', message: 'No AI key configured. Add a free key (e.g. GEMINI_API_KEY or GROQ_API_KEY) in project settings.' } });
-    return;
-  }
 
+  // Read + parse the body once, then branch on what was asked for.
   let raw;
   if (req.body && typeof req.body === 'object') raw = JSON.stringify(req.body);
   else if (typeof req.body === 'string') raw = req.body;
   else raw = await readBody(req);
   let payload = {};
   try { payload = JSON.parse(raw); } catch { /* ignore */ }
+
+  // Production Kit — a pure transform of already-generated agency output into
+  // paste-ready packages. No LLM involved, so it runs even with no key set.
+  if (payload.kit) {
+    const kits = buildProductionKits(payload.out || {});
+    sendJson(res, 200, { kits, markdown: kitsToMarkdown(kits, payload.title || 'ViralForge Production Kit') });
+    return;
+  }
+
+  if (!llmConfigured()) {
+    sendJson(res, 503, { error: { type: 'configuration_error', message: 'No AI key configured. Add a free key (e.g. GEMINI_API_KEY or GROQ_API_KEY) in project settings.' } });
+    return;
+  }
 
   // Remix mode — spin variations of a video that already popped. Driven by its
   // own seed (the winning video), so it runs before the pipeline's niche check.
