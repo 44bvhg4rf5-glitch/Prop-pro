@@ -210,11 +210,14 @@ async function resolveOne(p, ctx) {
     sized.sort((a, b) => a.diff - b.diff);
     if (sized.length) {
       const best = sized[0], next = sized[1];
-      const tight = best.diff / listSqft <= 0.07;
-      const unique = !next || next.diff >= best.diff + Math.max(70, listSqft * 0.15);
+      // Listing sqft and EPC floor area are measured differently, so allow ~13%.
+      // Safeguard: the match must be clearly closer than any other candidate
+      // (so we never pick between two similarly-sized properties).
+      const tight = best.diff / listSqft <= 0.13;
+      const unique = !next || next.diff >= best.diff + Math.max(50, listSqft * 0.10);
       if (tight && unique) {
         const ok = ct.some((r) => ctSame(r, addrParts(best.u.fullAddress)));
-        return { id: p.id, level: 'exact', deliverable: true, confidence: 'high', address: tc(best.u.fullAddress), postcode: best.u.postcode, units: [tc(best.u.fullAddress)], verified: ok, why: 'floor area matches the listing size' + (ok ? ', confirmed on the Council Tax register' : '') };
+        return { id: p.id, level: 'exact', deliverable: true, confidence: ok ? 'high' : 'medium', address: tc(best.u.fullAddress), postcode: best.u.postcode, units: [tc(best.u.fullAddress)], verified: ok, why: 'floor area matches the listing size' + (ok ? ', confirmed on the Council Tax register' : '') };
       }
     }
   }
