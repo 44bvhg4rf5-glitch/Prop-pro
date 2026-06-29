@@ -79,11 +79,11 @@ async function nearby(lat, lon, area) {
   return pcs.filter((pc) => !area || (pc || '').toUpperCase().startsWith(area)).slice(0, 8);
 }
 
-// One certificate's floor area (sq ft), cached — used to match a flat to the
-// listing's published size. Only ever called for an already-chosen building.
+// One certificate's details (floor area in sq ft + property type + built form),
+// cached. The EPC SEARCH response lacks these, so they need the certificate.
 const SQFT = 10.7639;
 const _memCert = new Map();
-async function certSqft(cert) {
+async function certDetails(cert) {
   if (!cert) return null;
   if (_memCert.has(cert)) return _memCert.get(cert);
   let v = null;
@@ -92,12 +92,38 @@ async function certSqft(cert) {
     const url = `${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cert)}`;
     let r = await fetchJson(url, KEY);
     if (r.status === 429) { await new Promise((s) => setTimeout(s, 500)); r = await fetchJson(url, KEY); } // ride out a rate limit
-    const body = (r.json && r.json.data) ? r.json.data : r.json;
-    const m2 = parseFloat(body && body.total_floor_area);
-    if (!Number.isNaN(m2) && m2 > 0) v = Math.round(m2 * SQFT);
+    const b = (r.json && r.json.data) ? r.json.data : r.json;
+    if (b) {
+      const m2 = parseFloat(b.total_floor_area ?? b.totalFloorArea);
+      v = {
+        sqft: (!Number.isNaN(m2) && m2 > 0) ? Math.round(m2 * SQFT) : null,
+        ptype: String(b.property_type ?? b.propertyType ?? '').toLowerCase(),
+        bform: String(b.built_form ?? b.builtForm ?? '').toLowerCase(),
+      };
+    }
   } catch { /* ignore */ }
   _memCert.set(cert, v);
   return v;
+}
+
+// Does an EPC certificate's property type / built form match the listing's type?
+// Used to narrow floor-area matching so it can uniquely pin on uniform streets.
+// Conservative: only rejects on a CLEAR mismatch (unknowns pass through).
+function epcTypeMatches(listingType, d) {
+  if (!d) return false;
+  const t = String(listingType || '').toLowerCase(), pt = d.ptype || '', bf = d.bform || '';
+  if (/flat|apartment|studio/.test(t)) return !pt || /flat/.test(pt);
+  if (/maisonette/.test(t)) return !pt || /maisonette|flat/.test(pt);
+  if (/bungalow/.test(t)) return !pt || /bungalow/.test(pt);
+  if (/house|detached|terrace|semi|town|mews|cottage|link|end/.test(t)) {
+    if (pt && !/house|bungalow/.test(pt)) return false;           // listing is a house but EPC says flat
+    if (/semi/.test(t)) { if (bf && !/semi/.test(bf)) return false; }
+    else if (/detached/.test(t)) { if (bf && !(/detached/.test(bf) && !/semi/.test(bf))) return false; }
+    else if (/end of terrace|end terrace/.test(t)) { if (bf && !/end/.test(bf)) return false; }
+    else if (/terrace/.test(t)) { if (bf && !/terrace/.test(bf)) return false; }
+    return true;
+  }
+  return true; // unknown listing type → don't filter on type
 }
 
 // OpenStreetMap Overpass — free, keyless crowdsourced addresses near a point.
@@ -203,27 +229,29 @@ async function resolveOne(p, ctx) {
     }
   }
 
-  // ── TIER 2 — floor area uniquely identifies the dwelling. When the listing
-  // publishes a size, the one whose certified floor area matches it (and is
-  // clearly closer than any other) is the listed property. ──
+  // ── TIER 2 — floor area (+ property type) uniquely identifies the dwelling.
+  // When the listing publishes a size, fetch each candidate's EPC details, keep
+  // only those whose property type / built form match the listing (so identical
+  // terraces of a different type are ruled out), then take the one whose floor
+  // area matches and is clearly closer than any other. ──
   if (listSqft > 0 && epc.length && epc.length <= 25) {
     const sized = [];
     for (const u of epc) {
-      if (ctx && ctx.certBudget <= 0) break;        // bound total floor-area lookups per request (avoid timeouts)
+      if (ctx && ctx.certBudget <= 0) break;        // bound total cert lookups per request (avoid timeouts)
       if (ctx) ctx.certBudget--;
-      const s = await certSqft(u.cert); if (s) sized.push({ u, s, diff: Math.abs(s - listSqft) });
+      const d = await certDetails(u.cert);
+      if (d && d.sqft && epcTypeMatches(p.type, d)) sized.push({ u, s: d.sqft, diff: Math.abs(d.sqft - listSqft) });
     }
     sized.sort((a, b) => a.diff - b.diff);
     if (sized.length) {
       const best = sized[0], next = sized[1];
       // Listing sqft and EPC floor area are measured differently, so allow ~13%.
-      // Safeguard: the match must be clearly closer than any other candidate
-      // (so we never pick between two similarly-sized properties).
+      // Safeguard: the match must be clearly closer than any other candidate.
       const tight = best.diff / listSqft <= 0.13;
       const unique = !next || next.diff >= best.diff + Math.max(50, listSqft * 0.10);
       if (tight && unique) {
         const ok = ct.some((r) => ctSame(r, addrParts(best.u.fullAddress)));
-        return { id: p.id, level: 'exact', deliverable: true, confidence: ok ? 'high' : 'medium', address: tc(best.u.fullAddress), postcode: best.u.postcode, units: [tc(best.u.fullAddress)], verified: ok, why: 'floor area matches the listing size' + (ok ? ', confirmed on the Council Tax register' : '') };
+        return { id: p.id, level: 'exact', deliverable: true, confidence: ok ? 'high' : 'medium', address: tc(best.u.fullAddress), postcode: best.u.postcode, units: [tc(best.u.fullAddress)], verified: ok, why: 'floor area + property type match the listing' + (ok ? ', confirmed on the Council Tax register' : '') };
       }
     }
   }
