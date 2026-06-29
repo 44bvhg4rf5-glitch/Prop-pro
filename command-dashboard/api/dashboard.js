@@ -41,14 +41,18 @@ async function getBody(req) {
 // Generate the morning brief from everything the dashboard knows: your open
 // tasks, recent agent/GitHub activity, and open issues. Cached once per day so
 // opening the app repeatedly is instant (pass ?refresh=1 to regenerate).
-async function buildSummary({ refresh }) {
+async function buildSummary({ refresh, clientTasks }) {
   const day = today();
   if (!refresh) {
     const cached = await readState(summaryKey(day), null);
     if (cached && cached.text) return { ...cached, cached: true };
   }
-  const tasks = (await readState(K_TASKS, [])) || [];
-  const open = tasks.filter((t) => !t.done);
+  // Tasks come from the app's on-device list (sent in the request) when present,
+  // otherwise from the durable store (when Upstash is configured).
+  const stored = (await readState(K_TASKS, [])) || [];
+  const open = Array.isArray(clientTasks) && clientTasks.length
+    ? clientTasks.map((t) => ({ text: String(t) }))
+    : stored.filter((t) => !t.done);
   const [feed, issues] = await Promise.all([
     githubConfigured() ? activityFeed({ limit: 25 }) : Promise.resolve({ items: [] }),
     githubConfigured() ? openIssuesAsTasks({ limit: 20 }) : Promise.resolve([]),
@@ -122,7 +126,9 @@ export default async function handler(req, res) {
     // ── Morning brief ──
     if (action === 'summary') {
       const refresh = url.searchParams.get('refresh') === '1';
-      const r = await buildSummary({ refresh });
+      let clientTasks = null;
+      if (method === 'POST') { const body = await getBody(req); if (Array.isArray(body.tasks)) clientTasks = body.tasks; }
+      const r = await buildSummary({ refresh, clientTasks });
       if (r.error) { sendJson(res, 502, { error: { message: r.error } }); return; }
       sendJson(res, 200, r);
       return;
