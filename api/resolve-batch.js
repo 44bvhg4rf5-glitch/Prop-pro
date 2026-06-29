@@ -241,8 +241,33 @@ async function resolveOne(p, ctx) {
     return { id: p.id, level: 'exact', deliverable: true, confidence: 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], why: 'the only address found on this street (EPC)' };
   }
 
-  // The specific property can't be identified from free data without guessing —
-  // withhold it. (No bare street/block names, no guessed flats.)
+  // ── LIKELY (best estimate — clearly flagged for the user to verify) ──
+  // We couldn't CONFIRM it, but a property gets a fresh EPC when it's marketed,
+  // so the freshest certificate on the street / in the building is the most
+  // likely listing. We only do this when there's a real freshness signal (one
+  // building clearly the freshest, or freshest near the listing date), and we
+  // always return a SPECIFIC unit — never a bare street/block name.
+  if (epc.length) {
+    const listDate = (p.listDate || '').slice(0, 10);
+    const groups = new Map();
+    for (const u of epc) { const k = buildingKey(u.fullAddress); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+    const cands = [...groups.values()].map((us) => ({ us, latest: us.reduce((x, u) => (u.certDate > x ? u.certDate : x), '') })).sort((a, b) => b.latest.localeCompare(a.latest));
+    let chosen = null;
+    if (building) chosen = cands[0].us;                       // named building → that building
+    else if (cands.length === 1) chosen = cands[0].us;        // one building on the street
+    else if (cands.length > 1) {
+      const top = cands[0], gap = daysBetween(top.latest, cands[1].latest);
+      const nearList = listDate && top.latest ? daysBetween(top.latest, listDate) <= 200 : false;
+      if (top.latest && (gap >= 20 || nearList)) chosen = top.us;   // a genuine freshness signal
+    }
+    if (chosen && chosen.length) {
+      chosen.sort((a, b) => b.certDate.localeCompare(a.certDate));
+      const unit = chosen[0];                                 // freshest unit = most likely
+      return { id: p.id, level: 'likely', deliverable: false, confidence: 'likely', address: tc(unit.fullAddress), postcode: unit.postcode, units: [tc(unit.fullAddress)], why: 'best estimate from the freshest EPC near the listing — verify before posting' };
+    }
+  }
+
+  // Truly nothing to go on — withhold (no bare street/block names, no guesses).
   return null;
 }
 
