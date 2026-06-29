@@ -2,38 +2,26 @@ import { EPC_BASE, fetchJson, sendJson, guardOrigin } from '../lib/helpers.js';
 
 export const config = { maxDuration: 30 };
 
-// TEMP diagnostic: dump the rich fields of a few EPC certificates for a postcode
-// so we know which attributes are populated + matchable against a listing.
+// TEMP diagnostic: probe which SEARCH filters the new EPC API accepts, so we can
+// narrow candidates by type / "marketed sale" without decoding numeric codes.
+async function search(qs, KEY) {
+  const r = await fetchJson(`${EPC_BASE}/api/domestic/search?${qs}`, KEY);
+  const rows = (r.json && Array.isArray(r.json.data)) ? r.json.data : [];
+  return { status: r.status, count: rows.length, certs: rows.slice(0, 4).map((x) => `${x.addressLine1}|${x.certificateNumber}`) };
+}
+
 export default async function handler(req, res) {
   if (!guardOrigin(req, res)) return;
   const u = new URL(req.url, 'http://localhost');
-  const pc = (u.searchParams.get('postcode') || 'HA1 3UH').toUpperCase().trim();
+  const pc = (u.searchParams.get('postcode') || 'HA1 2HA').toUpperCase().trim();
   const KEY = process.env.EPC_API_KEY || '';
-  const surl = `${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(pc).replace(/%20/g, '+')}&page_size=8`;
-  const s = await fetchJson(surl, KEY);
-  const rows = (s.json && Array.isArray(s.json.data)) ? s.json.data : [];
-  const rawSearch = rows.slice(0, 2).map((r) => r); // full raw search rows to inspect available fields
-  const out = [];
-  for (const r of rows.slice(0, 4)) {
-    const cert = r.certificateNumber || '';
-    const c = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(cert)}`, KEY);
-    const b = (c.json && c.json.data) ? c.json.data : c.json;
-    if (!b) { out.push({ addr: r.addressLine1, cert, note: 'no cert body' }); continue; }
-    out.push({
-      addr: r.addressLine1,
-      transaction_type: b.transaction_type,
-      lodgement_date: b.lodgement_date,
-      inspection_date: b.inspection_date,
-      total_floor_area: b.total_floor_area,
-      property_type: b.property_type,
-      built_form: b.built_form,
-      number_habitable_rooms: b.number_habitable_rooms,
-      number_heated_rooms: b.number_heated_rooms,
-      floor_level: b.floor_level,
-      flat_top_storey: b.flat_top_storey,
-      tenure: b.tenure,
-      construction_age_band: b.construction_age_band,
-    });
-  }
-  sendJson(res, 200, { postcode: pc, searchStatus: s.status, count: rows.length, rawSearch, certs: out });
+  const e = encodeURIComponent(pc).replace(/%20/g, '+');
+  const out = {};
+  out.base = await search(`postcode=${e}&page_size=200`, KEY);
+  out.ptype_flat = await search(`postcode=${e}&property-type=Flat&page_size=200`, KEY);
+  out.ptype_house = await search(`postcode=${e}&property-type=House&page_size=200`, KEY);
+  out.txn_marketed = await search(`postcode=${e}&transaction-type=marketed+sale&page_size=200`, KEY);
+  out.txn_marketed2 = await search(`postcode=${e}&transaction-type=1&page_size=200`, KEY);
+  out.bform_semi = await search(`postcode=${e}&built-form=Semi-Detached&page_size=200`, KEY);
+  sendJson(res, 200, { postcode: pc, probes: out });
 }
