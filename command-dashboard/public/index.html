@@ -111,6 +111,9 @@
   a{color:var(--accent)}
   .hint{font-size:13px;color:var(--dim);background:var(--panel2);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;margin-top:10px}
   code{background:var(--panel2);padding:1px 6px;border-radius:6px;font-size:13px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(82px + env(safe-area-inset-bottom));background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:11px 16px;display:flex;gap:16px;align-items:center;z-index:20;box-shadow:0 8px 28px rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;max-width:92%;font-size:14px}
+  .toast.show{opacity:1;pointer-events:auto}
+  .toast button{background:none;color:var(--accent);font-weight:700;font-size:15px;padding:2px 4px}
 </style>
 </head>
 <body>
@@ -133,17 +136,27 @@
       </div>
 
       <div class="card">
-        <h2>Tasks</h2>
-        <div class="row addrow" style="margin-bottom:10px">
-          <input id="newTask" placeholder="Add a task…" autocomplete="off" enterkeyhint="done" />
+        <h2>Today's Focus</h2>
+        <div id="todayFocus" class="muted">No tasks yet — add them in the To-Do tab.</div>
+        <button class="btn ghost sm" id="goTodo" style="margin-top:12px">Open To-Do →</button>
+      </div>
+    </section>
+
+    <!-- ── TO-DO ── -->
+    <section class="view" id="todoView">
+      <div class="card">
+        <h2>Today's To-Do</h2>
+        <div class="row addrow" style="margin-bottom:12px">
+          <input id="newTask" placeholder="Add a task or action…" autocomplete="off" enterkeyhint="done" />
           <button class="btn" id="addTask">Add</button>
         </div>
         <ul class="tasks" id="taskList"></ul>
-        <div class="row" style="margin-top:10px;justify-content:space-between">
+        <div class="row" style="margin-top:12px;justify-content:space-between">
           <span class="muted" id="taskCount"></span>
-          <button class="btn ghost sm" id="clearDone">Clear done</button>
+          <button class="btn ghost sm" id="clearDone">Clear completed</button>
         </div>
       </div>
+      <div class="hint">✅ Tap the circle on the left of a task to mark it <b>completed</b>. Your tasks are saved on this device. Add the free Upstash database (see the Setup tab) later to sync them across your iPhone &amp; iPad.</div>
     </section>
 
     <!-- ── CHAT ── -->
@@ -202,10 +215,12 @@
 
   <nav class="tabbar" id="tabbar">
     <button data-v="today" class="on"><span class="ic">☀️</span>Today</button>
+    <button data-v="todo"><span class="ic">✅</span>To-Do</button>
     <button data-v="chat"><span class="ic">💬</span>Chat</button>
     <button data-v="agents"><span class="ic">🤖</span>Agents</button>
     <button data-v="setup"><span class="ic">⚙️</span>Setup</button>
   </nav>
+  <div class="toast" id="toast"></div>
 </div>
 
 <script>
@@ -260,7 +275,8 @@ async function loadStatus(){
 async function loadBrief(refresh){
   $('#brief').innerHTML = '<span class="spinner"></span> '+(refresh?'Regenerating…':'Preparing your brief…');
   try{
-    const r = await api('action=summary'+(refresh?'&refresh=1':''));
+    const open = (typeof TASKS!=='undefined'?TASKS:[]).filter(t=>!t.done).map(t=>t.text);
+    const r = await api('action=summary'+(refresh?'&refresh=1':''), {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tasks:open})});
     if(r.error){ $('#brief').textContent = '⚠️ '+(r.error.message||'Could not generate brief.'); return; }
     $('#brief').textContent = r.text || 'Nothing to report yet.';
     $('#briefMeta').textContent = (r.provider && r.provider!=='none'? r.provider : 'offline') + (r.cached?' · cached':' · fresh');
@@ -268,29 +284,81 @@ async function loadBrief(refresh){
 }
 $('#refreshBrief').onclick = ()=>loadBrief(true);
 
-/* ── tasks ── */
-function renderTasks(tasks){
+/* ── tasks (saved on THIS device via localStorage — works with zero setup) ── */
+const TASK_KEY = 'cmd_tasks_v1';
+const loadStore = () => { try { return JSON.parse(localStorage.getItem(TASK_KEY) || '[]'); } catch { return []; } };
+const saveStore = () => localStorage.setItem(TASK_KEY, JSON.stringify(TASKS));
+let TASKS = loadStore();
+
+function renderTasks(){
   const ul = $('#taskList');
-  if(!tasks.length){ ul.innerHTML = '<li class="empty">No tasks yet — add one above.</li>'; }
-  else ul.innerHTML = tasks.map(t=>
+  if(!TASKS.length){ ul.innerHTML = '<li class="empty">No tasks yet — add one above.</li>'; }
+  else ul.innerHTML = TASKS.map(t=>
     `<li data-id="${t.id}">
        <div class="check ${t.done?'done':''}" data-act="toggle">${t.done?'✓':''}</div>
        <span class="tasktext ${t.done?'done':''}">${esc(t.text)}</span>
        <button class="del" data-act="delete">✕</button>
      </li>`).join('');
-  const open = tasks.filter(t=>!t.done).length;
-  $('#taskCount').textContent = open+' open · '+tasks.length+' total';
+  const open = TASKS.filter(t=>!t.done).length;
+  $('#taskCount').textContent = open+' to do · '+TASKS.length+' total';
+  renderTodayFocus();
 }
-async function loadTasks(){ const r = await api('action=tasks'); renderTasks(r.tasks||[]); }
-async function taskOp(body){ const r = await api('action=tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); renderTasks(r.tasks||[]); }
-$('#addTask').onclick = async ()=>{ const v=$('#newTask').value.trim(); if(!v) return; $('#newTask').value=''; await taskOp({op:'add',text:v}); };
+function renderTodayFocus(){
+  const el = $('#todayFocus'); if(!el) return;
+  const open = TASKS.filter(t=>!t.done);
+  if(!TASKS.length){ el.innerHTML = '<span class="muted">No tasks yet — add them in the To-Do tab.</span>'; return; }
+  if(!open.length){ el.innerHTML = '🎉 All tasks completed for today!'; return; }
+  el.innerHTML = open.slice(0,6).map(t=>`<div style="padding:4px 0">• ${esc(t.text)}</div>`).join('')
+    + (open.length>6 ? `<div class="muted" style="padding-top:4px">+${open.length-6} more</div>` : '');
+}
+function addTask(text){
+  text = (text||'').trim(); if(!text) return;
+  TASKS.unshift({ id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), text: text.slice(0,300), done:false, created:new Date().toISOString() });
+  saveStore(); renderTasks();
+}
+function toggleTask(id){ TASKS = TASKS.map(t=> t.id===id ? {...t, done:!t.done} : t); saveStore(); renderTasks(); }
+
+/* Undo support: snapshot before any removal so an accidental delete/clear is reversible. */
+let undoSnapshot = null, toastTimer = null;
+function showToast(msg, withUndo){
+  const t = $('#toast');
+  t.innerHTML = esc(msg) + (withUndo ? ' <button id="undoBtn">Undo</button>' : '');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.classList.remove('show'); undoSnapshot = null; }, withUndo ? 7000 : 2500);
+  if(withUndo) $('#undoBtn').onclick = ()=>{
+    if(undoSnapshot){ TASKS = undoSnapshot; saveStore(); renderTasks(); }
+    undoSnapshot = null; t.classList.remove('show'); clearTimeout(toastTimer);
+  };
+}
+function deleteTask(id){
+  undoSnapshot = TASKS.slice();
+  TASKS = TASKS.filter(t=> t.id!==id); saveStore(); renderTasks();
+  showToast('Task deleted', true);
+}
+$('#addTask').onclick = ()=>{ addTask($('#newTask').value); $('#newTask').value=''; $('#newTask').focus(); };
 $('#newTask').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#addTask').click(); });
-$('#clearDone').onclick = ()=>taskOp({op:'clearDone'});
+$('#clearDone').onclick = ()=>{
+  const done = TASKS.filter(t=>t.done).length;
+  if(!done){ showToast('No completed tasks to clear', false); return; }
+  undoSnapshot = TASKS.slice();
+  TASKS = TASKS.filter(t=>!t.done); saveStore(); renderTasks();
+  showToast(done+' completed task'+(done>1?'s':'')+' cleared', true);
+};
 $('#taskList').addEventListener('click', e=>{
   const li = e.target.closest('li'); if(!li) return;
   const act = e.target.dataset.act; if(!act) return;
-  taskOp({op:act, id:li.dataset.id});
+  if(act==='toggle') toggleTask(li.dataset.id);
+  else if(act==='delete') deleteTask(li.dataset.id);
 });
+$('#goTodo').onclick = ()=> $('[data-v="todo"]').click();
+
+/* Seed the user's current setup task the first time the app opens */
+function seedTasks(){
+  if(localStorage.getItem('cmd_seeded')) return;
+  localStorage.setItem('cmd_seeded','1');
+  addTask('Add a free Groq API key in Vercel and redeploy to switch the AI on');
+}
 
 /* ── agents feed ── */
 async function loadFeed(){
@@ -367,7 +435,7 @@ async function sendChat(){
 }
 
 /* ── init ── */
-loadStatus(); loadBrief(false); loadTasks();
+seedTasks(); renderTasks(); loadStatus(); loadBrief(false);
 </script>
 </body>
 </html>
