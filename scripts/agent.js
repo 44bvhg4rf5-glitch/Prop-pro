@@ -189,13 +189,14 @@ async function boardReport() {
 
 const ROLES = {
   manager: { fn: managerReport, dir: 'manager', title: '🧭 Manager' },
+  md: { fn: managerReport, dir: 'manager', title: '🏢 Managing Director' },
   research: { fn: researchReport, dir: 'research', title: '🔎 Research' },
   competitor: { fn: competitorReport, dir: 'competitor', title: '🛰️ Competitor watch' },
   content: { fn: contentReport, dir: 'content', title: '✍️ Letter copy' },
   rnd: { fn: rndReport, dir: 'rnd', title: '🧪 R&D' },
   health: { fn: healthReport, dir: 'health', title: '🩺 Health check' },
   security: { fn: securityReport, dir: 'security', title: '🔒 Security' },
-  board: { fn: boardReport, dir: 'board', title: '🏢 Board report' },
+  board: { fn: boardReport, dir: 'board', title: '🏢 Board' },
 };
 const role = ROLES[ROLE] || ROLES.security;
 const out = await role.fn();
