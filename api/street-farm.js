@@ -109,7 +109,12 @@ export default async function handler(req, res) {
     for (const r of byAddr.values()) {
       if (checked >= 60) break; checked++;
       const t = await tenureOf(r.cert, KEY);
-      if (t == null || !RENTED_TENURE.has(t)) continue;
+      // Landlord target = explicitly rented (tenure 2/3) OR a flat that isn't
+      // owner-occupied. The second case catches purpose-built / new-build blocks
+      // whose EPC tenure is "not defined" (lodged at construction) — exactly where
+      // buy-to-let concentrates. Owner-occupied (tenure 1) is always excluded.
+      const isFlat = /\b(flat|apartment|apt|maisonette)\b/i.test(r.full);
+      if (!(RENTED_TENURE.has(t) || (t !== 1 && isFlat))) continue;
       const k = norm(r.full); if (seen.has(k)) continue; seen.add(k);
       const num = ((r.full.match(/\b(\d+[a-z]?)\b/i) || [])[1] || '').toLowerCase();
       if (exN && num === exN && (!wantStreet || r.street.includes(wantStreet))) continue;
