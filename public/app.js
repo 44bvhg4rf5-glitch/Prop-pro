@@ -1381,7 +1381,9 @@ async function runLiveSearch(){
           status: isSale ? 'For Sale' : 'To Let', portal: raw.source || 'Rightmove', portalCls: 'rm',
           agent: raw.agent || '', addedDate: raw.addedDate || '',
           description: '', isLive: true, isRealUrl: !!pid2, selected: true,
-          isNew: false, listedAt: new Date(),
+          // Use the REAL first-listed date for the resolver's marketing-date
+          // signal (a property gets a fresh EPC when it goes on the market).
+          isNew: false, listedAt: raw.firstListed || null, firstListed: raw.firstListed || '',
           rmUrl: raw.url || `https://www.rightmove.co.uk/${rmCh2}/find.html?locationIdentifier=OUTCODE%5E${rmId2}&sortType=6`,
           rmAreaUrl: `https://www.rightmove.co.uk/${rmCh2}/find.html?locationIdentifier=OUTCODE%5E${rmId2}&sortType=6`,
           rmSoldUrl: `https://www.rightmove.co.uk/house-prices/${code.toLowerCase()}.html`,
@@ -1475,7 +1477,7 @@ async function runLiveSearch(){
       // left out of the "found" view entirely (no work for the user).
       const byId = {}; toResolve.forEach(p => { byId[p.id] = p; });
       const payload = toResolve.map(p => ({ id: p.id, displayAddress: p.displayAddress || p.address, type: p.type, lat: p.lat, lon: p.lon, haCode: p.haCode, sizeSqft: p.sizeSqft || 0, url: p.rmUrl || p.portalUrl || p.url || '', listDate: p.listedAt ? new Date(p.listedAt).toISOString() : '' }));
-      const CHUNK = 45; let doneC = 0;
+      const CHUNK = 18; let doneC = 0;   // smaller chunks → fewer simultaneous EPC lookups → type/size signals fire reliably
       for (let c = 0; c < payload.length; c += CHUNK) {
         const chunk = payload.slice(c, c + CHUNK);
         let d = {};
