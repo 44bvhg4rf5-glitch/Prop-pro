@@ -146,34 +146,45 @@ const ROSTER = [
   { role: 'security', does: 'reviews the backend code for security issues', topic: false },
 ];
 
-// Manager — sits above the team. You give it a task; it plans, delegates to the
-// right specialist agents, and (via the workflow) launches them for you.
+// Manager / Managing Director — sits above the team. With a task it plans and
+// delegates for the owner. With NO task (the weekly schedule) it self-directs:
+// reviews the situation and decides what the team should work on this week.
 async function managerReport() {
   const task = (process.env.AGENT_TASK || TOPIC || '').trim();
-  const rosterLines = ROSTER.map((a) => `- **${a.role}** — ${a.does}`).join('\n');
-  if (!task) {
-    return { body: `## No task given yet\n\nRun this agent again and type what you want done in the **task** box. I'll turn it into a plan, assign the right specialist agents and launch them for you.\n\n### The team I manage\n${rosterLines}`, problem: false, dispatch: [] };
-  }
+  const weekly = !task;                                   // no task → autonomous weekly review
+  const context = (process.env.AGENT_CONTEXT || '').slice(0, 4000);
   const roster = ROSTER.map((a) => `- ${a.role}: ${a.does}`).join('\n');
-  const system = "You are the Manager agent for PropMail Pro — you sit above a team of specialist AI agents and turn the owner's request into an actionable plan, delegating to the right agents. Be concise, practical and honest. Assign AT MOST 3 agents, and only the ones BEST SUITED to the request — fewer is better, and one well-chosen agent beats three loosely-related ones. You do not do the specialist work yourself — you plan and delegate. Flag clearly anything only a human developer can do.";
-  const user = `THE OWNER'S REQUEST:\n${task}\n\nYOUR TEAM (you may delegate ONLY to these):\n${roster}\n\nWrite a Markdown plan with these sections:\n## Goal\n(restate what the owner wants, 1-2 lines)\n## Plan\n(numbered steps)\n## Delegation\n(a table: | Agent | What to focus on | — pick ONLY the best-suited agents, AT MOST 3; if one agent covers it, assign just that one)\n## What you'll receive\n(what to expect back, and anything only a human/developer must do)\n\nThen, on the VERY LAST line, output ONLY a fenced JSON object naming which agents to launch NOW (AT MOST 3 — the best-suited only) and the topic to give each, e.g.\n\`\`\`json\n{"dispatch":[{"agent":"research","topic":"..."}]}\n\`\`\`\nUse an empty array if no agent should run automatically. Give a focused topic string to each agent you launch.`;
+  const cap = weekly ? 5 : 3;
+  const system = weekly
+    ? 'You are the Managing Director of PropMail Pro\'s autonomous AI team. Each week you proactively review the business and decide what the team should work on — without being asked. Be decisive, concise and practical. You plan and delegate to your specialist agents (you do not do their work yourself). Flag clearly anything only a human must do.'
+    : "You are the Manager agent for PropMail Pro — you turn the owner's request into an actionable plan and delegate to the right agents. Be concise, practical and honest. Assign AT MOST 3 agents, only the best-suited. You plan and delegate; flag anything only a human developer can do.";
+  const user = weekly
+    ? `WEEKLY PLANNING MEETING — ${today}. Set this week's priorities for PropMail Pro (a UK estate-agent address-intelligence tool) and delegate the work to your team.\n\n${context ? 'RECENT ACTIVITY / SITUATION:\n' + context + '\n\n' : ''}YOUR TEAM (delegate ONLY to these):\n${roster}\n\nWrite a Markdown plan:\n## This week's focus\n(2-4 priorities, informed by the situation above)\n## Delegation\n(table: | Agent | What to focus on this week | — choose the agents that matter this week, up to 5)\n## Watch / risks\n(what to keep an eye on; anything only a human must do)\n\nThen, on the VERY LAST line, output ONLY a fenced JSON object of who to launch now, e.g.\n\`\`\`json\n{"dispatch":[{"agent":"research","topic":"..."}]}\n\`\`\``
+    : `THE OWNER'S REQUEST:\n${task}\n\nYOUR TEAM (delegate ONLY to these):\n${roster}\n\nWrite a Markdown plan:\n## Goal\n## Plan\n## Delegation\n(table: | Agent | What to focus on | — AT MOST 3 best-suited)\n## What you'll receive\n\nThen, on the VERY LAST line, output ONLY a fenced JSON object naming who to launch now (AT MOST 3), e.g.\n\`\`\`json\n{"dispatch":[{"agent":"research","topic":"..."}]}\n\`\`\``;
   const r = await runLLM({ system, user, maxTokens: 2200 });
   if (r.error) return { body: `**The manager could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)`, problem: false, dispatch: [] };
   const parsed = extractJson(r.text) || {};
   const valid = new Set(ROSTER.map((a) => a.role));
   const seen = new Set();
-  // Keep only known agents, drop duplicates, and hard-cap at the 3 best the
-  // Manager chose — so one broad request can never drain the free AI budget.
   const dispatch = (Array.isArray(parsed.dispatch) ? parsed.dispatch : [])
     .map((d) => ({ agent: String((d && d.agent) || '').toLowerCase().trim(), topic: String((d && d.topic) || '').slice(0, 300) }))
     .filter((d) => valid.has(d.agent) && !seen.has(d.agent) && seen.add(d.agent))
-    .slice(0, 3);
-  // Strip the trailing JSON block so the human-readable plan stays clean.
+    .slice(0, cap);
   let body = stripPreamble(r.text).replace(/```json[\s\S]*?```\s*$/, '').trim();
   const queued = dispatch.length
     ? `\n\n---\n🚀 **Launching now:** ${dispatch.map((d) => '`' + d.agent + '`').join(', ')} — each will reply in this thread shortly.`
-    : '\n\n---\n_No agent was auto-launched for this task — see the plan above for what needs doing._';
-  return { body: `${body}${queued}\n\n_Managed by: ${r.provider || 'AI'}_`, problem: false, dispatch };
+    : '\n\n---\n_No agent was auto-launched._';
+  return { body: `${body}${queued}\n\n_${weekly ? 'Managing Director (autonomous weekly review)' : 'Managed by'}: ${r.provider || 'AI'}_`, problem: false, dispatch };
+}
+
+// Board report — the weekly chief-of-staff digest. Reads what the team produced
+// this week (passed in as AGENT_CORPUS) and compiles ONE exec briefing.
+async function boardReport() {
+  const corpus = (process.env.AGENT_CORPUS || '').slice(0, 12000);
+  const system = "You are the Chief of Staff for PropMail Pro's AI team. Compile the week's specialist reports into ONE concise board-level briefing for the owner/investor. Be honest and specific, pull out what actually matters, separate fact from recommendation, and don't pad.";
+  const user = `THIS WEEK'S TEAM REPORTS:\n${corpus || '(No reports were captured this week.)'}\n\nWrite a Markdown board report:\n## The week in one line\n## What the team found & did\n(grouped by area — research, competitor, R&D, ops/health, security)\n## Recommended decisions for the owner\n## Watch list`;
+  const r = await runLLM({ system, user, maxTokens: 2200 });
+  return r.error ? `**The board report could not run:** ${r.error}\n\n(Check the GROQ_API_KEY secret is set on the repo.)` : `${stripPreamble(r.text)}\n\n_Compiled by: ${r.provider || 'AI'}_`;
 }
 
 const ROLES = {
@@ -184,6 +195,7 @@ const ROLES = {
   rnd: { fn: rndReport, dir: 'rnd', title: '🧪 R&D' },
   health: { fn: healthReport, dir: 'health', title: '🩺 Health check' },
   security: { fn: securityReport, dir: 'security', title: '🔒 Security' },
+  board: { fn: boardReport, dir: 'board', title: '🏢 Board report' },
 };
 const role = ROLES[ROLE] || ROLES.security;
 const out = await role.fn();

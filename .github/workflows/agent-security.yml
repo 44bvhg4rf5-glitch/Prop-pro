@@ -3,8 +3,7 @@ name: Security agent
 # Runs a security review of the backend on a schedule (and on demand), then
 # posts the findings to you as a GitHub Issue. Free: uses GitHub Actions + Groq.
 on:
-  schedule:
-    - cron: '0 9 * * 1'        # every Monday 09:00 UTC (staggered after Research + Competitor to avoid AI rate limits)
+  # No standalone schedule — the Managing Director dispatches this weekly.
   workflow_dispatch:
     inputs:
       issue:

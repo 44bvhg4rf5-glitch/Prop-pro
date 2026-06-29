@@ -3,8 +3,7 @@ name: Letter copy
 # Writes three fresh, ready-to-post prospecting letter templates and posts them
 # as a GitHub Issue so there's always new copy to send. Free: GitHub Actions + Groq.
 on:
-  schedule:
-    - cron: '0 7 * * 3'        # every Wednesday 07:00 UTC
+  # No standalone schedule — the Managing Director dispatches this weekly.
   workflow_dispatch:
     inputs:
       topic:

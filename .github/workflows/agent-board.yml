@@ -1,0 +1,52 @@
+name: Board report (weekly)
+
+# The chief-of-staff digest. Every Friday it reads what the team produced this
+# week and compiles ONE board-level briefing for the owner, then archives it to
+# the repo (the org's memory — and the weekly commit keeps the schedules alive).
+on:
+  schedule:
+    - cron: '0 16 * * 5'       # every Friday 16:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: write              # to commit the report archive
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gather this week's team reports (issues from the last 7 days)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          since=$(date -d '7 days ago' +%F)
+          corpus=$(gh issue list --state all --limit 40 --search "created:>=$since" --json title,body \
+                   --jq '.[] | "### " + .title + "\n" + ((.body // "")[0:1200])' 2>/dev/null || true)
+          {
+            echo "AGENT_CORPUS<<EOF"
+            echo "$corpus"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+      - name: Compile the board report
+        id: agent
+        env:
+          AGENT_ROLE: board
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/agent.js
+      - name: Post the board report as an issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue create --title "${{ steps.agent.outputs.report_title }}" --body-file "${{ steps.agent.outputs.report_file }}"
+      - name: Archive to the repo (memory + keeps the schedules alive)
+        run: |
+          git config user.name "PropMail AI"
+          git config user.email "actions@users.noreply.github.com"
+          git add reports/ || true
+          git commit -m "Weekly board report archive" || { echo "nothing to commit"; exit 0; }
+          git push || echo "::warning::archive push failed (non-fatal)"
