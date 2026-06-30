@@ -148,6 +148,17 @@ export default async function handler(req, res) {
   const u = new URL(req.url, 'http://localhost');
   const OS_KEY = process.env.OS_PLACES_KEY || '';
 
+  // Temp diagnostic: does the EPC domestic search expose a tenure field?
+  if (u.searchParams.get('epcfields')) {
+    const k = process.env.EPC_API_KEY || '';
+    if (!k) { sendJson(res, 200, { epcKey: false }); return; }
+    const url = `${EPC_BASE}/api/domestic/search?postcode=HA1+4HZ&page_size=3`;
+    const { status, json } = await fetchJson(url, k);
+    const row = (json && json.data && json.data[0]) || {};
+    sendJson(res, 200, { status, keys: Object.keys(row), tenure: row.tenure, sampleTenures: (json && json.data || []).map((r) => r.tenure) });
+    return;
+  }
+
   // Autocomplete suggestions — handled first (fires per keystroke, so no
   // blocklist/Redis lookup here; keep it fast and light).
   const suggest = u.searchParams.get('suggest');
