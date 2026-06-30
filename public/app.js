@@ -598,11 +598,10 @@ function saveBrand(b){ try { localStorage.setItem('pmBrand', JSON.stringify(b));
 function renderLetterHTML(builtText, prop){
   const b = getBrand();
   const e = (s) => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  // Letterhead: logo image if uploaded, else the company name in the brand colour.
-  let head = "";
-  if (b.logoImg) head = '<img class="lh-logo" src="' + b.logoImg + '" alt="">';
-  else if (b.companyName) head = '<div class="lh-name" style="color:' + (b.brandColor||"#1d4ed8") + '">' + e(b.companyName) + '</div>';
-  if (b.tagline) head += '<div class="lh-tag" style="color:' + (b.brandColor||"#1d4ed8") + '">' + e(b.tagline) + '</div>';
+  // The company name, tagline, footer line and website are already pre-printed on
+  // the letterhead stationery, so they are NOT rendered here (no duplication).
+  // Only an optional uploaded logo prints at the top.
+  let head = b.logoImg ? '<img class="lh-logo" src="' + b.logoImg + '" alt="">' : "";
   // Recipient address block + "RE:" subject line, built from the property.
   const A = letterAddress(prop || {});
   const today = new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
@@ -616,12 +615,11 @@ function renderLetterHTML(builtText, prop){
   // Sign-off - British convention: "sincerely" when addressed by name, else
   // "faithfully" for a generic recipient (Homeowner / Landlord).
   const signoff = '<div class="lh-signoff">' + (getOwnerName(prop || {}) ? "Yours sincerely," : "Yours faithfully,") + '</div>';
-  const sigLines = [ b.signatoryName ? "<strong>" + e(b.signatoryName) + "</strong>" : "", e(b.signatoryTitle), e(b.companyName), e(b.contactAddress), e(b.phone), e(b.email) ].filter(Boolean).join("<br>");
+  // Signature: name, title, then contact details (company name omitted — it's on
+  // the pre-printed stationery).
+  const sigLines = [ b.signatoryName ? "<strong>" + e(b.signatoryName) + "</strong>" : "", e(b.signatoryTitle), e(b.contactAddress), e(b.phone), e(b.email) ].filter(Boolean).join("<br>");
   const sigBlock = '<div class="lh-sign">' + (b.signatureImg ? '<img class="lh-sigimg" src="' + b.signatureImg + '" alt="">' : "") + (sigLines ? '<div class="lh-sig-lines">' + sigLines + "</div>" : "") + "</div>";
-  const footer = (b.footerText || b.website)
-    ? '<div class="lh-foot"><div class="lh-foot-text">' + e(b.footerText) + "</div>" + (b.website ? '<div class="lh-foot-web">' + e(b.website) + "</div>" : "") + "</div>"
-    : "";
-  return '<div class="letter-page"><div class="lh-head">' + head + "</div>" + toBlock + dateBlock + greet + reBlock + bodyHtml + signoff + sigBlock + footer + "</div>";
+  return '<div class="letter-page"><div class="lh-head">' + head + "</div>" + toBlock + dateBlock + greet + reBlock + bodyHtml + signoff + sigBlock + "</div>";
 }
 
 function doPrint(content, prop){
@@ -917,19 +915,19 @@ function prevForProp(i){
 /* ── Branding form (Letter Templates panel) ── */
 function loadBrandForm(){
   const b=getBrand(); const set=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||'';};
-  set('br-name',b.companyName); set('br-tag',b.tagline); set('br-signame',b.signatoryName); set('br-sigtitle',b.signatoryTitle);
-  set('br-addr',b.contactAddress); set('br-phone',b.phone); set('br-email',b.email); set('br-footer',b.footerText); set('br-web',b.website);
-  const col=document.getElementById('br-color'); if(col) col.value=b.brandColor||'#1d4ed8';
+  set('br-signame',b.signatoryName); set('br-sigtitle',b.signatoryTitle);
+  set('br-addr',b.contactAddress); set('br-phone',b.phone); set('br-email',b.email);
   const sp=document.getElementById('br-sig-prev'); if(sp) sp.innerHTML=b.signatureImg?'<img src="'+b.signatureImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No signature yet</span>';
-  const lp=document.getElementById('br-logo-prev'); if(lp) lp.innerHTML=b.logoImg?'<img src="'+b.logoImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No logo — company name is used</span>';
+  const lp=document.getElementById('br-logo-prev'); if(lp) lp.innerHTML=b.logoImg?'<img src="'+b.logoImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No logo (optional)</span>';
   renderBrandPreview();
 }
 function saveBrandFromForm(){
   const b=getBrand(); const g=id=>(document.getElementById(id)||{}).value||'';
-  b.companyName=g('br-name').trim(); b.tagline=g('br-tag').trim(); b.brandColor=g('br-color')||'#1d4ed8';
   b.signatoryName=g('br-signame').trim(); b.signatoryTitle=g('br-sigtitle').trim(); b.contactAddress=g('br-addr').trim();
-  b.phone=g('br-phone').trim(); b.email=g('br-email').trim(); b.footerText=g('br-footer').trim(); b.website=g('br-web').trim();
-  if(saveBrand(b)) toast('Letterhead saved — it’s now on every letter','ok');
+  b.phone=g('br-phone').trim(); b.email=g('br-email').trim();
+  // These live on the pre-printed letterhead, so clear any previously-saved values.
+  b.companyName=''; b.tagline=''; b.footerText=''; b.website='';
+  if(saveBrand(b)) toast('Signature saved — it’s now on every letter','ok');
   renderBrandPreview();
 }
 function brandImg(input,key){
