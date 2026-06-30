@@ -2,6 +2,7 @@ import https from 'https';
 import { EPC_BASE, fetchJson, sendJson, guardOrigin } from '../lib/helpers.js';
 import { getBlocklist, buildMatcher, isSuppressed } from '../lib/blocklist.js';
 import { freeAddressesForPostcode, freeAddressesForArea, freeAddressesForStreet } from '../lib/freeAddresses.js';
+import { streetIntel } from '../lib/streetIntel.js';
 
 export const config = { maxDuration: 60 }; // area / street scans hit several postcodes
 
@@ -186,8 +187,10 @@ export default async function handler(req, res) {
     const areaToken = prefix || parts.slice(1).join(', ') || 'Harrow';
     const r = await freeAddressesForStreet(roadName, areaToken, { epcKey: process.env.EPC_API_KEY || '' });
     const addresses = filterByType(cleanAddresses(r.addresses).filter(notBlocked), types);
+    let intel = null;
+    if (addresses.length) { try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix }); } catch { /* intel is best-effort */ } }
     sendJson(res, 200, {
-      street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [],
+      street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], intel,
       note: addresses.length
         ? `${addresses.length} homes across ${(r.postcodes || []).length} postcode(s)${prefix ? ' in ' + prefix : ''}, from the free Council Tax register.`
         : `No matching addresses — include the town or a postcode (e.g. "${roadName}, Harrow" or "${roadName} HA1").`,
@@ -234,8 +237,10 @@ export default async function handler(req, res) {
       if (isFull) {
         const list = await freeAddressesForPostcode(postcode, { epcKey });
         const addresses = filterByType(cleanAddresses(list).filter(notBlocked), types);
+        let intel = null;
+        if (addresses.length) { try { intel = await streetIntel({ streetName: '', postcodes: [postcode], homes: addresses.length }); } catch { /* best-effort */ } }
         sendJson(res, 200, {
-          postcode, source: 'Council Tax register' + (epcKey ? ' + EPC' : ''), total: addresses.length, addresses,
+          postcode, source: 'Council Tax register' + (epcKey ? ' + EPC' : ''), total: addresses.length, addresses, intel,
           note: addresses.length ? undefined : 'No dwellings listed at this postcode on the Council Tax register.',
         });
         return;

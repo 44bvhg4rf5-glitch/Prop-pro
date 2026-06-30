@@ -6481,7 +6481,7 @@ async function doPostcodeLookup(postcodes){
 
   const allResults = [];
   let residential=0, commercial=0;
-  let liveCount=0, lastSource='';
+  let liveCount=0, lastSource='', lastIntel=null;
 
   for(let pi=0; pi<postcodes.length; pi++){
     const pc = postcodes[pi].trim().toUpperCase();
@@ -6499,6 +6499,7 @@ async function doPostcodeLookup(postcodes){
         const list = Array.isArray(data.addresses) ? data.addresses : [];
         if(list.length){
           lastSource = data.source || lastSource;
+          if(data.intel) lastIntel = data.intel;
           foundAddresses = list.map((a,i)=>{
             const type = a.type === 'Commercial' ? 'Commercial' : 'Residential';
             const line1 = a.line1 || (a.fullAddress||'').split(',')[0] || '';
@@ -6547,12 +6548,29 @@ async function doPostcodeLookup(postcodes){
     allResults.push(...foundAddresses);
   }
 
-  finishAddressLookup(allResults, lastSource, liveCount);
+  finishAddressLookup(allResults, lastSource, liveCount, lastIntel);
 }
 
 // Shared finish step for postcode/batch/street lookups: hide commercial,
 // reveal the results UI, populate counters, render and scroll into view.
-function finishAddressLookup(rawResults, lastSource, liveCount){
+// Market-intelligence banner above the results: homes on the street, licensed-
+// rental density and recent sales turnover, with a landlord-vs-vendor steer.
+function renderStreetIntel(intel){
+  const card=document.getElementById('addr-results-card');
+  let el=document.getElementById('sl-intel');
+  if(!intel || !card){ if(el) el.style.display='none'; return; }
+  if(!el){ el=document.createElement('div'); el.id='sl-intel'; el.className='card'; el.style.cssText='padding:14px 16px;margin-bottom:12px'; card.parentNode.insertBefore(el, card); }
+  el.style.display='';
+  const col = intel.focus==='landlord' ? '#6b1fa0' : intel.focus==='vendor' ? '#1E6FD9' : '#059669';
+  const chip=(t)=>`<span style="display:inline-block;font-size:11.5px;font-weight:600;color:var(--text2);background:var(--slate,#f1f5f9);border:1px solid var(--border);border-radius:20px;padding:3px 11px">${esc(t)}</span>`;
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px">
+      <span style="font-size:13px;font-weight:800;color:${col}"><i class=ic-chart></i> Street snapshot</span>
+      ${(intel.lines||[]).map(chip).join('')}
+    </div>
+    <div style="font-size:13px;color:var(--text);font-weight:600">${esc(intel.verdict||'')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:5px">Rentals = licensed lets on the public register (a minimum — unlicensed lets aren’t counted). Sales = Land Registry, last 5 years.</div>`;
+}
+function finishAddressLookup(rawResults, lastSource, liveCount, intel){
   // The backend already filtered by the chosen property type; here we just
   // strip any do-not-mail addresses (belt-and-braces, and covers this-device mode).
   let allResults = rawResults.filter(a=>!isBlockedAddr(a));
@@ -6574,6 +6592,7 @@ function finishAddressLookup(rawResults, lastSource, liveCount){
   // ── Reveal the results UI (these cards start hidden) ──
   const show = (id)=>{ const el=document.getElementById(id); if(el) el.style.display=''; };
   show('pc-stats'); show('letter-chooser'); show('addr-results-card');
+  renderStreetIntel(intel);
 
   // Hide the now-unused Commercial stat tile.
   const comTile = document.getElementById('ss-com');
@@ -6619,7 +6638,7 @@ async function doStreetLookup(street){
   setStage(1);
   showPCStatus('scanning',`Searching "${street}"…`,10,'Finding every address on this street…');
 
-  const allResults=[]; let lastSource='';
+  const allResults=[]; let lastSource=''; let intel=null;
   try{
     setStage(2);
     const resp = await fetch(`/api/addresses?street=${encodeURIComponent(street)}&types=${slTypes()}`);
@@ -6627,6 +6646,7 @@ async function doStreetLookup(street){
       const data = await resp.json();
       const list = Array.isArray(data.addresses) ? data.addresses : [];
       lastSource = data.source || '';
+      intel = data.intel || null;
       list.forEach((a,i)=>{
         const type = a.type === 'Commercial' ? 'Commercial' : 'Residential';
         const line1 = a.line1 || (a.fullAddress||'').split(',')[0] || '';
@@ -6650,7 +6670,7 @@ async function doStreetLookup(street){
     blog(`Street search error — ${e.message}`,'warn');
   }
 
-  finishAddressLookup(allResults, lastSource, allResults.length);
+  finishAddressLookup(allResults, lastSource, allResults.length, intel);
 }
 
 /* ═══════════════════════════════════════════
