@@ -1,6 +1,9 @@
 import https from 'https';
 import { sendJson, guardOrigin, reverseGeocode, EPC_BASE, fetchJson } from '../lib/helpers.js';
 import { councilTaxAddresses } from '../lib/counciltax.js';
+import { hmoLookup } from '../lib/hmo.js';
+
+const COMPANY = /\b(ltd|limited|llp|plc|properties|property|developments?|estates?|holdings?|management|homes|investments?|lettings?|group)\b/i;
 
 export const config = { maxDuration: 45 };
 
@@ -118,7 +121,10 @@ export default async function handler(req, res) {
       const k = norm(r.full); if (seen.has(k)) continue; seen.add(k);
       const num = ((r.full.match(/\b(\d+[a-z]?)\b/i) || [])[1] || '').toLowerCase();
       if (exN && num === exN && (!wantStreet || r.street.includes(wantStreet))) continue;
-      neighbours.push({ address: r.full, postcode: r.postcode, addressee: 'The Landlord' });
+      // Free named-landlord enrichment from the licence register (no extra calls).
+      const lic = hmoLookup(r.full, r.postcode);
+      const holder = (lic && lic.h) || '';
+      neighbours.push({ address: r.full, postcode: r.postcode, addressee: 'The Landlord', holder, company: holder ? COMPANY.test(holder) : false, licence: lic ? lic.label : '' });
     }
   } else {
     // Homeowner farm — every dwelling on the street from Council Tax.

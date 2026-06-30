@@ -67,7 +67,14 @@ let templates = [
   {id:'cash',name:'Cash Buyer Offer',desc:'Investor / cash buyer outreach',
    body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Property Owner,\n\nI am reaching out about your property in {{district}}.\n\nWe are cash buyers with funds immediately available, looking to acquire properties across the HA postcode area. We can move quickly, complete on your timeline, and require no mortgage approvals.\n\nIf you would consider a no-obligation cash offer, we would love to hear from you.\n\nYours faithfully,\n\n[Your Name]\n[Company Name]`},
   {id:'sold',name:'Sold in Your Street',desc:'After a nearby sale (Land Registry)',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\nWe have just sold a property in your street and have buyers still looking in {{district}}.\n\nThe sale generated strong interest, and several of our registered buyers missed out — they remain keen to purchase in your immediate area.\n\nIf you have ever wondered what your home might be worth in today's market, we would be glad to provide a free, no-obligation valuation.\n\nYours sincerely,\n\n[Your Name]\n[Company Name]\n[Phone] | [Email]`}
+   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\nWe have just sold a property in your street and have buyers still looking in {{district}}.\n\nThe sale generated strong interest, and several of our registered buyers missed out — they remain keen to purchase in your immediate area.\n\nIf you have ever wondered what your home might be worth in today's market, we would be glad to provide a free, no-obligation valuation.\n\nYours sincerely,\n\n[Your Name]\n[Company Name]\n[Phone] | [Email]`},
+  // ── Landlord touting sequence (rentals) — touch 1/2/3 ──
+  {id:'let-t1',name:'Landlord — Just Let Nearby (Touch 1)',desc:'Rentals: after a nearby let',
+   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nWe have just let a property close to {{street}} — at full asking rent and within days — and we still have referenced tenants actively looking in {{district}}.\n\nIf your property is coming up for renewal, sitting empty between tenancies, or you are simply not getting the service you should from your current agent, we would be glad to offer a free, no-obligation rental valuation.\n\nWe handle everything — marketing, accompanied viewings, referencing and full management — and we know exactly what {{district}} tenants will pay.\n\nPlease call and quote {{code}}.\n\nKind regards,\n\n[Your Name]\n[Letting Agency]\n[Phone] | [Email]`},
+  {id:'let-t2',name:'Landlord — Tenants Waiting (Touch 2)',desc:'Rentals: 2-week follow-up',
+   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nI wrote recently about lettings on {{street}}. I wanted to follow up because we still have referenced tenants waiting for the right property in {{district}}, and good stock is in short supply.\n\nIf you would consider letting or switching management, a quick call could be worth a great deal in achievable rent and fewer void days. The valuation is free and there is no obligation.\n\nPlease call and quote {{code}}.\n\nKind regards,\n\n[Your Name]\n[Letting Agency]\n[Phone] | [Email]`},
+  {id:'let-t3',name:'Landlord — Renters’ Rights Review (Touch 3)',desc:'Rentals: 4-week follow-up (compliance angle)',
+   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nThe Renters' Rights Act has changed the rules for landlords — from how tenancies end to compliance and notice periods. Many landlords near {{street}} are reviewing their options.\n\nWe are offering local landlords a free, no-obligation review: a current rental valuation plus a plain-English summary of what the changes mean for your property. Whether you let with us or not, you will come away clearer.\n\nPlease call and quote {{code}}.\n\nKind regards,\n\n[Your Name]\n[Letting Agency]\n[Phone] | [Email]`}
 ];
 
 /* ═══════════════════════════════════════════
@@ -360,7 +367,9 @@ function buildLetter(body,p){
     .replace(/\{\{bedrooms\}\}/g,p.beds===0?'Studio':p.beds)
     .replace(/\{\{name\}\}/g,owner||'Homeowner')
     .replace(/\{\{ownerName\}\}/g,owner||'Homeowner')
-    .replace(/\{\{type\}\}/g,p.type);
+    .replace(/\{\{type\}\}/g,p.type)
+    .replace(/\{\{code\}\}/g,p.quoteCode||'')
+    .replace(/\{\{street\}\}/g,(_addr.split(',')[0]||'').replace(/^(the (landlord|homeowner)|[\w'&. ]+),\s*/i,'').replace(/^\d+[a-z]?\s+/i,''));
   return applyOwnerSalutation(out, owner);
 }
 /* ── Valuation leads (from the public landing page) ── */
@@ -2407,16 +2416,18 @@ async function offmarketAction(i, btn){
     const r=await fetch('/api/street-farm?'+qs.toString());
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ toast('Could not farm street: '+(d.error||r.status),'warn'); if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-mailbox></i> '+(OM_STYLE[x.reason].btn);} return; }
-    const who=audience==='landlord'?'The Landlord':'The Homeowner';
-    const src=audience==='landlord'?'Off-market let — landlord farm':'Off-market sold — street farm';
-    let n=0;
-    (d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(x.addr)).forEach(c=>{
-      const toAddr=who+', '+c.address;
-      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:c.postcode||x.postcode||'', district:x.district, haCode:x.district, type:'Property', beds:0, addressee:who, addressConfirmed:true, addressSource:src, portal:'Off-Market', source:src, isRealUrl:false, rmUrl:'' };
-      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false }); if(typeof logContact==='function') logContact(prop, tpl, src); n++;
-    });
-    if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
-    toast(n?('<i class=ic-mailbox></i> Queued '+n+' '+who+' letters near '+street):'No targets found on that street', n?'ok':'warn');
+    const neighbours=(d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(x.addr));
+    let n=0,extra='';
+    if(audience==='landlord'){
+      const r2=queueLandlordList(neighbours, x.district, 'Off-market let — landlord farm'); n=r2.n; if(r2.named) extra=' · '+r2.named+' named'+(r2.co?', '+r2.co+' companies':'');
+    } else {
+      const src='Off-market sold — street farm';
+      const stpl=[...templates,...(uploadedTpls||[])].find(t=>/sold/i.test(t.name))||templates[0];
+      neighbours.forEach(c=>{ const toAddr='The Homeowner, '+c.address; const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:c.postcode||x.postcode||'', district:x.district, haCode:x.district, type:'Property', beds:0, addressee:'The Homeowner', quoteCode:'SOLD-'+(x.district||'HA'), addressConfirmed:true, addressSource:src, portal:'Off-Market', source:src, isRealUrl:false, rmUrl:'' }; queue.push({ id:Date.now()+Math.random(), prop, tpl:stpl, status:'pend', at:new Date(), auto:false }); if(typeof logContact==='function') logContact(prop, stpl, src); n++; });
+      if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
+    }
+    const who=audience==='landlord'?'landlord':'homeowner';
+    toast(n?('<i class=ic-mailbox></i> Queued '+n+' '+who+' letters near '+street+extra):'No targets found on that street', n?'ok':'warn');
   }catch(e){ toast('Could not farm street: '+e.message,'warn'); }
   if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> '+(OM_STYLE[x.reason].btn); }
 }
@@ -2520,17 +2531,18 @@ async function farmFromLead(i, btn){
     const r = await fetch('/api/street-farm?'+qs.toString());
     const d = await r.json().catch(()=>({}));
     if(!r.ok){ toast('Could not farm street: '+(d.error||r.status),'warn'); }
-    const who = audience==='landlord'?'The Landlord':'The Homeowner';
     const src = 'Touting · '+((TT_STYLE[x.signal]||{}).label||x.signal)+' (street)';
-    const tpl = [...templates,...(uploadedTpls||[])][0] || templates[0];
-    let n=0;
-    (d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(x.addr)).forEach(c=>{
-      const toAddr=who+', '+c.address;
-      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:c.postcode||x.postcode||'', district:x.district, haCode:x.district, type:'Property', beds:0, addressee:who, addressConfirmed:true, addressSource:src, portal:'Touting', source:src, isRealUrl:false, rmUrl:'' };
-      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false }); if(typeof logContact==='function') logContact(prop, tpl, src); n++;
-    });
-    if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
-    toast(n?('<i class=ic-mailbox></i> Queued '+n+' '+who+' letters near '+street):'No targets found on that street', n?'ok':'warn');
+    const neighbours=(d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(x.addr));
+    let n=0,extra='';
+    if(audience==='landlord'){
+      const r2=queueLandlordList(neighbours, x.district, src); n=r2.n; if(r2.named) extra=' · '+r2.named+' named'+(r2.co?', '+r2.co+' companies':'');
+    } else {
+      const tpl=[...templates,...(uploadedTpls||[])].find(t=>/sold/i.test(t.name))||templates[0];
+      neighbours.forEach(c=>{ const toAddr='The Homeowner, '+c.address; const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:c.postcode||x.postcode||'', district:x.district, haCode:x.district, type:'Property', beds:0, addressee:'The Homeowner', quoteCode:'SOLD-'+(x.district||'HA'), addressConfirmed:true, addressSource:src, portal:'Touting', source:src, isRealUrl:false, rmUrl:'' }; queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false }); if(typeof logContact==='function') logContact(prop, tpl, src); n++; });
+      if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
+    }
+    const who = audience==='landlord'?'landlord':'homeowner';
+    toast(n?('<i class=ic-mailbox></i> Queued '+n+' '+who+' letters near '+street+extra):'No targets found on that street', n?'ok':'warn');
   }catch(e){ toast('Could not farm street: '+e.message,'warn'); }
   if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-flame></i> Farm street'; }
 }
@@ -2659,7 +2671,7 @@ async function queueStreetLetters(i, btn){
       const toAddr='The Homeowner, '+c.address;
       const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr,
         postcode:c.postcode||s.postcode, district:s.district, haCode:s.district, type:'Property', beds:0,
-        addressee:'The Homeowner', addressConfirmed:true, addressSource:'Council Tax (street farm)',
+        addressee:'The Homeowner', quoteCode:'SOLD-'+(s.district||s.haCode||'HA'), addressConfirmed:true, addressSource:'Council Tax (street farm)',
         portal:'Sold Board', source:'Sold in street', isRealUrl:true,
         rmUrl:'https://www.rightmove.co.uk/house-prices/'+encodeURIComponent(s.postcode)+'.html',
         soldRef:s.fullAddress, soldPrice:s.price };
@@ -2707,6 +2719,38 @@ function renderLet(){
     +'</div>';
   }).join('');
 }
+// ── Shared landlord-letter helpers (rentals) ──
+// Touch-1 landlord template (falls back to any landlord/let template).
+function letTpl(){ const all=[...templates,...(uploadedTpls||[])]; return all.find(t=>t.id==='let-t1') || all.find(t=>/let|landlord|rent/i.test(t.name)) || templates[0]; }
+const LL_CO=/\b(ltd|limited|llp|plc|properties|property|developments?|estates?|holdings?|homes|investments?|lettings?|group|management)\b/i;
+// Build a queued letter for one farmed landlord. Companies are addressed + greeted
+// by name (B2B, low risk); named individuals keep "The Landlord" on the letter but
+// the name is stored for phone follow-up. A quote code is stamped for attribution.
+function landlordProp(c, district, srcLabel){
+  const dist=district||c.district||'';
+  const isCo=!!c.company || LL_CO.test(c.holder||'');
+  const who=(isCo && c.holder)?c.holder:'The Landlord';
+  const toAddr=who+', '+c.address;
+  return { address:toAddr, displayAddress:toAddr, fullAddress:toAddr,
+    postcode:c.postcode||'', district:dist, haCode:dist, type:'Property', beds:0,
+    addressee:who, ownerName:(isCo?c.holder:''), landlordName:c.holder||'', licence:c.licence||'',
+    quoteCode:'LET-'+(dist||'HA'),
+    addressConfirmed:true, addressSource:'Landlord farm', portal:'Let Board',
+    source:srcLabel||(isCo?'Landlord — company':'Landlord — street'), isRealUrl:false, rmUrl:'' };
+}
+function queueLandlordList(neighbours, district, srcLabel){
+  const tpl=letTpl(); let n=0,named=0,co=0;
+  (neighbours||[]).forEach(c=>{
+    const prop=landlordProp(c, district, srcLabel);
+    if(prop.landlordName) named++; if(prop.ownerName) co++;
+    queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false });
+    if(typeof logContact==='function') logContact(prop, tpl, prop.source); n++;
+  });
+  if(typeof updQBadge==='function') updQBadge();
+  if(typeof updQStats==='function') updQStats();
+  if(typeof updateKPIs==='function') updateKPIs();
+  return { n, named, co };
+}
 async function queueLandlordStreet(i, btn){
   const s=letItems[i]; if(!s) return;
   if(btn){ btn.disabled=true; btn.textContent='Finding landlords…'; }
@@ -2718,22 +2762,9 @@ async function queueLandlordStreet(i, btn){
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ toast('Could not find landlords: '+(d.error||r.status),'warn'); if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter landlords nearby'; } return; }
     const neighbours=(d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(s.displayAddress||s.address));
-    const tpl=[...templates,...(uploadedTpls||[])].find(t=>/let|landlord|rent/i.test(t.name)) || templates[0];
-    let n=0;
-    neighbours.forEach(c=>{
-      const toAddr='The Landlord, '+c.address;
-      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr,
-        postcode:c.postcode||s.postcode||'', district:s.haCode, haCode:s.haCode, type:'Property', beds:0,
-        addressee:'The Landlord', addressConfirmed:true, addressSource:'EPC tenure (landlord farm)',
-        portal:'Let Board', source:'Let in street', isRealUrl:!!s.url, rmUrl:s.url||'',
-        letRef:s.displayAddress||s.address };
-      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false, sold:false });
-      if(typeof logContact==='function') logContact(prop, tpl, 'Let in street'); n++;
-    });
-    if(typeof updQBadge==='function') updQBadge();
-    if(typeof updQStats==='function') updQStats();
-    if(typeof updateKPIs==='function') updateKPIs();
-    toast(n?('<i class=ic-mailbox></i> Queued '+n+' landlord letters near '+street):'No rented homes found on that street (no EPC tenure match)', n?'ok':'warn');
+    const {n,named,co}=queueLandlordList(neighbours, s.haCode, 'Let in street');
+    const xtra=named?(' · '+named+' named'+(co?', '+co+' companies':'')):'';
+    toast(n?('<i class=ic-mailbox></i> Queued '+n+' landlord letters near '+street+xtra):'No rented homes found on that street (no EPC tenure match)', n?'ok':'warn');
   }catch(e){ toast('Could not fetch landlords: '+e.message,'warn'); }
   if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> Letter landlords nearby'; }
 }
