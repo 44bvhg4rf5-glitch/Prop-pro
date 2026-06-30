@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const district = (u.searchParams.get('district') || '').toUpperCase();
   const postcode = (u.searchParams.get('postcode') || '').trim();
   const line1 = (u.searchParams.get('line1') || '').trim();
-  const note = 'HMO licence registers are public under s.232 Housing Act 2004. Published for licensing transparency, NOT marketing — keep mail property-addressed ("The Landlord") and confirm a lawful basis before naming an individual.';
+  const note = 'Private-rented-sector licence registers (selective + HMO) are public under s.232 Housing Act 2004 — the licence holder is the landlord. Published for licensing transparency, NOT marketing — keep mail property-addressed ("The Landlord") and confirm a lawful basis before naming an individual.';
 
   if (postcode || line1) {
     const hit = hmoLookup(line1, postcode);
