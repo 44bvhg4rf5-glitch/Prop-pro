@@ -1244,6 +1244,52 @@ async function webAddrSearch(){
   }catch(e){ box.innerHTML='<div style="color:var(--amber);font-size:13px">'+esc(e.message)+'</div>'; }
   finally{ if(btn){btn.disabled=false;btn.textContent='Search the web';} }
 }
+// ── Photo-based address finder: read a listing's photos → pin the exact house ──
+async function photoFind(){
+  const url=(document.getElementById('pa-url').value||'').trim();
+  if(!/rightmove\.co\.uk\/properties\//i.test(url)){ toast('Paste a Rightmove property link','warn'); return; }
+  const btn=document.getElementById('pa-btn'); if(btn){btn.disabled=true;btn.innerHTML='<i class=ic-eye></i> Reading…';}
+  const box=document.getElementById('pa-result');
+  box.innerHTML='<div style="color:var(--muted);font-size:13px;padding:10px 0">Downloading the listing photos and reading them… this takes a few seconds.</div>';
+  try{
+    const r=await fetch('/api/photo-address',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const d=await r.json().catch(()=>({}));
+    renderPhotoResult(d);
+  }catch(e){ box.innerHTML='<div style="color:var(--amber);font-size:13px">'+esc(e.message)+'</div>'; }
+  finally{ if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-eye></i> Read photos';} }
+}
+function renderPhotoResult(d){
+  const box=document.getElementById('pa-result'); if(!box) return;
+  if(!d || d.error){ box.innerHTML='<div style="color:var(--amber);font-size:13px;padding:8px 0">'+esc((d&&(d.note||d.error))||'Could not read this listing.')+'</div>'; return; }
+  const v=d.vision||{};
+  const colour={high:'var(--green)',medium:'var(--amber)',low:'var(--muted)'}[d.confidence]||'var(--muted)';
+  const read=[];
+  if(v.number) read.push('number <strong>'+esc(v.number)+'</strong>');
+  if(v.buildingName) read.push('“'+esc(v.buildingName)+'”');
+  if(v.type) read.push(esc(v.type));
+  const desc=[v.walls,v.doorColour?v.doorColour+' door':'',v.bay?'bay window':'',v.storeys?v.storeys+' storeys':''].filter(Boolean).map(esc).join(' · ');
+  const head='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+    +'<span style="font-size:12px;font-weight:800;color:'+colour+';text-transform:uppercase;letter-spacing:.4px">'+esc(d.confidence||'')+' confidence</span>'
+    +'<span style="font-size:12px;color:var(--muted)">'+esc(d.postcode||'')+' · '+(d.candidates||0)+' homes in postcode · read by '+esc(d.provider||'AI')+'</span></div>'
+    +'<div style="font-size:12px;color:var(--text2);margin-bottom:4px">Photos say: '+(read.length?read.join(', '):'no number visible')+(desc?'  ('+desc+')':'')+'</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:9px">'+esc(d.how||'')+'</div>';
+  const matches=d.matches||[];
+  if(!matches.length){ box.innerHTML=head+'<div style="font-size:13px;color:var(--muted)">No matching address on the Council Tax list.</div>'; return; }
+  box.innerHTML=head+matches.map((a,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'
+    +'<span style="font-size:13px;color:var(--text);font-weight:600">'+esc(a.fullAddress)+'</span>'
+    +'<button onclick="queuePhotoAddr('+i+')" style="padding:6px 12px;background:rgba(124,58,237,.1);color:#7C3AED;border:1.5px solid rgba(124,58,237,.25);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0"><i class=ic-mailbox></i> Use</button>'
+    +'</div>').join('');
+  window._paMatches=matches;
+}
+function queuePhotoAddr(i){
+  const a=(window._paMatches||[])[i]; if(!a) return;
+  const tplEl=document.getElementById('f-tpl');
+  const tpl=[...templates,...(uploadedTpls||[])].find(t=>t.id===(tplEl?.value||'intro'))||templates[0];
+  const prop={address:a.fullAddress,displayAddress:a.fullAddress,fullAddress:a.fullAddress,postcode:a.postcode||'',addressConfirmed:true,source:'Photo match',status:'Success letter'};
+  queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false});
+  updQBadge();updQStats();updateKPIs();
+  toast('<i class=ic-mailbox></i> Letter queued for '+esc(a.fullAddress),'ok');
+}
 function queueWebAddr(i){
   const a=(window._waList||[])[i]; if(!a) return;
   const tplEl=document.getElementById('f-tpl');
