@@ -4,6 +4,7 @@ import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 import { rightmoveProperty } from '../lib/sources.js';
 import { councilTaxAddresses, councilTaxCached } from '../lib/counciltax.js';
 import { listingDetail } from '../lib/listingDetail.js';
+import { ppdByPostcode, listingTypeCats } from '../lib/landreg.js';
 
 export const config = { maxDuration: 60 };
 
@@ -356,6 +357,42 @@ async function tryConfirm(p, pcs, listSqft, ctx) {
     return { id: p.id, level: 'exact', deliverable: true, confidence: 'medium', address: tc(u.fullAddress), postcode: u.postcode, units: [tc(u.fullAddress)], why: 'the only address found on this street (EPC)' };
   }
 
+  // ── TIER LR — HM Land Registry Price Paid. Every SOLD home on the street
+  // carries its full house number + price + type. (1) A single sold home of the
+  // listing's type pins it; (2) the ASKING PRICE disambiguates which sold home is
+  // the listing among several of the same type (a £1.2M detached ≠ a £400k one).
+  // Houses only — flats are handled by the EPC/CT tiers. ──
+  if (!building && street && ctx && ctx.lrBudget > 0) {
+    const cats = listingTypeCats(p.type);
+    if (cats.length) {
+      const seenA = new Set(); const cand = [];
+      for (const pc of pcs) {
+        for (const r of await ppdByPostcode(pc, ctx)) {
+          if (!ctStreetMatch(r.street, street) && !norm(r.street).includes(street)) continue;
+          const k = norm(r.fullAddress);
+          if (cats.includes(r.type) && !seenA.has(k)) { seenA.add(k); cand.push(r); }
+        }
+      }
+      if (cand.length === 1) {
+        const r = cand[0];
+        const ok = ct.some((x) => ctSame(x, addrParts(r.fullAddress)));
+        return { id: p.id, level: 'exact', deliverable: true, confidence: 'high', address: tc(r.fullAddress), postcode: r.postcode, units: [tc(r.fullAddress)], verified: ok, why: 'the only ' + r.type + ' sold on this street (Land Registry)' + (ok ? ', confirmed on Council Tax' : '') };
+      }
+      const ask = parseInt(p.price || 0, 10) || 0;
+      if (cand.length > 1 && ask > 0) {
+        const scored = cand.map((r) => ({ r, diff: Math.abs(r.price - ask) })).sort((a, b) => a.diff - b.diff);
+        const best = scored[0], next = scored[1];
+        const within = best.r.price >= ask * 0.45 && best.r.price <= ask * 1.25;  // a PAST sale vs the CURRENT asking
+        const clear = !next || (next.diff - best.diff) >= ask * 0.18;             // clearly closer than any other
+        if (within && clear) {
+          const r = best.r;
+          const ok = ct.some((x) => ctSame(x, addrParts(r.fullAddress)));
+          return { id: p.id, level: 'exact', deliverable: true, confidence: ok ? 'high' : 'medium', address: tc(r.fullAddress), postcode: r.postcode, units: [tc(r.fullAddress)], verified: ok, why: 'property type + asking price match its Land Registry sale record' + (ok ? ', confirmed on Council Tax' : '') };
+        }
+      }
+    }
+  }
+
   return null;
 }
 
@@ -497,7 +534,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450, detailBudget: 18 }; // cap free lookups per request (Council Tax + EPC details + listing detail pages)
+  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450, detailBudget: 18, lrBudget: 40 }; // cap free lookups per request (Council Tax + EPC details + listing detail pages)
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
