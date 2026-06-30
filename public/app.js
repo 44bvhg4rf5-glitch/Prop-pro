@@ -2341,6 +2341,86 @@ function clrResults(){ props=[]; document.getElementById('results-area').style.d
 function selAll(){ selectAllResults(); }
 function doCSV(){ exportCSV(); }
 
+// ── Off-Market Database (every property that has left the market) ──
+let offmarketRecs = [];
+const OM_STYLE = {
+  sold:      { c:'#059669', bg:'rgba(5,150,105,.12)',  label:'SOLD',      act:'Farm street',      btn:'Farm the street' },
+  let:       { c:'#9A6C12', bg:'rgba(201,146,26,.14)', label:'LET',       act:'Farm landlords',   btn:'Letter landlords' },
+  withdrawn: { c:'#dc2626', bg:'rgba(220,38,38,.12)',  label:'WITHDRAWN', act:'Re-tout vendor',   btn:'Re-tout' },
+};
+async function initOffmarket(){
+  const box=document.getElementById('om-results');
+  if(box) box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)"><i class=ic-box></i> Loading the off-market database…</div>';
+  try{
+    const r=await fetch('/api/touting?view=offmarket');
+    const d=await r.json().catch(()=>({}));
+    if(d.configured===false){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+(d.note||'Storage not configured.')+'</div>'; return; }
+    offmarketRecs=d.records||[];
+    const c=d.counts||{};
+    const te=document.getElementById('om-total'); if(te) te.textContent=(c.sold||0)+(c.let||0)+(c.withdrawn||0);
+    const we=document.getElementById('om-withdrawn'); if(we) we.textContent=c.withdrawn||0;
+    const me=document.getElementById('om-meta'); if(me) me.textContent='Sold '+(c.sold||0)+' · Let '+(c.let||0)+' · Withdrawn '+(c.withdrawn||0)+' recorded so far.';
+    renderOffmarket();
+  }catch(e){ if(box) box.innerHTML='<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
+}
+function renderOffmarket(){
+  const box=document.getElementById('om-results'); if(!box) return;
+  const f=document.getElementById('om-reason')?.value||'';
+  const list=(offmarketRecs||[]).filter(x=>!f||x.reason===f);
+  if(!list.length){ box.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">Nothing recorded yet for this filter. The database fills as properties leave the market on each daily scan.</div>'; return; }
+  box.innerHTML=list.slice(0,400).map((x,i)=>{
+    const s=OM_STYLE[x.reason]||OM_STYLE.withdrawn;
+    const meta=[x.postcode,x.district,x.propType,(x.beds?x.beds+' bed':''),(x.price?(x.channel==='rent'?'£'+x.price+' pcm':'£'+Number(x.price).toLocaleString()):''),(x.dom?Math.round(x.dom/7)+'w on mkt':''),'off '+(x.offDate||'').slice(0,10)].filter(Boolean).join(' · ');
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +'<span style="flex-shrink:0;min-width:84px;text-align:center;font-size:10px;font-weight:800;color:'+s.c+';background:'+s.bg+';padding:4px 7px;border-radius:6px">'+s.label+'</span>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(x.addr||'(address)')+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+meta+'</div>'
+      +'</div>'
+      +(x.url?'<a href="'+x.url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Listing</a>':'')
+      +'<button onclick="offmarketAction('+i+',this)" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> '+s.btn+'</button>'
+    +'</div>';
+  }).join('');
+}
+async function offmarketAction(i, btn){
+  const f=document.getElementById('om-reason')?.value||'';
+  const list=(offmarketRecs||[]).filter(x=>!f||x.reason===f);
+  const x=list[i]; if(!x) return;
+  const tpl=[...templates,...(uploadedTpls||[])][0]||templates[0];
+  if(x.reason==='withdrawn'){
+    // Re-tout the vendor directly — single letter to The Homeowner.
+    const toAddr='The Homeowner, '+(x.addr||'');
+    const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:x.postcode||'', district:x.district, haCode:x.district, type:x.propType||'Property', beds:x.beds||0, addressee:'The Homeowner', addressConfirmed:true, addressSource:'Off-market (withdrawn)', portal:'Off-Market', source:'Withdrawn — re-tout', isRealUrl:!!x.url, rmUrl:x.url||'' };
+    queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false });
+    if(typeof logContact==='function') logContact(prop, tpl, 'Withdrawn — re-tout');
+    if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
+    toast('<i class=ic-mailbox></i> Re-tout letter queued — '+(x.addr||x.postcode),'ok');
+    return;
+  }
+  // sold → farm street (homeowners); let → farm landlords. Reuse street-farm.
+  if(btn){ btn.disabled=true; btn.textContent='Finding…'; }
+  try{
+    const audience=x.reason==='let'?'landlord':'homeowner';
+    const street=(x.addr||'').split(',')[0];
+    const qs=new URLSearchParams({ audience, street, exclude:x.addr||'' });
+    if(x.postcode) qs.set('postcode',x.postcode); else if(x.lat!=null){ qs.set('lat',x.lat); qs.set('lon',x.lon); }
+    const r=await fetch('/api/street-farm?'+qs.toString());
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ toast('Could not farm street: '+(d.error||r.status),'warn'); if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-mailbox></i> '+(OM_STYLE[x.reason].btn);} return; }
+    const who=audience==='landlord'?'The Landlord':'The Homeowner';
+    const src=audience==='landlord'?'Off-market let — landlord farm':'Off-market sold — street farm';
+    let n=0;
+    (d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(x.addr)).forEach(c=>{
+      const toAddr=who+', '+c.address;
+      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:c.postcode||x.postcode||'', district:x.district, haCode:x.district, type:'Property', beds:0, addressee:who, addressConfirmed:true, addressSource:src, portal:'Off-Market', source:src, isRealUrl:false, rmUrl:'' };
+      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false }); if(typeof logContact==='function') logContact(prop, tpl, src); n++;
+    });
+    if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
+    toast(n?('<i class=ic-mailbox></i> Queued '+n+' '+who+' letters near '+street):'No targets found on that street', n?'ok':'warn');
+  }catch(e){ toast('Could not farm street: '+e.message,'warn'); }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-mailbox></i> '+(OM_STYLE[x.reason].btn); }
+}
+
 // Owner sync — automatically checks each resolved address against FREE public
 // records (Companies House + planning) and tags every result Match / No-match.
 async function syncOwners(props){
@@ -3231,6 +3311,7 @@ function showPanel(n){
   if (n === 'marketing') loadMarketing();
   if (n === 'performance') initPerf();
   if (n === 'touting') initTouting();
+  if (n === 'offmarket') initOffmarket();
   if (n === 'premarket' && !premarketItems.length) initPremarket();
   if (n === 'sold' && !soldItems.length) initSold();
   if (n === 'let' && !letItems.length) initLet();
