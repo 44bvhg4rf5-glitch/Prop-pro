@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260629-resultfilter">
+  <link rel="stylesheet" href="styles.css?v=20260630-letterformat">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -819,23 +819,23 @@
     </div>
     <div class="card" style="padding:16px">
       <input id="tname" placeholder="Template name…" style="font-weight:700;font-size:14px;border:none;border-bottom:2px solid var(--border);border-radius:0;padding:4px 0;background:transparent;margin-bottom:12px;box-shadow:none">
+      <div style="font-size:11.5px;color:var(--muted);background:#F8FAFF;border:1px solid var(--border);border-radius:7px;padding:8px 11px;margin-bottom:10px;line-height:1.5">
+        Just write the <strong>message</strong>. The date, the recipient’s name &amp; address, the <em>“Dear …”</em> greeting, the <em>“RE: property address”</em> line, your <em>“Yours faithfully”</em> sign-off and your signature are added automatically — and identically — to every letter.
+      </div>
       <div class="tb">
         <button class="tbb" onclick="wrapT('**','**')"><b>B</b></button>
         <button class="tbb" onclick="wrapT('_','_')"><i>I</i></button>
         <div style="width:1px;height:18px;background:var(--border)"></div>
         <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Insert:</span>
-        <button class="vt" onclick="insV('{{address}}')">{{address}}</button>
-        <button class="vt" onclick="insV('{{area}}')">{{area}}</button>
-        <button class="vt" onclick="insV('{{date}}')">{{date}}</button>
-        <button class="vt" onclick="insV('{{price}}')">{{price}}</button>
-        <button class="vt" onclick="insV('{{bedrooms}}')">{{bedrooms}}</button>
-        <button class="vt" onclick="insV('{{source}}')">{{source}}</button>
-        <button class="vt" onclick="insV('{{type}}')">{{type}}</button>
-        <button class="vt" onclick="insV('{{district}}')">{{district}}</button>
-        <button class="vt" onclick="insV('{{postcode}}')">{{postcode}}</button>
-        <button class="vt" onclick="insV('{{signature}}')" title="Where your signature & details go (otherwise added at the end)">{{signature}}</button>
+        <button class="vt" onclick="insV('{{area}}')" title="The area/district, e.g. Harrow">{{area}}</button>
+        <button class="vt" onclick="insV('{{street}}')" title="The street name, e.g. Kenton Road">{{street}}</button>
+        <button class="vt" onclick="insV('{{type}}')" title="Property type, e.g. flat">{{type}}</button>
+        <button class="vt" onclick="insV('{{price}}')" title="The asking price / rent">{{price}}</button>
+        <button class="vt" onclick="insV('{{bedrooms}}')" title="Number of bedrooms">{{bedrooms}}</button>
+        <button class="vt" onclick="insV('{{source}}')" title="Where it was listed, e.g. Rightmove">{{source}}</button>
+        <button class="vt" onclick="insV('{{code}}')" title="The quote / tracking code for this campaign">{{code}}</button>
       </div>
-      <textarea id="tedit" rows="14" style="font-family:'Georgia',serif;font-size:13px;line-height:1.75" placeholder="Write your letter here…"></textarea>
+      <textarea id="tedit" rows="14" style="font-family:'Georgia',serif;font-size:13px;line-height:1.75" placeholder="Write your message here…"></textarea>
       <div class="fr" style="margin-top:10px">
         <button class="btn bp sm-btn" onclick="saveTpl()"><i class=ic-save></i> Save Template</button>
         <button class="btn bs sm-btn" onclick="prevTpl()"><i class=ic-eye></i> Preview</button>
@@ -1664,6 +1664,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260629-resultfilter"></script>
+<script src="app.js?v=20260630-letterformat"></script>
 </body>
 </html>

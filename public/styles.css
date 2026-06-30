@@ -519,6 +519,11 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 .lh-logo{max-height:74px;max-width:360px;display:block}
 .lh-name{font-size:25px;font-weight:700;letter-spacing:-.3px;line-height:1.1}
 .lh-tag{font-size:12px;font-weight:600;margin-top:3px}
+.lh-to{line-height:1.5;margin-bottom:22px}
+.lh-date{margin-bottom:22px}
+.lh-greet{margin-bottom:14px}
+.lh-re{font-weight:700;margin-bottom:16px}
+.lh-signoff{margin-top:18px;margin-bottom:2px}
 .lh-body{white-space:pre-wrap}
 .lh-sign{margin-top:14px}
 .lh-sigimg{max-height:58px;display:block;margin-bottom:3px}
