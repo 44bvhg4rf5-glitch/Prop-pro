@@ -57,24 +57,30 @@ const PORTALS = ['Rightmove','Rightmove','Rightmove','Zoopla','Zoopla','OnTheMar
 const PORTAL_CLS = {Rightmove:'rm',Zoopla:'zo',OnTheMarket:'ot'};
 const BEARINGS_8 = ['N','NE','E','SE','S','SW','W','NW'];
 
+// Each template is just the MESSAGE (the "topic of discussion"). The formal
+// scaffold — recipient address block, date, "Dear …", "RE: …", the sign-off
+// and your signature — is added automatically and identically to every letter
+// by renderLetterHTML(), so the layout is always tidy and consistent.
+// `audience` ('homeowner' | 'landlord' | 'owner') sets the default salutation
+// when no owner name has been found.
 let templates = [
-  {id:'intro',name:'Introduction Letter',desc:'General introduction',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\nI am writing regarding your property at {{address}}, currently listed on {{source}}.\n\nOur agency specialises in properties across the {{district}} area of Harrow and we have a portfolio of qualified buyers and tenants actively searching for homes just like yours.\n\nWe offer a free, no-obligation valuation and would love the opportunity to help you achieve the best outcome.\n\nPlease do not hesitate to contact us.\n\nYours sincerely,\n\n[Your Name]\n[Company Name]\n[Phone] | [Email]`},
-  {id:'sale',name:'We Can Help You Sell',desc:'Targeted at vendors',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\nWe noticed your {{type}} at {{address}} ({{bedrooms}} bed) listed at {{price}} on {{source}}.\n\nWe have a number of motivated buyers currently searching in {{district}} and believe your property could be the ideal match. Our local expertise consistently delivers above-asking results.\n\nWe'd love a brief, no-obligation chat at your convenience.\n\nKind regards,\n\n[Your Name]\n[Your Agency]`},
-  {id:'let',name:'Landlord Letter',desc:'For rental properties',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nI noticed your {{type}} at {{address}} listed for {{price}} on {{source}}.\n\nWe are a specialist letting agency covering all HA postcodes with a strong pipeline of pre-vetted tenants. We handle everything from viewings to referencing.\n\nIf you would like to discuss our full property management service, please do get in touch.\n\nYours sincerely,\n\n[Your Name]\n[Letting Agency]`},
-  {id:'cash',name:'Cash Buyer Offer',desc:'Investor / cash buyer outreach',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Property Owner,\n\nI am reaching out about your property in {{district}}.\n\nWe are cash buyers with funds immediately available, looking to acquire properties across the HA postcode area. We can move quickly, complete on your timeline, and require no mortgage approvals.\n\nIf you would consider a no-obligation cash offer, we would love to hear from you.\n\nYours faithfully,\n\n[Your Name]\n[Company Name]`},
-  {id:'sold',name:'Sold in Your Street',desc:'After a nearby sale (Land Registry)',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\nWe have just sold a property in your street and have buyers still looking in {{district}}.\n\nThe sale generated strong interest, and several of our registered buyers missed out — they remain keen to purchase in your immediate area.\n\nIf you have ever wondered what your home might be worth in today's market, we would be glad to provide a free, no-obligation valuation.\n\nYours sincerely,\n\n[Your Name]\n[Company Name]\n[Phone] | [Email]`},
+  {id:'intro',name:'Introduction Letter',desc:'General introduction',audience:'homeowner',
+   body:`I am writing regarding your property, which I noticed is currently on the market in {{area}}.\n\nOur agency specialises in {{area}} and the surrounding Harrow area, and we have a portfolio of qualified buyers and tenants actively searching for homes just like yours.\n\nWe would be glad to offer a free, no-obligation valuation and to show you how we could help you achieve the best possible outcome. Please do not hesitate to get in touch.`},
+  {id:'sale',name:'We Can Help You Sell',desc:'Targeted at vendors',audience:'homeowner',
+   body:`I noticed your {{type}} is currently available at {{price}} on {{source}}.\n\nWe have a number of motivated buyers searching in {{area}} right now, and I believe your property could be an excellent match. Our local expertise consistently delivers strong results for sellers.\n\nI would welcome a brief, no-obligation conversation at your convenience to discuss how we can help.`},
+  {id:'let',name:'Landlord Letter',desc:'For rental properties',audience:'landlord',
+   body:`I noticed your {{type}} is currently advertised to let at {{price}} on {{source}}.\n\nWe are a specialist letting agency covering all HA postcodes, with a strong pipeline of pre-vetted, referenced tenants ready to move. We manage everything from marketing and accompanied viewings through to referencing and full property management.\n\nIf you would like to discuss our service — or simply compare it with your current arrangement — I would be glad to offer a free, no-obligation rental valuation.`},
+  {id:'cash',name:'Cash Buyer Offer',desc:'Investor / cash buyer outreach',audience:'owner',
+   body:`I am writing to ask whether you would consider an offer for your property in {{area}}.\n\nWe are cash buyers with funds immediately available, acquiring properties across the HA postcode area. We can move quickly, complete on your timeline, and there are no mortgage approvals to wait on.\n\nIf a straightforward, no-obligation cash offer would be of interest, I would be delighted to hear from you.`},
+  {id:'sold',name:'Sold in Your Street',desc:'After a nearby sale (Land Registry)',audience:'homeowner',
+   body:`We have recently sold a property on {{street}}, and we still have registered buyers actively looking in {{area}}.\n\nThe sale generated strong interest, and several of our buyers missed out — they remain very keen to purchase in your immediate area.\n\nIf you have ever wondered what your home might be worth in today's market, we would be glad to provide a free, no-obligation valuation.`},
   // ── Landlord touting sequence (rentals) — touch 1/2/3 ──
-  {id:'let-t1',name:'Landlord — Just Let Nearby (Touch 1)',desc:'Rentals: after a nearby let',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nWe have just let a property close to {{street}} — at full asking rent and within days — and we still have referenced tenants actively looking in {{district}}.\n\nIf your property is coming up for renewal, sitting empty between tenancies, or you are simply not getting the service you should from your current agent, we would be glad to offer a free, no-obligation rental valuation.\n\nWe handle everything — marketing, accompanied viewings, referencing and full management — and we know exactly what {{district}} tenants will pay.\n\nPlease call and quote {{code}}.\n\nKind regards,\n\n[Your Name]\n[Letting Agency]\n[Phone] | [Email]`},
-  {id:'let-t2',name:'Landlord — Tenants Waiting (Touch 2)',desc:'Rentals: 2-week follow-up',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nI wrote recently about lettings on {{street}}. I wanted to follow up because we still have referenced tenants waiting for the right property in {{district}}, and good stock is in short supply.\n\nIf you would consider letting or switching management, a quick call could be worth a great deal in achievable rent and fewer void days. The valuation is free and there is no obligation.\n\nPlease call and quote {{code}}.\n\nKind regards,\n\n[Your Name]\n[Letting Agency]\n[Phone] | [Email]`},
-  {id:'let-t3',name:'Landlord — Renters’ Rights Review (Touch 3)',desc:'Rentals: 4-week follow-up (compliance angle)',
-   body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Landlord,\n\nThe Renters' Rights Act has changed the rules for landlords — from how tenancies end to compliance and notice periods. Many landlords near {{street}} are reviewing their options.\n\nWe are offering local landlords a free, no-obligation review: a current rental valuation plus a plain-English summary of what the changes mean for your property. Whether you let with us or not, you will come away clearer.\n\nPlease call and quote {{code}}.\n\nKind regards,\n\n[Your Name]\n[Letting Agency]\n[Phone] | [Email]`}
+  {id:'let-t1',name:'Landlord — Just Let Nearby (Touch 1)',desc:'Rentals: after a nearby let',audience:'landlord',
+   body:`We have just let a property close to {{street}} — at full asking rent and within days — and we still have referenced tenants actively looking in {{area}}.\n\nIf your property is coming up for renewal, sitting empty between tenancies, or simply not getting the service it should from your current agent, we would be glad to offer a free, no-obligation rental valuation.\n\nWe handle everything — marketing, accompanied viewings, referencing and full management — and we know exactly what {{area}} tenants will pay. Please call and quote {{code}}.`},
+  {id:'let-t2',name:'Landlord — Tenants Waiting (Touch 2)',desc:'Rentals: 2-week follow-up',audience:'landlord',
+   body:`I wrote to you recently about lettings on {{street}}. I wanted to follow up, because we still have referenced tenants waiting for the right property in {{area}}, and good stock is in short supply.\n\nIf you would consider letting or switching management, a short call could be worth a great deal in achievable rent and fewer void days. The valuation is free and there is no obligation. Please call and quote {{code}}.`},
+  {id:'let-t3',name:'Landlord — Renters’ Rights Review (Touch 3)',desc:'Rentals: 4-week follow-up (compliance angle)',audience:'landlord',
+   body:`The Renters' Rights Act has changed the rules for landlords — from how tenancies end to compliance and notice periods — and many landlords near {{street}} are reviewing their options.\n\nWe are offering local landlords a free, no-obligation review: a current rental valuation together with a plain-English summary of what the changes mean for your property. Whether or not you choose to let with us, you will come away clearer. Please call and quote {{code}}.`}
 ];
 
 /* ═══════════════════════════════════════════
@@ -324,7 +330,7 @@ function updQStats(){
 function printItem(i, fromBatch){
   if(!queue[i]) return;
   queue[i].status='prnt'; renderQueue();
-  if(queue[i]?.prop && queue[i]?.tpl) doPrint(buildLetter(queue[i].tpl.body,queue[i].prop));
+  if(queue[i]?.prop && queue[i]?.tpl) doPrint(buildLetter(queue[i].tpl.body,queue[i].prop),queue[i].prop);
   setTimeout(()=>{if(queue[i]){queue[i].status='done';renderQueue();toast(`Printed: ${queue[i]?.prop?.address?.split(',')?.[0]||'Letter'}`,'ok');
     logLetterPrinted(1);
     if(!fromBatch && queue[i]?.prop && typeof showCycleModal==='function') showCycleModal(queue[i].prop);
@@ -351,6 +357,74 @@ function setOwnerName(a,name){ try{ const m=JSON.parse(localStorage.getItem('pmO
 function applyOwnerSalutation(text,name){
   if(!name) return text;
   return text.replace(/\bDear\s+(Homeowner|Home Owner|Property Owner|Landlord|Resident|Sir\/Madam|Owner)\b/gi,'Dear '+name);
+}
+
+/* ── Formal-letter scaffold helpers ──
+   Every letter is laid out identically by renderLetterHTML(): recipient address
+   block → date → "Dear …" → "RE: full address" → message → "Yours …" →
+   signature. These helpers turn a property into the recipient block + RE line. */
+const UK_PC=/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i;
+// Normalise a UK postcode to its single-spaced form, e.g. "ha30az" → "HA3 0AZ".
+function tidyPostcode(s){
+  const m=String(s||'').toUpperCase().match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/);
+  if(!m) return '';
+  const pc=m[0].replace(/\s+/g,'');
+  return pc.slice(0,-3)+' '+pc.slice(-3);
+}
+// Who the letter is addressed to: the found owner name, else a sensible default
+// from the property's audience (landlord for lettings, homeowner for sales).
+function recipientName(p){
+  const owner=getOwnerName(p);
+  if(owner) return owner;
+  const aud=(p&&p._audience)||'';
+  const isLet = aud==='landlord' || (p&&(p.channel==='rent'||p.channel==='let')) || /to let|let agreed|to rent/i.test(String(p&&p.status||''));
+  if(aud==='owner') return 'Property Owner';
+  return isLet ? 'Landlord' : 'Homeowner';
+}
+// Break a property into the formal recipient block: name + street line(s) + area
+// + postcode, plus the full property address for the "RE:" line.
+function letterAddress(p){
+  p=p||{};
+  const name=recipientName(p);
+  let streetLines=[], area='', postcode=tidyPostcode(p.postcode);
+  if(p.line1){                                   // Success-letter address shape
+    streetLines=[p.line1,p.line2].map(s=>String(s||'').trim()).filter(Boolean);
+    area=String(p.area||'').trim();
+  } else {
+    const raw=String(p.fullAddress||p.address||'').trim();
+    let parts=raw.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+    if(!postcode){                               // pull the postcode out of the parts
+      for(let i=parts.length-1;i>=0;i--){ const pc=tidyPostcode(parts[i]); if(pc){ postcode=pc; break; } }
+    }
+    parts=parts.map(s=>s.replace(UK_PC,'').trim()).filter(Boolean);   // strip postcode remnants
+    const TOWNS=/^(harrow|north harrow|south harrow|west harrow|wembley|london|pinner|hatch end|stanmore|edgware|northwood|ruislip|kenton|wealdstone|sudbury|greenford|kingsbury|belmont)$/i;
+    if(parts.length>1 && TOWNS.test(parts[parts.length-1])) area=parts.pop();
+    if(!area) area=String(p.district||'').trim();
+    streetLines=parts;
+  }
+  // Tidy an all-lowercase town to title case (real resolver data is already cased).
+  if(area && area===area.toLowerCase()) area=area.replace(/\b[a-z]/g,c=>c.toUpperCase());
+  const full=[...streetLines,area,postcode].filter(Boolean).join(', ');
+  const lines=[name,...streetLines,area,postcode].filter(Boolean);
+  return { name, streetLines, area, postcode, full, lines };
+}
+// Strip any letter scaffolding a body may contain (legacy templates, uploaded
+// full letters) so only the message remains — the scaffold is re-applied once,
+// consistently, by the renderer.
+function stripScaffold(text){
+  let lines=String(text||'').replace(/\r/g,'').split('\n');
+  const di=lines.findIndex(l=>/^\s*dear\b/i.test(l));          // drop up to & incl. the salutation
+  if(di>=0) lines=lines.slice(di+1);
+  while(lines.length && /^\s*$/.test(lines[0])) lines.shift();
+  if(lines.length && /^\s*(re|ref)\s*[:\-]/i.test(lines[0])) lines.shift();   // drop a leading RE: line
+  const si=lines.findIndex(l=>/^\s*(yours sincerely|yours faithfully|yours truly|kind(est)? regards|best( regards)?|warm regards|many thanks|regards)\s*,?\s*$/i.test(l));
+  if(si>=0) lines=lines.slice(0,si);                          // drop the sign-off and anything after it
+  return lines.join('\n')
+    .replace(/\{\{signature\}\}/g,'')
+    .replace(/\[[^\]\n]{0,40}\]/g,'')                          // drop unfilled [placeholders]
+    .replace(/[ \t]{2,}/g,' ')                                 // tidy gaps left by removed placeholders
+    .replace(/^[ \t]+$/gm,'')
+    .replace(/\n{3,}/g,'\n\n').trim();
 }
 
 function buildLetter(body,p){
@@ -516,42 +590,42 @@ const BRAND_DEFAULTS = { companyName:'', tagline:'', brandColor:'#1d4ed8', signa
 function getBrand(){ try { return { ...BRAND_DEFAULTS, ...(JSON.parse(localStorage.getItem('pmBrand')||'{}')) }; } catch { return { ...BRAND_DEFAULTS }; } }
 function saveBrand(b){ try { localStorage.setItem('pmBrand', JSON.stringify(b)); return true; } catch(e){ toast('Could not save — the image may be too large. Try a smaller file.', 'err'); return false; } }
 
-// Wrap an already-built letter (placeholders resolved) in the company letterhead,
-// signature block and footer, as a print-ready A4 page. Used for every print path.
+// Lay out a letter as a print-ready A4 page in ONE consistent formal format:
+//   letterhead -> recipient address block -> date -> "Dear ...," -> "RE: address"
+//   -> message -> "Yours faithfully/sincerely," -> signature -> footer.
+// builtText is the message (placeholders already resolved); any scaffolding it
+// still carries is stripped so every template prints to the same tidy layout.
 function renderLetterHTML(builtText, prop){
   const b = getBrand();
-  const e = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  // Letterhead: logo image if uploaded, else the company name in the brand colour.
-  let head = '';
-  if (b.logoImg) head = '<img class="lh-logo" src="' + b.logoImg + '" alt="">';
-  else if (b.companyName) head = '<div class="lh-name" style="color:' + (b.brandColor||'#1d4ed8') + '">' + e(b.companyName) + '</div>';
-  if (b.tagline) head += '<div class="lh-tag" style="color:' + (b.brandColor||'#1d4ed8') + '">' + e(b.tagline) + '</div>';
-  // Signature block (image + signatory details).
-  const sigLines = [ b.signatoryName ? '<strong>' + e(b.signatoryName) + '</strong>' : '', e(b.signatoryTitle), e(b.companyName), e(b.contactAddress), e(b.phone), e(b.email) ].filter(Boolean).join('<br>');
-  const sigBlock = '<div class="lh-sign">' + (b.signatureImg ? '<img class="lh-sigimg" src="' + b.signatureImg + '" alt="">' : '') + (sigLines ? '<div class="lh-sig-lines">' + sigLines + '</div>' : '') + '</div>';
-  // Clean the body: drop unfilled [bracket placeholders] and any leftover blank/punctuation lines.
-  let text = String(builtText||'').replace(/\{\{signature\}\}/g, 'SIG')
-    .replace(/\[[^\]\n]{0,40}\]/g, '')
-    .replace(/^[ \t|·•\-]+$/gm, '')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n');
-  let bodyHtml;
-  if (text.includes('SIG')) {
-    const [before, after] = text.split('SIG');
-    bodyHtml = '<div class="lh-body">' + e(before.trim()) + '</div>' + sigBlock + (after && after.trim() ? '<div class="lh-body">' + e(after.trim()) + '</div>' : '');
-  } else {
-    bodyHtml = '<div class="lh-body">' + e(text.trim()) + '</div>' + sigBlock;
-  }
-  const footer = (b.footerText || b.website)
-    ? '<div class="lh-foot"><div class="lh-foot-text">' + e(b.footerText) + '</div>' + (b.website ? '<div class="lh-foot-web">' + e(b.website) + '</div>' : '') + '</div>'
-    : '';
-  return '<div class="letter-page"><div class="lh-head">' + head + '</div>' + bodyHtml + footer + '</div>';
+  const e = (s) => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // The company name, tagline, footer line and website are already pre-printed on
+  // the letterhead stationery, so they are NOT rendered here (no duplication).
+  // Only an optional uploaded logo prints at the top.
+  let head = b.logoImg ? '<img class="lh-logo" src="' + b.logoImg + '" alt="">' : "";
+  // Recipient address block + "RE:" subject line, built from the property.
+  const A = letterAddress(prop || {});
+  const today = new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
+  const toBlock = (A.streetLines.length || A.postcode)
+    ? '<div class="lh-to">' + A.lines.map(e).join("<br>") + '</div>'
+    : (A.name ? '<div class="lh-to">' + e(A.name) + '</div>' : "");
+  const dateBlock = '<div class="lh-date">' + e(today) + '</div>';
+  const greet = '<div class="lh-greet">Dear ' + e(A.name) + ',</div>';
+  const reBlock = A.full ? '<div class="lh-re">RE: ' + e(A.full) + '</div>' : "";
+  const bodyHtml = '<div class="lh-body">' + e(stripScaffold(builtText)) + '</div>';
+  // Sign-off - British convention: "sincerely" when addressed by name, else
+  // "faithfully" for a generic recipient (Homeowner / Landlord).
+  const signoff = '<div class="lh-signoff">' + (getOwnerName(prop || {}) ? "Yours sincerely," : "Yours faithfully,") + '</div>';
+  // Signature: name, title, then contact details (company name omitted — it's on
+  // the pre-printed stationery).
+  const sigLines = [ b.signatoryName ? "<strong>" + e(b.signatoryName) + "</strong>" : "", e(b.signatoryTitle), e(b.contactAddress), e(b.phone), e(b.email) ].filter(Boolean).join("<br>");
+  const sigBlock = '<div class="lh-sign">' + (b.signatureImg ? '<img class="lh-sigimg" src="' + b.signatureImg + '" alt="">' : "") + (sigLines ? '<div class="lh-sig-lines">' + sigLines + "</div>" : "") + "</div>";
+  return '<div class="letter-page"><div class="lh-head">' + head + "</div>" + toBlock + dateBlock + greet + reBlock + bodyHtml + signoff + sigBlock + "</div>";
 }
 
-function doPrint(content){
-  const pa=document.getElementById('pa');
-  pa.innerHTML=renderLetterHTML(content, {});
-  pa.style.display='block'; window.print(); pa.style.display='none';
+function doPrint(content, prop){
+  const pa=document.getElementById("pa");
+  pa.innerHTML=renderLetterHTML(content, prop||{});
+  pa.style.display="block"; window.print(); pa.style.display="none";
 }
 
 /* ═══════════════════════════════════════════
@@ -748,7 +822,7 @@ async function botCycle(){
         setTimeout(()=>{
           if(queue[qi]&&queue[qi].status==='pend'){
             queue[qi].status='prnt';
-            doPrint(buildLetter(queue[qi].tpl.body,queue[qi].prop));
+            doPrint(buildLetter(queue[qi].tpl.body,queue[qi].prop),queue[qi].prop);
             setTimeout(()=>{if(queue[qi]){queue[qi].status='done';bdPrinted++;updBotDash();updQStats();logLetterPrinted(1);}},700);
           }
         },1200);
@@ -816,13 +890,14 @@ function saveTpl(){
   renderTpls(); toast('Template saved','ok');
 }
 function newTpl(){
-  activeTpl={id:'new'+Date.now(),name:'New Template',body:'{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\n',desc:'Custom'};
+  activeTpl={id:'new'+Date.now(),name:'New Template',body:'Write your message here. The date, the recipient address, “Dear …”, the “RE:” line and your signature are all added automatically — just type the body of the letter.',desc:'Custom',audience:'homeowner'};
   const tn=document.getElementById('tname'); if(tn) tn.value=activeTpl.name;
   const te=document.getElementById('tedit'); if(te) te.value=activeTpl.body;
 }
 function prevTpl(){
   const body=(document.getElementById('tedit')||{}).value||'';
-  const mock={address:'The Legal Owner\nFlat 1\nHillrise Court\n135 Kenton Road\nHARROW\nHA3 0AZ',district:'Harrow',haCode:'HA3',portal:'Rightmove',price:450000,beds:3,type:'Semi-Detached',status:'For Sale'};
+  const aud=(activeTpl&&activeTpl.audience)||'homeowner';
+  const mock={address:'Flat 1, Hillrise Court, 135 Kenton Road, Harrow, HA3 0AZ',district:'Harrow',haCode:'HA3',postcode:'HA3 0AZ',portal:'Rightmove',price:450000,priceLabel:aud==='landlord'?'£1,950 pcm':'£450,000',beds:3,type:'Semi-Detached',status:aud==='landlord'?'To Let':'For Sale',_audience:aud};
   const pc=document.getElementById('prev-content'); if(pc) pc.innerHTML=renderLetterHTML(buildLetter(body,mock),mock);
   const pa=document.getElementById('prev-area'); if(pa){pa.style.display='block';pa.scrollIntoView({behavior:'smooth'});}
 }
@@ -840,19 +915,19 @@ function prevForProp(i){
 /* ── Branding form (Letter Templates panel) ── */
 function loadBrandForm(){
   const b=getBrand(); const set=(id,v)=>{const el=document.getElementById(id); if(el) el.value=v||'';};
-  set('br-name',b.companyName); set('br-tag',b.tagline); set('br-signame',b.signatoryName); set('br-sigtitle',b.signatoryTitle);
-  set('br-addr',b.contactAddress); set('br-phone',b.phone); set('br-email',b.email); set('br-footer',b.footerText); set('br-web',b.website);
-  const col=document.getElementById('br-color'); if(col) col.value=b.brandColor||'#1d4ed8';
+  set('br-signame',b.signatoryName); set('br-sigtitle',b.signatoryTitle);
+  set('br-addr',b.contactAddress); set('br-phone',b.phone); set('br-email',b.email);
   const sp=document.getElementById('br-sig-prev'); if(sp) sp.innerHTML=b.signatureImg?'<img src="'+b.signatureImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No signature yet</span>';
-  const lp=document.getElementById('br-logo-prev'); if(lp) lp.innerHTML=b.logoImg?'<img src="'+b.logoImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No logo — company name is used</span>';
+  const lp=document.getElementById('br-logo-prev'); if(lp) lp.innerHTML=b.logoImg?'<img src="'+b.logoImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No logo (optional)</span>';
   renderBrandPreview();
 }
 function saveBrandFromForm(){
   const b=getBrand(); const g=id=>(document.getElementById(id)||{}).value||'';
-  b.companyName=g('br-name').trim(); b.tagline=g('br-tag').trim(); b.brandColor=g('br-color')||'#1d4ed8';
   b.signatoryName=g('br-signame').trim(); b.signatoryTitle=g('br-sigtitle').trim(); b.contactAddress=g('br-addr').trim();
-  b.phone=g('br-phone').trim(); b.email=g('br-email').trim(); b.footerText=g('br-footer').trim(); b.website=g('br-web').trim();
-  if(saveBrand(b)) toast('Letterhead saved — it’s now on every letter','ok');
+  b.phone=g('br-phone').trim(); b.email=g('br-email').trim();
+  // These live on the pre-printed letterhead, so clear any previously-saved values.
+  b.companyName=''; b.tagline=''; b.footerText=''; b.website='';
+  if(saveBrand(b)) toast('Signature saved — it’s now on every letter','ok');
   renderBrandPreview();
 }
 function brandImg(input,key){
@@ -871,8 +946,8 @@ function brandImg(input,key){
 function clearBrandImg(key){ const b=getBrand(); b[key]=''; saveBrand(b); loadBrandForm(); }
 function renderBrandPreview(){
   const el=document.getElementById('br-preview'); if(!el) return;
-  const mock={address:'The Legal Owner\nFlat 1\nHillrise Court\n135 Kenton Road\nHARROW\nHA3 0AZ',district:'Harrow',haCode:'HA3'};
-  const sample='{{address}}\n\nDear Homeowner,\n\nI wanted to get in touch to see if your property is currently let. If it is, I’d be interested to hear whether you’re receiving the level of service and communication you should expect from your agent.\n\nWith the lettings market busier than ever, it has never been more important to choose an agent you trust — one that is experienced, proactive and local.\n\nI’d love to talk about how we can help. Please give me a call or pop into our office.\n\nKind regards,';
+  const mock={address:'Flat 1, Hillrise Court, 135 Kenton Road, Harrow, HA3 0AZ',district:'Harrow',haCode:'HA3',postcode:'HA3 0AZ',status:'For Sale'};
+  const sample='I wanted to get in touch to see if your property is currently let. If it is, I’d be interested to hear whether you’re receiving the level of service and communication you should expect from your agent.\n\nWith the lettings market busier than ever, it has never been more important to choose an agent you trust — one that is experienced, proactive and local.\n\nI’d love to talk about how we can help. Please give me a call or pop into our office.';
   el.innerHTML=renderLetterHTML(buildLetter(sample,mock),mock);
 }
 function insV(v){const ta=document.getElementById('tedit');if(!ta)return;const s=ta.selectionStart;ta.value=ta.value.slice(0,s)+v+ta.value.slice(ta.selectionEnd);ta.selectionStart=ta.selectionEnd=s+v.length;ta.focus();}
@@ -891,7 +966,7 @@ function processFile(file){
   d.innerHTML=`<span>${ext==='.pdf'?'<i class=ic-book></i>':ext==='.docx'?'<i class=ic-book></i>':'<i class=ic-file></i>'}</span><div style="flex:1"><div style="font-size:12px;font-weight:600">${file.name}</div><div style="font-size:10px;color:var(--mut)">${(file.size/1024).toFixed(1)} KB</div></div><button class="btn bg sm-btn" onclick="useUpl('${file.name.replace(/'/g,'\\x27')}')">Use</button>`;
   document.getElementById('upfiles')?.appendChild(d);
   if(ext==='.txt'){const r=new FileReader();r.onload=ev=>{const t={id:'u'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:'Uploaded',body:ev.target.result};uploadedTpls.push(t);refreshTplSels();toast(`"${file.name}" uploaded`,'ok');};r.readAsText(file);}
-  else{const t={id:'u'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:`Uploaded ${ext}`,body:`{{date}}\n\n{{address}}\n{{district}}\n\nDear Homeowner,\n\n[Content from ${file.name}]\n\nYours sincerely,\n[Your Name]`};uploadedTpls.push(t);refreshTplSels();toast(`"${file.name}" ready`,'ok');}
+  else{const t={id:'u'+Date.now(),name:file.name.replace(/\.[^.]+$/,''),desc:`Uploaded ${ext}`,audience:'homeowner',body:`[Paste the message from ${file.name} here. The date, recipient address, “Dear …”, “RE:” line and your signature are added automatically.]`};uploadedTpls.push(t);refreshTplSels();toast(`"${file.name}" ready`,'ok');}
 }
 function useUpl(name){const t=uploadedTpls.find(t=>t.name===name.replace(/\.[^.]+$/,''));if(t){loadTpl(t);showPanel('templates');toast('Loaded in editor','ok');}}
 
