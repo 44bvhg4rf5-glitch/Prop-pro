@@ -1485,7 +1485,7 @@ async function runLiveSearch(){
       // scale, and never a bare street name. Anything it can't pin precisely is
       // left out of the "found" view entirely (no work for the user).
       const byId = {}; toResolve.forEach(p => { byId[p.id] = p; });
-      const payload = toResolve.map(p => ({ id: p.id, displayAddress: p.displayAddress || p.address, type: p.type, lat: p.lat, lon: p.lon, haCode: p.haCode, sizeSqft: p.sizeSqft || 0, url: p.rmUrl || p.portalUrl || p.url || '', listDate: p.listedAt ? new Date(p.listedAt).toISOString() : '' }));
+      const payload = toResolve.map(p => ({ id: p.id, displayAddress: p.displayAddress || p.address, type: p.type, lat: p.lat, lon: p.lon, haCode: p.haCode, sizeSqft: p.sizeSqft || 0, price: p.price || 0, url: p.rmUrl || p.portalUrl || p.url || '', listDate: p.listedAt ? new Date(p.listedAt).toISOString() : '' }));
       const CHUNK = 18; let doneC = 0;   // smaller chunks → fewer simultaneous EPC lookups → type/size signals fire reliably
       for (let c = 0; c < payload.length; c += CHUNK) {
         const chunk = payload.slice(c, c + CHUNK);
