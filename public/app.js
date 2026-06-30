@@ -2501,9 +2501,38 @@ function renderTouting(){
         +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+meta+'</div>'
       +'</div>'
       +link
+      +'<button onclick="farmFromLead('+i+',this)" title="Letter the whole street around this lead" style="flex-shrink:0;padding:6px 11px;background:rgba(37,99,235,.1);color:var(--blue);border:1.5px solid rgba(37,99,235,.25);border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-flame></i> Farm street</button>'
       +'<button onclick="queueTouting('+i+')" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue</button>'
     +'</div>';
   }).join('');
+}
+// One-click street farm around a Touting Radar lead. A fall-through / withdrawal
+// is a hot moment to canvass the whole street; rentals farm landlords.
+async function farmFromLead(i, btn){
+  const f = document.getElementById('tt-filter')?.value || '';
+  const x = (toutingLeads||[]).filter(y=>!f || y.signal===f)[i]; if(!x) return;
+  if(btn){ btn.disabled=true; btn.textContent='Finding…'; }
+  try{
+    const audience = x.channel==='rent' ? 'landlord' : 'homeowner';
+    const street = (x.addr||'').split(',')[0];
+    const qs = new URLSearchParams({ audience, street, exclude:x.addr||'' });
+    if(x.postcode) qs.set('postcode',x.postcode); else if(x.lat!=null){ qs.set('lat',x.lat); qs.set('lon',x.lon); }
+    const r = await fetch('/api/street-farm?'+qs.toString());
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok){ toast('Could not farm street: '+(d.error||r.status),'warn'); }
+    const who = audience==='landlord'?'The Landlord':'The Homeowner';
+    const src = 'Touting · '+((TT_STYLE[x.signal]||{}).label||x.signal)+' (street)';
+    const tpl = [...templates,...(uploadedTpls||[])][0] || templates[0];
+    let n=0;
+    (d.neighbours||[]).filter(c=>contactKey(c.address)!==contactKey(x.addr)).forEach(c=>{
+      const toAddr=who+', '+c.address;
+      const prop={ address:toAddr, displayAddress:toAddr, fullAddress:toAddr, postcode:c.postcode||x.postcode||'', district:x.district, haCode:x.district, type:'Property', beds:0, addressee:who, addressConfirmed:true, addressSource:src, portal:'Touting', source:src, isRealUrl:false, rmUrl:'' };
+      queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false }); if(typeof logContact==='function') logContact(prop, tpl, src); n++;
+    });
+    if(typeof updQBadge==='function') updQBadge(); if(typeof updateKPIs==='function') updateKPIs();
+    toast(n?('<i class=ic-mailbox></i> Queued '+n+' '+who+' letters near '+street):'No targets found on that street', n?'ok':'warn');
+  }catch(e){ toast('Could not farm street: '+e.message,'warn'); }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class=ic-flame></i> Farm street'; }
 }
 async function runToutingScan(){
   const btn = document.getElementById('tt-scan-btn');
