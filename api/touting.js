@@ -9,17 +9,24 @@ const ALL_HA = ['HA0', 'HA1', 'HA2', 'HA3', 'HA4', 'HA5', 'HA6', 'HA7', 'HA8', '
 const SNAP_KEY = 'touting:snapshot';
 const LEADS_KEY = 'touting:leads';
 const META_KEY = 'touting:meta';
+const OFFMARKET_KEY = 'touting:offmarket';
 const LEADS_CAP = 800;
+const OFFMARKET_CAP = 6000;   // the growing database of properties that have left the market
 
-// Pull the live index across all HA districts, Sold-STC included (we need to SEE
-// the agreed state to later detect a fall-through back to Available).
+// Pull the live index across all HA districts — BOTH sale (Sold-STC included, so
+// we can see fall-throughs) and rent (Let-Agreed included). Each listing is
+// tagged with its channel so exits can be classified sold / let / withdrawn.
 async function pullAll() {
   const per = await Promise.all(ALL_HA.map(async (d) => {
-    const [rm, otm] = await Promise.all([
+    const [rmSale, otmSale, rmRent, otmRent] = await Promise.all([
       rightmoveListings(d, { includeSSTC: true, pages: 2 }).catch(() => []),
       onTheMarketListings(d, { pages: 1 }).catch(() => []),
+      rightmoveListings(d, { channel: 'rent', includeSSTC: true, pages: 1 }).catch(() => []),
+      onTheMarketListings(d, { channel: 'rent', pages: 1 }).catch(() => []),
     ]);
-    return mergeListings([rm, otm]);
+    const sale = mergeListings([rmSale, otmSale]).map((p) => ({ ...p, channel: 'sale' }));
+    const rent = mergeListings([rmRent, otmRent]).map((p) => ({ ...p, channel: 'rent' }));
+    return [...sale, ...rent];
   }));
   return per.flat();
 }
@@ -27,8 +34,17 @@ async function pullAll() {
 async function runScan(nowISO) {
   const prev = (await getJSON(SNAP_KEY, {})) || {};
   const today = await pullAll();
-  const { snapshot, events } = classify(prev, today, nowISO);
+  const { snapshot, events, offMarket } = classify(prev, today, nowISO);
   await setJSON(SNAP_KEY, snapshot);
+
+  // Append confirmed exits to the off-market database (dedupe by id+reason; a
+  // property that leaves the market is recorded once with how it left).
+  if (offMarket && offMarket.length) {
+    const db = (await getJSON(OFFMARKET_KEY, [])) || [];
+    const have = new Set(db.map((r) => `${r.id}|${r.reason}`));
+    const fresh = offMarket.filter((r) => !have.has(`${r.id}|${r.reason}`));
+    if (fresh.length) await setJSON(OFFMARKET_KEY, [...fresh, ...db].slice(0, OFFMARKET_CAP));
+  }
 
   if (events.length) {
     // Prepend this scan's events to the capped feed, de-duplicating a repeat of
@@ -42,7 +58,9 @@ async function runScan(nowISO) {
 
   const byType = {};
   for (const e of events) byType[e.signal] = (byType[e.signal] || 0) + 1;
-  const meta = { lastScan: nowISO, scanned: today.length, tracked: Object.keys(snapshot).length, lastEvents: events.length, byType };
+  const offByReason = {};
+  for (const r of (offMarket || [])) offByReason[r.reason] = (offByReason[r.reason] || 0) + 1;
+  const meta = { lastScan: nowISO, scanned: today.length, tracked: Object.keys(snapshot).length, lastEvents: events.length, byType, offMarket: (offMarket || []).length, offByReason };
   await setJSON(META_KEY, meta);
   return meta;
 }
@@ -65,6 +83,18 @@ export default async function handler(req, res) {
     if (wantScan) {
       const meta = await runScan(nowISO);
       sendJson(res, 200, { configured: true, scanned: true, ...meta });
+      return;
+    }
+    // The off-market database (every property that has left the market).
+    if (u.searchParams.get('view') === 'offmarket') {
+      const reason = (u.searchParams.get('reason') || '').toLowerCase();
+      const district = (u.searchParams.get('district') || '').toUpperCase();
+      let db = (await getJSON(OFFMARKET_KEY, [])) || [];
+      if (reason) db = db.filter((r) => r.reason === reason);
+      if (district) db = db.filter((r) => (r.district || '').toUpperCase() === district);
+      const counts = {};
+      for (const r of ((await getJSON(OFFMARKET_KEY, [])) || [])) counts[r.reason] = (counts[r.reason] || 0) + 1;
+      sendJson(res, 200, { configured: true, total: db.length, counts, records: db.slice(0, 1000) });
       return;
     }
     const [leads, snapshot, meta] = await Promise.all([
