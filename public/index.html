@@ -6,7 +6,7 @@
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Sacramento&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Caveat:wght@600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260630-signature">
+  <link rel="stylesheet" href="styles.css?v=20260630-photofinder">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -475,6 +475,15 @@
       <button onclick="webAddrSearch()" id="wa-btn" style="padding:11px 18px;background:#4F46E5;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Search the web</button>
     </div>
     <div id="wa-results" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <div class="ct"><div class="ct-icon" style="background:#F3E8FF"><i class=ic-eye></i></div>Find a property from its photos <span class="nb nb-b" style="margin-left:6px">NEW</span></div>
+    <div style="font-size:12px;color:var(--muted);margin:2px 0 10px">Paste a <strong>Rightmove listing link</strong>. We read the photos (free) for a house number on the door/gatepost/bin and match it to the exact address — turning the listing's postcode into the actual house.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="pa-url" type="text" placeholder="Paste a Rightmove property link, e.g. rightmove.co.uk/properties/123456789" style="flex:1;min-width:240px;padding:11px 13px;border:1.5px solid var(--border2);border-radius:9px;font-size:14px;font-family:inherit" onkeydown="if(event.key==='Enter')photoFind()">
+      <button onclick="photoFind()" id="pa-btn" style="padding:11px 18px;background:#7C3AED;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-eye></i> Read photos</button>
+    </div>
+    <div id="pa-result" style="margin-top:12px"></div>
   </div>
   <div class="card">
     <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-search></i></div>Postcode Lookup</div>
@@ -1678,6 +1687,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260630-signature"></script>
+<script src="app.js?v=20260630-photofinder"></script>
 </body>
 </html>
