@@ -179,81 +179,82 @@ export default async function handler(req, res) {
   // Street mode takes precedence when a ?street= is supplied.
   const street = (u.searchParams.get('street') || '').trim();
   if (street) {
-    if (OS_KEY) { await streetSearch(res, street, OS_KEY, notBlocked, types); return; }
-    // Free path: every house on the street via Council Tax across its postcodes.
+    // Free Council Tax street search (complete + powers the snapshot). OS Places
+    // is only a last resort if this yields nothing.
     const { prefix, street: cleaned } = splitStreetPostcode(street);
     const parts = cleaned.split(',').map((s) => s.trim()).filter(Boolean);
     const roadName = parts[0] || cleaned;
     const areaToken = prefix || parts.slice(1).join(', ') || 'Harrow';
-    const r = await freeAddressesForStreet(roadName, areaToken, { epcKey: process.env.EPC_API_KEY || '' });
+    const r = await freeAddressesForStreet(roadName, areaToken, { epcKey: process.env.EPC_API_KEY || '' }).catch(() => ({ addresses: [], postcodes: [] }));
     const addresses = filterByType(cleanAddresses(r.addresses).filter(notBlocked), types);
-    let intel = null;
-    if (addresses.length) { try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix, epcKey: process.env.EPC_API_KEY || '' }); } catch { /* intel is best-effort */ } }
-    sendJson(res, 200, {
-      street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], intel,
-      note: addresses.length
-        ? `${addresses.length} homes across ${(r.postcodes || []).length} postcode(s)${prefix ? ' in ' + prefix : ''}, from the free Council Tax register.`
-        : `No matching addresses — include the town or a postcode (e.g. "${roadName}, Harrow" or "${roadName} HA1").`,
-    });
+    if (addresses.length) {
+      let intel = null;
+      try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix, epcKey: process.env.EPC_API_KEY || '' }); } catch { /* best-effort */ }
+      sendJson(res, 200, {
+        street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], intel,
+        note: `${addresses.length} homes across ${(r.postcodes || []).length} postcode(s)${prefix ? ' in ' + prefix : ''}, from the free Council Tax register.`,
+      });
+      return;
+    }
+    // Last resort: OS Places, if a key is set.
+    if (OS_KEY) { await streetSearch(res, street, OS_KEY, notBlocked, types); return; }
+    sendJson(res, 200, { street, source: 'Council Tax register', total: 0, addresses: [], postcodes: [], note: `No matching addresses — include the town or a postcode (e.g. "${roadName}, Harrow" or "${roadName} HA1").` });
     return;
   }
 
   const postcode = (u.searchParams.get('postcode') || '').trim().toUpperCase();
   if (!postcode) { sendJson(res, 400, { error: 'postcode or street is required' }); return; }
 
-  // 1. OS Places — full Royal Mail PAF address list. A full postcode pulls that
-  // postcode; an outcode/sector (e.g. "HA3" or "HA3 5") pulls the whole district.
   const OS = OS_KEY;
   const debug = !!process.env.DEBUG_KEY && u.searchParams.get('debug') === process.env.DEBUG_KEY;
   const isFull = /\d[A-Z]{2}$/.test(postcode.replace(/\s+/g, ''));
+  const epcKey = process.env.EPC_API_KEY || '';
+
+  // 1. FREE complete path (PRIMARY): Council Tax (∪ EPC) — every dwelling, and
+  //    it powers the Street snapshot. Used first regardless of any OS key, since
+  //    it's complete + free; OS/EPC are fallbacks only if this comes up empty.
+  try {
+    if (isFull) {
+      const list = await freeAddressesForPostcode(postcode, { epcKey });
+      const addresses = filterByType(cleanAddresses(list).filter(notBlocked), types);
+      if (addresses.length) {
+        let intel = null;
+        try { intel = await streetIntel({ streetName: '', postcodes: [postcode], homes: addresses.length, epcKey }); } catch { /* best-effort */ }
+        sendJson(res, 200, { postcode, source: 'Council Tax register' + (epcKey ? ' + EPC' : ''), total: addresses.length, addresses, intel });
+        return;
+      }
+    } else {
+      const r = await freeAddressesForArea(postcode, { epcKey, maxPostcodes: 30 });
+      const addresses = filterByType(cleanAddresses(r.addresses).filter(notBlocked), types);
+      if (addresses.length) {
+        sendJson(res, 200, {
+          postcode, source: 'Council Tax register', total: addresses.length, addresses, totalAvailable: r.postcodesAvailable,
+          note: `Scanned ${r.postcodesScanned} of ~${r.postcodesAvailable} postcodes near ${postcode} (free Council Tax register). Search a full postcode or a street name for a complete list.`,
+        });
+        return;
+      }
+    }
+  } catch { /* fall through to OS / EPC */ }
+
+  // 2. OS Places (Royal Mail PAF) — only if the free path came up empty.
   const cap = isFull ? 500 : 3000;
   let osDiag = { osKeyPresent: !!OS, osStatus: null, osError: null };
   if (OS) {
     try {
       const { status, results, total } = await osPaged('postcode', postcode, OS, cap);
       osDiag.osStatus = status;
-      if (status === 200) {
+      if (status === 200 && results.length) {
         const addresses = filterByType(cleanAddresses(results.map((d) => mapDpa(d, postcode))).filter(notBlocked), types);
         sendJson(res, 200, {
-          postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses,
-          totalAvailable: total,
-          note: total > cap
-            ? `District ${postcode} has ${total} addresses; showing the first ${addresses.length}. Search a sector (e.g. "${postcode} 5") for specific areas.`
-            : undefined,
+          postcode, source: 'Royal Mail / OS Places', total: addresses.length, addresses, totalAvailable: total,
+          note: total > cap ? `District ${postcode} has ${total} addresses; showing the first ${addresses.length}. Search a sector for specific areas.` : undefined,
         });
         return;
       }
       osDiag.osError = 'unexpected response';
     } catch (e) { osDiag.osError = e.message; }
   }
-  if (debug) { sendJson(res, 200, { postcode, debug: osDiag, hasEpcKey: !!(process.env.EPC_API_KEY || '') }); return; }
-
-  // 2. FREE complete path (no OS key): Council Tax (∪ EPC) — every dwelling.
-  //    A full postcode pulls that postcode; an outcode/sector scans the
-  //    postcodes around it via postcodes.io and Council-Taxes each.
-  if (!OS) {
-    const epcKey = process.env.EPC_API_KEY || '';
-    try {
-      if (isFull) {
-        const list = await freeAddressesForPostcode(postcode, { epcKey });
-        const addresses = filterByType(cleanAddresses(list).filter(notBlocked), types);
-        let intel = null;
-        if (addresses.length) { try { intel = await streetIntel({ streetName: '', postcodes: [postcode], homes: addresses.length, epcKey }); } catch { /* best-effort */ } }
-        sendJson(res, 200, {
-          postcode, source: 'Council Tax register' + (epcKey ? ' + EPC' : ''), total: addresses.length, addresses, intel,
-          note: addresses.length ? undefined : 'No dwellings listed at this postcode on the Council Tax register.',
-        });
-        return;
-      }
-      const r = await freeAddressesForArea(postcode, { epcKey, maxPostcodes: 30 });
-      const addresses = filterByType(cleanAddresses(r.addresses).filter(notBlocked), types);
-      sendJson(res, 200, {
-        postcode, source: 'Council Tax register', total: addresses.length, addresses, totalAvailable: r.postcodesAvailable,
-        note: `Scanned ${r.postcodesScanned} of ~${r.postcodesAvailable} postcodes near ${postcode} (free Council Tax register). Search a full postcode or a street name for a complete list.`,
-      });
-      return;
-    } catch { /* fall through to the EPC-only path */ }
-  }
+  if (debug) { sendJson(res, 200, { postcode, debug: osDiag, hasEpcKey: !!epcKey }); return; }
 
   // 3. EPC register fallback (works with the existing key).
   const KEY = process.env.EPC_API_KEY || '';
