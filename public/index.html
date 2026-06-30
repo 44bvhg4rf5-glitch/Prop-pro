@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PropMail Pro — Estate Agent Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260630-letterhead">
+  <link href="https://fonts.googleapis.com/css2?family=Allura&family=Sacramento&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Caveat:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260630-signature">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -761,22 +762,42 @@
           <div><label class="perf-lbl">Phone</label><input id="br-phone" placeholder="020 8515 7929"></div>
           <div><label class="perf-lbl">Email</label><input id="br-email" placeholder="you@agency.com"></div>
         </div>
-        <div class="br-row2" style="margin-top:12px">
-          <div>
-            <label class="perf-lbl">Your signature (image)</label>
-            <div id="br-sig-prev" style="min-height:30px;margin-bottom:6px"></div>
-            <input type="file" accept="image/*" id="br-sig-file" style="display:none" onchange="brandImg(this,'signatureImg')">
-            <button class="btn bs sm-btn" onclick="document.getElementById('br-sig-file').click()"><i class=ic-upload></i> Upload signature</button>
-            <button class="btn bghost sm-btn" onclick="clearBrandImg('signatureImg')">Remove</button>
+        <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+          <label class="perf-lbl">Your signature</label>
+          <div style="font-size:11.5px;color:var(--muted);margin:2px 0 9px">Sign with your finger for a real, handwritten signature — or type your name and pick a handwriting style. This is your actual signature, never a generic one.</div>
+          <div style="display:flex;gap:6px;margin-bottom:9px">
+            <button type="button" class="btn bs sm-btn" id="sigtab-draw" onclick="sigTab('draw')">✍️ Draw it</button>
+            <button type="button" class="btn bghost sm-btn" id="sigtab-type" onclick="sigTab('type')">⌨️ Type it</button>
+            <button type="button" class="btn bghost sm-btn" id="sigtab-upload" onclick="sigTab('upload')">⬆️ Upload</button>
           </div>
-          <div>
-            <label class="perf-lbl">Logo (optional — only if not on your paper)</label>
-            <div id="br-logo-prev" style="min-height:30px;margin-bottom:6px"></div>
-            <input type="file" accept="image/*" id="br-logo-file" style="display:none" onchange="brandImg(this,'logoImg')">
-            <button class="btn bs sm-btn" onclick="document.getElementById('br-logo-file').click()"><i class=ic-upload></i> Upload logo</button>
-            <button class="btn bghost sm-btn" onclick="clearBrandImg('logoImg')">Remove</button>
+          <div id="sigm-draw">
+            <canvas id="sig-pad" width="600" height="180" style="width:100%;height:150px;border:1.5px dashed var(--border2);border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;display:block"></canvas>
+            <div class="fr" style="margin-top:7px;gap:6px">
+              <button type="button" class="btn bghost sm-btn" onclick="clearSigPad()">Clear</button>
+              <button type="button" class="btn bp sm-btn" onclick="useDrawnSig()"><i class=ic-save></i> Use this signature</button>
+            </div>
+          </div>
+          <div id="sigm-type" style="display:none">
+            <input id="sig-name" placeholder="Type your full name, e.g. Daniel Murray" oninput="renderTypedSig()" style="margin-bottom:9px">
+            <div id="sig-fonts" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:9px"></div>
+            <div id="sig-type-prev" style="height:74px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--border2);border-radius:8px;background:#fff;overflow:hidden"></div>
+            <div class="fr" style="margin-top:7px"><button type="button" class="btn bp sm-btn" onclick="useTypedSig()"><i class=ic-save></i> Use this signature</button></div>
+          </div>
+          <div id="sigm-upload" style="display:none">
+            <input type="file" accept="image/*" id="br-sig-file" style="display:none" onchange="brandImg(this,'signatureImg')">
+            <button type="button" class="btn bs sm-btn" onclick="document.getElementById('br-sig-file').click()"><i class=ic-upload></i> Upload a photo / scan of your signature</button>
+          </div>
+          <div style="margin-top:11px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="perf-lbl" style="margin:0">On your letters:</span>
+            <div id="br-sig-prev" style="min-height:30px"></div>
+            <button type="button" class="btn bghost sm-btn" onclick="clearBrandImg('signatureImg')">Remove</button>
           </div>
         </div>
+        <label class="perf-lbl" style="margin-top:14px">Logo (optional — only if not on your paper)</label>
+        <div id="br-logo-prev" style="min-height:30px;margin-bottom:6px"></div>
+        <input type="file" accept="image/*" id="br-logo-file" style="display:none" onchange="brandImg(this,'logoImg')">
+        <button type="button" class="btn bs sm-btn" onclick="document.getElementById('br-logo-file').click()"><i class=ic-upload></i> Upload logo</button>
+        <button type="button" class="btn bghost sm-btn" onclick="clearBrandImg('logoImg')">Remove</button>
         <div class="fr" style="margin-top:14px"><button class="btn bp sm-btn" onclick="saveBrandFromForm()"><i class=ic-save></i> Save signature</button></div>
       </div>
       <div class="brand-preview-wrap">
@@ -1657,6 +1678,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260630-letterhead"></script>
+<script src="app.js?v=20260630-signature"></script>
 </body>
 </html>

@@ -919,6 +919,7 @@ function loadBrandForm(){
   set('br-addr',b.contactAddress); set('br-phone',b.phone); set('br-email',b.email);
   const sp=document.getElementById('br-sig-prev'); if(sp) sp.innerHTML=b.signatureImg?'<img src="'+b.signatureImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No signature yet</span>';
   const lp=document.getElementById('br-logo-prev'); if(lp) lp.innerHTML=b.logoImg?'<img src="'+b.logoImg+'" style="max-height:48px">':'<span style="color:var(--muted);font-size:11px">No logo (optional)</span>';
+  initSigPad(); setupSigFonts();
   renderBrandPreview();
 }
 function saveBrandFromForm(){
@@ -944,6 +945,89 @@ function brandImg(input,key){
   r.readAsDataURL(f);
 }
 function clearBrandImg(key){ const b=getBrand(); b[key]=''; saveBrand(b); loadBrandForm(); }
+
+/* ── Signature capture: draw it with a finger, or type it in a real handwriting
+   font. Both produce a transparent PNG saved as signatureImg (what the letter
+   already renders), so the result is the user's own signature — never generic. ── */
+const SIG_FONTS = [
+  { label:'Flowing',  css:"'Allura', cursive" },
+  { label:'Casual',   css:"'Sacramento', cursive" },
+  { label:'Bold',     css:"'Dancing Script', cursive" },
+  { label:'Elegant',  css:"'Great Vibes', cursive" },
+  { label:'Pen',      css:"'Homemade Apple', cursive" },
+  { label:'Relaxed',  css:"'Caveat', cursive" },
+];
+let _sigFontCss = SIG_FONTS[0].css, _sigPadInit = false, _sigDrawing = false, _sigHasInk = false;
+
+function sigTab(which){
+  ['draw','type','upload'].forEach(t=>{
+    const m=document.getElementById('sigm-'+t); if(m) m.style.display = t===which?'':'none';
+    const b=document.getElementById('sigtab-'+t); if(b){ b.classList.toggle('bs',t===which); b.classList.toggle('bghost',t!==which); }
+  });
+  if(which==='draw') initSigPad();
+  if(which==='type'){ setupSigFonts(); renderTypedSig(); }
+}
+// Pointer/touch drawing on a fixed-resolution canvas (display CSS-scaled).
+function initSigPad(){
+  const c=document.getElementById('sig-pad'); if(!c || _sigPadInit) return; _sigPadInit=true;
+  const ctx=c.getContext('2d'); ctx.lineWidth=3.2; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#1a2b4a';
+  const pos=(e)=>{ const r=c.getBoundingClientRect(); const t=(e.touches&&e.touches[0])||e; return { x:(t.clientX-r.left)*(c.width/r.width), y:(t.clientY-r.top)*(c.height/r.height) }; };
+  const start=(e)=>{ e.preventDefault(); _sigDrawing=true; const p=pos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); };
+  const move =(e)=>{ if(!_sigDrawing) return; e.preventDefault(); const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); _sigHasInk=true; };
+  const end  =()=>{ _sigDrawing=false; };
+  c.addEventListener('mousedown',start); c.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+  c.addEventListener('touchstart',start,{passive:false}); c.addEventListener('touchmove',move,{passive:false}); c.addEventListener('touchend',end);
+}
+function clearSigPad(){ const c=document.getElementById('sig-pad'); if(c){ c.getContext('2d').clearRect(0,0,c.width,c.height); _sigHasInk=false; } }
+function useDrawnSig(){
+  const c=document.getElementById('sig-pad');
+  if(!c || !_sigHasInk){ toast('Draw your signature in the box first','warn'); return; }
+  storeSigCanvas(c);
+}
+// Build the typed-name handwriting font buttons.
+function setupSigFonts(){
+  const wrap=document.getElementById('sig-fonts'); if(!wrap || wrap._built) return; wrap._built=true;
+  wrap.innerHTML=SIG_FONTS.map((f,i)=>'<button type="button" class="vt sigfont" data-css="'+esc(f.css)+'" onclick="pickSigFont(this)" style="font-family:'+f.css+';font-size:22px;line-height:1;padding:6px 12px'+(i===0?';outline:2px solid var(--blue)':'')+'">'+esc(f.label)+'</button>').join('');
+}
+function pickSigFont(btn){
+  _sigFontCss=btn.getAttribute('data-css');
+  document.querySelectorAll('#sig-fonts .sigfont').forEach(b=>b.style.outline='');
+  btn.style.outline='2px solid var(--blue)';
+  renderTypedSig();
+}
+function renderTypedSig(){
+  const prev=document.getElementById('sig-type-prev'); if(!prev) return;
+  const n=(document.getElementById('sig-name')||{}).value||'Your Name';
+  prev.innerHTML='<span style="font-family:'+_sigFontCss+';font-size:46px;color:#1a2b4a;white-space:nowrap;padding:0 12px">'+esc(n)+'</span>';
+}
+async function useTypedSig(){
+  const n=((document.getElementById('sig-name')||{}).value||'').trim();
+  if(!n){ toast('Type your name first','warn'); return; }
+  const fam=(_sigFontCss.match(/'([^']+)'/)||[])[1]||'cursive';
+  try{ await document.fonts.load('120px "'+fam+'"'); await document.fonts.ready; }catch{}
+  const fs=120, c=document.createElement('canvas'), m=document.createElement('canvas').getContext('2d');
+  m.font=fs+'px '+_sigFontCss; const w=Math.ceil(m.measureText(n).width)+80, h=Math.ceil(fs*1.8);
+  c.width=w; c.height=h; const ctx=c.getContext('2d');
+  ctx.font=fs+'px '+_sigFontCss; ctx.fillStyle='#1a2b4a'; ctx.textBaseline='middle'; ctx.fillText(n,40,h/2);
+  storeSigCanvas(c);
+}
+// Trim transparent margins, scale, and save the canvas as the signature image.
+function trimCanvas(c){
+  const ctx=c.getContext('2d'), w=c.width, h=c.height, d=ctx.getImageData(0,0,w,h).data;
+  let top=h, left=w, right=0, bot=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ if(d[(y*w+x)*4+3]>12){ if(x<left)left=x; if(x>right)right=x; if(y<top)top=y; if(y>bot)bot=y; } }
+  if(right<left) return c;
+  const pad=10; left=Math.max(0,left-pad); top=Math.max(0,top-pad); right=Math.min(w-1,right+pad); bot=Math.min(h-1,bot+pad);
+  const nw=right-left+1, nh=bot-top+1, o=document.createElement('canvas'); o.width=nw; o.height=nh;
+  o.getContext('2d').drawImage(c,left,top,nw,nh,0,0,nw,nh); return o;
+}
+function storeSigCanvas(src){
+  const c=trimCanvas(src), max=420, scale=Math.min(1,max/(c.width||max));
+  const w=Math.max(1,Math.round(c.width*scale)), h=Math.max(1,Math.round(c.height*scale));
+  const o=document.createElement('canvas'); o.width=w; o.height=h; o.getContext('2d').drawImage(c,0,0,w,h);
+  const b=getBrand(); b.signatureImg=o.toDataURL('image/png');
+  if(saveBrand(b)){ loadBrandForm(); toast('Signature saved — it’s now on every letter','ok'); }
+}
 function renderBrandPreview(){
   const el=document.getElementById('br-preview'); if(!el) return;
   const mock={address:'Flat 1, Hillrise Court, 135 Kenton Road, Harrow, HA3 0AZ',district:'Harrow',haCode:'HA3',postcode:'HA3 0AZ',status:'For Sale'};
