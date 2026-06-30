@@ -188,7 +188,7 @@ export default async function handler(req, res) {
     const r = await freeAddressesForStreet(roadName, areaToken, { epcKey: process.env.EPC_API_KEY || '' });
     const addresses = filterByType(cleanAddresses(r.addresses).filter(notBlocked), types);
     let intel = null;
-    if (addresses.length) { try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix }); } catch { /* intel is best-effort */ } }
+    if (addresses.length) { try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix, epcKey: process.env.EPC_API_KEY || '' }); } catch { /* intel is best-effort */ } }
     sendJson(res, 200, {
       street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], intel,
       note: addresses.length
@@ -238,7 +238,7 @@ export default async function handler(req, res) {
         const list = await freeAddressesForPostcode(postcode, { epcKey });
         const addresses = filterByType(cleanAddresses(list).filter(notBlocked), types);
         let intel = null;
-        if (addresses.length) { try { intel = await streetIntel({ streetName: '', postcodes: [postcode], homes: addresses.length }); } catch { /* best-effort */ } }
+        if (addresses.length) { try { intel = await streetIntel({ streetName: '', postcodes: [postcode], homes: addresses.length, epcKey }); } catch { /* best-effort */ } }
         sendJson(res, 200, {
           postcode, source: 'Council Tax register' + (epcKey ? ' + EPC' : ''), total: addresses.length, addresses, intel,
           note: addresses.length ? undefined : 'No dwellings listed at this postcode on the Council Tax register.',

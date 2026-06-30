@@ -6614,7 +6614,25 @@ function renderStreetIntel(intel){
       ${(intel.lines||[]).map(chip).join('')}
     </div>
     <div style="font-size:13px;color:var(--text);font-weight:600">${esc(intel.verdict||'')}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:5px">Rentals = licensed lets on the public register (a minimum — unlicensed lets aren’t counted). Sales = Land Registry, last 5 years.</div>`;
+    ${(intel.rentedAddresses&&intel.rentedAddresses.length)?'<div style="margin-top:9px"><button onclick="queueRentalHomes()" style="padding:8px 14px;background:#6b1fa0;color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter the '+intel.rentedAddresses.length+' rental home'+(intel.rentedAddresses.length===1?'':'s')+' (to the landlord)</button></div>':''}
+    <div style="font-size:11px;color:var(--muted);margin-top:7px">Rented % = EPC tenure (a real sample). Licensed = the public licence register (a floor). Sales = Land Registry, last 5 years.</div>`;
+  window._slIntel=intel;
+}
+// Queue landlord letters to the EPC-identified rental homes on the searched street.
+function queueRentalHomes(){
+  const intel=window._slIntel; const rented=(intel&&intel.rentedAddresses)||[];
+  if(!rented.length){ toast('No rental homes to letter','warn'); return; }
+  const all=[...templates,...(uploadedTpls||[])];
+  const tpl=all.find(t=>t.id==='let-t1')||all.find(t=>/landlord|let/i.test(t.name))||templates[0];
+  let n=0;
+  rented.forEach(a=>{
+    const prop={address:a.fullAddress,displayAddress:a.fullAddress,fullAddress:a.fullAddress,postcode:a.postcode||'',uprn:a.uprn||'',status:'To Let',channel:'rent',_audience:'landlord',source:'EPC rented',addressConfirmed:true};
+    if(typeof isBlockedAddr==='function' && isBlockedAddr(prop)) return;
+    queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false});
+    n++;
+  });
+  updQBadge();updQStats(); if(typeof updateKPIs==='function')updateKPIs();
+  toast('<i class=ic-mailbox></i> Queued '+n+' landlord letters for the rental homes on this street','ok');
 }
 function finishAddressLookup(rawResults, lastSource, liveCount, intel){
   // The backend already filtered by the chosen property type; here we just
