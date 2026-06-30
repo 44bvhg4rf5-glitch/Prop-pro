@@ -4,7 +4,6 @@ import { getJSON, setJSON, storeConfigured } from '../lib/store.js';
 import { rightmoveProperty } from '../lib/sources.js';
 import { councilTaxAddresses, councilTaxCached } from '../lib/counciltax.js';
 import { listingDetail } from '../lib/listingDetail.js';
-import { osMatchDeliveryPoint, osConfigured } from '../lib/osPlaces.js';
 
 export const config = { maxDuration: 60 };
 
@@ -383,16 +382,10 @@ async function resolveOne(p, ctx) {
   if (p.url && ctx && ctx.detailBudget > 0) {
     ctx.detailBudget--;
     det = await listingDetail(p.url).catch(() => null);
-    // ── TIER OS — pin the EXACT address by matching the listing's Royal Mail
-    // delivery-point id to OS Places (PAF) UDPRN/UPRN. Most authoritative when an
-    // OS_PLACES_KEY is live; dormant (skipped) otherwise. ──
-    if (det && det.postcode && det.deliveryPointId && osConfigured() && ctx && ctx.osBudget > 0) {
-      ctx.osBudget--;
-      const m = await osMatchDeliveryPoint(det.postcode, det.deliveryPointId).catch(() => null);
-      if (m && m.address) {
-        return { id: p.id, level: 'exact', deliverable: true, confidence: 'high', address: m.address, postcode: m.postcode || det.postcode, units: [m.address], verified: true, why: "matched the listing's Royal Mail delivery-point ID to the address (OS Places / PAF)" };
-      }
-    }
+    // NB: Rightmove's address.deliveryPointId was validated against Royal Mail
+    // UDPRN / OS UPRN (via Ideal Postcodes) and is NOT either — it's a Rightmove-
+    // internal id that resolves to unrelated properties. So there is no OS/PAF
+    // delivery-point pin; we rely on the free signals below.
     if (det) {
       // Option 2: the detail page's own displayAddress sometimes states a
       // house/flat number the card hid — prefer it when it carries a number so
@@ -504,7 +497,7 @@ export default async function handler(req, res) {
   let body = {}; try { body = JSON.parse(raw); } catch { /* ignore */ }
   const listings = Array.isArray(body.listings) ? body.listings.slice(0, 50) : [];
   if (!listings.length) { sendJson(res, 400, { error: 'Send { listings: [...] }' }); return; }
-  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450, detailBudget: 18, osBudget: 30 }; // cap free lookups per request (Council Tax + EPC details + listing detail pages)
+  const ctx = { ovBudget: 4, ctBudget: 20, certBudget: 450, detailBudget: 18 }; // cap free lookups per request (Council Tax + EPC details + listing detail pages)
   const results = (await mapLimit(listings, 6, (p) => resolveOne(p, ctx))).filter(Boolean);
   res.setHeader('Access-Control-Allow-Origin', '*');
   sendJson(res, 200, { requested: listings.length, resolved: results.length, exact: results.filter((r) => r.deliverable).length, results });
