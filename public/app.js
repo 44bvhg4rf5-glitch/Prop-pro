@@ -1503,6 +1503,7 @@ async function runLiveSearch(){
           if (res.postcode) p.postcode = res.postcode;
           p.displayAddress = res.address; p.fullAddress = res.address; p.address = res.address;
           p.addressFound = true; p.addressWhy = res.why || ''; p.block = null;
+          p.addressConfidence = res.confidence || (res.level === 'exact' ? 'high' : 'likely');
           if (res.level === 'exact') {
             p.addressConfirmed = true; p.addressLikely = false; p.addressSource = 'Register (exact)'; p.addressVerified = !!res.verified;
           } else {
@@ -2124,12 +2125,30 @@ function renderLiveResults(){
 
   const selCount = props.filter(p=>p.selected).length;
   const foundCount = props.filter(p=>p.addressFound).length;
-  const af = window.addrFilter || 'all';   // 'found' = only properties with a full address
-  const shownCount = af==='found' ? foundCount : props.length;
+  const af = window.addrFilter || 'found';
+  // Counts per confidence band, so the user can pick the high-chance ones.
+  const cnt = {
+    high:      props.filter(p=>p.addressConfirmed && p.addressConfidence==='high').length,
+    confirmed: props.filter(p=>p.addressConfirmed).length,
+    likely:    props.filter(p=>p.addressLikely).length,
+    found:     foundCount,
+    all:       props.length,
+  };
+  // Which properties pass the current toggle.
+  window._matchAddrFilter = (p) =>
+      af==='all'       ? true
+    : af==='found'     ? !!p.addressFound
+    : af==='confirmed' ? !!p.addressConfirmed
+    : af==='likely'    ? !!p.addressLikely
+    : af==='high'      ? (p.addressConfirmed && p.addressConfidence==='high')
+    : !!p.addressFound;
+  const matchFilter = window._matchAddrFilter;
+  const shownCount = props.filter(matchFilter).length;
+  const LBL = { high:'High-confidence', confirmed:'Confirmed', likely:'Likely', found:'Properties with a full address', all:'Live properties' };
   const title = document.getElementById('results-title');
   const sub   = document.getElementById('results-sub');
-  if(title) title.textContent = af==='found' ? `${foundCount} Properties With a Full Address` : `${props.length} Live Properties Found`;
-  if(sub)   sub.textContent   = `${foundCount} of ${props.length} have a full address · ${selCount} selected for letters`;
+  if(title) title.textContent = `${shownCount} ${LBL[af]||'Properties'}`;
+  if(sub)   sub.textContent   = `${cnt.confirmed} confirmed · ${cnt.likely} likely · ${foundCount} of ${props.length} with a full address · ${selCount} selected`;
 
   // Update select button state
   const qBtn = document.getElementById('queue-selected-btn');
@@ -2144,19 +2163,23 @@ function renderLiveResults(){
   fbar.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:6px';
   const mkBtn = (key,label) => '<button onclick="setAddrFilter(\''+key+'\')" style="padding:6px 13px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid '+(af===key?'var(--blue)':'var(--border2)')+';background:'+(af===key?'var(--blue)':'#fff')+';color:'+(af===key?'#fff':'var(--text)')+'">'+label+'</button>';
   fbar.innerHTML = '<span style="font-size:11px;color:var(--muted);font-weight:600">Show:</span>'
-    + mkBtn('found','Full address found ('+foundCount+')')
+    + mkBtn('high','★ High chance ('+cnt.high+')')
+    + mkBtn('confirmed','Confirmed ('+cnt.confirmed+')')
+    + mkBtn('likely','Likely — verify ('+cnt.likely+')')
+    + mkBtn('found','All found ('+foundCount+')')
     + mkBtn('all','All listings ('+props.length+')');
   table.appendChild(fbar);
 
-  if(af==='found' && !foundCount){
+  if(!shownCount){
     const empty=document.createElement('div');
     empty.style.cssText='text-align:center;padding:28px;color:var(--muted)';
-    empty.innerHTML='<div style="font-size:13px;font-weight:600">No full addresses resolved yet</div><div style="font-size:12px;margin-top:6px">Tap "All listings" to see every property and confirm addresses one by one.</div>';
+    empty.innerHTML='<div style="font-size:13px;font-weight:600">Nothing to show for this filter</div><div style="font-size:12px;margin-top:6px">'
+      + (af==='high'||af==='confirmed' ? 'No '+(af==='high'?'high-confidence':'confirmed')+' addresses in this search — try "Likely" or "All found".' : 'Tap "All listings" to see every property and confirm addresses one by one.')+'</div>';
     table.appendChild(empty);
   }
 
   props.forEach((p, i) => {
-    if(af==='found' && !p.addressFound) return;
+    if(!matchFilter(p)) return;
     const isReal   = p.propertyId && p.propertyId.length >= 6;
     const isSale   = p.status === 'For Sale';
     const accentBg = isSale ? 'rgba(0,79,154,.08)' : 'rgba(5,150,105,.08)';
@@ -2251,7 +2274,7 @@ function toggleResultSelect(i){
 }
 
 // ── Select / deselect all ──
-function selectAllResults(){  props.forEach(p=>p.selected=true);  renderLiveResults(); }
+function selectAllResults(){  const m=window._matchAddrFilter||(p=>p.addressFound);  let n=0;  props.forEach(p=>{ const v=m(p); p.selected=v; if(v)n++; });  renderLiveResults();  if(typeof toast==='function') toast(n+' selected (matching the current filter)', n?'ok':'warn'); }
 function selectNoneResults(){ props.forEach(p=>p.selected=false); renderLiveResults(); }
 
 // ── Queue a single property immediately ──
