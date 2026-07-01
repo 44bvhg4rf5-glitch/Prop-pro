@@ -30,6 +30,7 @@ import rentalHotspots from './api/rental-hotspots.js';
 import roadGeometry from './api/road-geometry.js';
 import rentedHomes from './api/rented-homes.js';
 import rentalIntel from './api/rental-intel.js';
+import geoGrid from './api/geo-grid.js';
 import config from './api/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,6 +73,7 @@ const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/road-geometry')) { roadGeometry(req, res); return; }
   if (req.url.startsWith('/api/rented-homes')) { rentedHomes(req, res); return; }
   if (req.url.startsWith('/api/rental-intel')) { rentalIntel(req, res); return; }
+  if (req.url.startsWith('/api/geo-grid')) { geoGrid(req, res); return; }
   if (req.url === '/api/config')            { config(req, res); return; }
 
   // ── Static files ──
