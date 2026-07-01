@@ -1341,22 +1341,21 @@ async function drawHotspotRoads(list){
   const s=Math.min(...lats)-0.004, n=Math.max(...lats)+0.004, w=Math.min(...lons)-0.006, e=Math.max(...lons)+0.006;
   const key=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
   const idxByName=new Map(); list.forEach((h,i)=>{ const k=key(h.street); if(!idxByName.has(k)) idxByName.set(k,i); });
-  const names=[...new Set(list.slice(0,90).map(h=>h.street))].map(n=>n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  const names=[...new Set(list.slice(0,90).map(h=>h.street))];
   if(!names.length) return;
-  const q='[out:json][timeout:25];way[highway][name~"^('+names.join('|')+')$",i]('+s+','+w+','+n+','+e+');out geom;';
   try{
-    const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
-    const j=await r.json();
+    const r=await fetch('/api/road-geometry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names,bbox:{s,w,n,e}})});
+    const j=await r.json(); const geom=j.geom||{};
     if(window._hsRoadLayer) window._hsMap.removeLayer(window._hsRoadLayer);
     const grp=L.layerGroup(); let drawn=0;
-    (j.elements||[]).forEach(el=>{
-      if(!el.geometry||!el.tags||!el.tags.name) return;
-      const idx=idxByName.get(key(el.tags.name)); if(idx===undefined) return;
+    Object.keys(geom).forEach(k=>{
+      const idx=idxByName.get(k); if(idx===undefined) return;
       const h=list[idx]; const col=HS_COL[h.tier]||'#059669';
-      const latlngs=el.geometry.map(g=>[g.lat,g.lon]);
-      const line=L.polyline(latlngs,{color:col,weight:8,opacity:.9,lineCap:'round'});
-      line.bindPopup(hotspotPopupHTML(h,idx));
-      grp.addLayer(line); drawn++;
+      geom[k].forEach(path=>{
+        const line=L.polyline(path,{color:col,weight:8,opacity:.9,lineCap:'round'});
+        line.bindPopup(hotspotPopupHTML(h,idx));
+        grp.addLayer(line); drawn++;
+      });
     });
     if(drawn){ grp.addTo(window._hsMap); window._hsRoadLayer=grp; }
   }catch(e){ /* base map + markers remain */ }
