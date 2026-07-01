@@ -863,7 +863,9 @@ function renderTpls(){
   [...templates,...uploadedTpls].forEach(t=>{
     const d=document.createElement('div'); d.className='ti'+(t.id===activeTpl?.id?' act':'');
     d.onclick=()=>loadTpl(t);
-    d.innerHTML=`<div class="tn">${t.name}</div><div class="td">${t.desc||''}</div>`;
+    const del=t.custom?`<button title="Delete" onclick="deleteTpl('${t.id}',event)" style="position:absolute;top:8px;right:8px;border:none;background:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1">×</button>`:'';
+    d.style.position='relative';
+    d.innerHTML=`<div class="tn">${t.name}${t.custom?' <span style="font-size:9px;font-weight:800;color:#7C3AED;border:1px solid #ddd6fe;border-radius:4px;padding:1px 4px;vertical-align:middle">YOURS</span>':''}</div><div class="td">${t.desc||''}</div>${del}`;
     list.appendChild(d);
   });
   if(!activeTpl) loadTpl(templates[0]); else loadTpl(activeTpl);
@@ -880,13 +882,33 @@ function loadTpl(t){
   const te=document.getElementById('tedit'); if(te) te.value=t.body;
   document.querySelectorAll('.ti').forEach((el,i)=>el.classList.toggle('act',[...templates,...uploadedTpls][i]?.id===t.id));
 }
+// Custom templates the user writes are persisted to this device so they survive
+// a reload and show up everywhere (search, auto-flow, batch selectors).
+function loadCustomTpls(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('pmp_custom_tpls')||'[]');
+    saved.forEach(t=>{ if(t&&t.id&&!templates.some(x=>x.id===t.id)) templates.push({...t,custom:true}); });
+  }catch{}
+}
+function persistCustomTpls(){
+  try{ localStorage.setItem('pmp_custom_tpls', JSON.stringify(templates.filter(t=>t.custom))); }catch{}
+}
 function saveTpl(){
   const name=(document.getElementById('tname')||{}).value?.trim();
   const body=(document.getElementById('tedit')||{}).value||'';
   if(!name){toast('Enter a name','warn');return;}
-  const ex=templates.find(t=>t.id===activeTpl?.id);
-  if(ex){ex.name=name;ex.body=body;} else templates.push({id:'t'+Date.now(),name,body,desc:'Custom'});
-  renderTpls(); toast('Template saved','ok');
+  const ex=templates.find(t=>t.id===activeTpl?.id)||uploadedTpls.find(t=>t.id===activeTpl?.id);
+  if(ex){ ex.name=name; ex.body=body; if(ex.custom) persistCustomTpls(); }
+  else { const t={id:'t'+Date.now(),name,body,desc:'Custom',custom:true}; templates.push(t); activeTpl=t; persistCustomTpls(); }
+  renderTpls(); toast('Template saved — it’s now in all your letter menus','ok');
+}
+function deleteTpl(id,ev){
+  if(ev)ev.stopPropagation();
+  const t=templates.find(x=>x.id===id); if(!t||!t.custom){toast('Only your own templates can be deleted','warn');return;}
+  if(!confirm('Delete your template “'+t.name+'”?'))return;
+  templates=templates.filter(x=>x.id!==id); persistCustomTpls();
+  if(activeTpl&&activeTpl.id===id) activeTpl=null;
+  renderTpls(); toast('Template deleted','ok');
 }
 function newTpl(){
   activeTpl={id:'new'+Date.now(),name:'New Template',body:'Write your message here. The date, the recipient address, “Dear …”, the “RE:” line and your signature are all added automatically — just type the body of the letter.',desc:'Custom',audience:'homeowner'};
@@ -7594,6 +7616,7 @@ function updateIntelTable(){
 }
 
 // Load saved agent-targeting settings + campaign log as soon as the app is ready.
+try { if (typeof loadCustomTpls === 'function') loadCustomTpls(); } catch (e) {}
 try { if (typeof loadTargeting === 'function') loadTargeting(); } catch (e) {}
 try { if (typeof loadContacts === 'function') loadContacts(); } catch (e) {}
 try { if (typeof loadGroups === 'function') loadGroups(); } catch (e) {}

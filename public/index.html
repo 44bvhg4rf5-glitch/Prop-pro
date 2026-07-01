@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Sacramento&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Caveat:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <script src="/vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20260701-rintel2">
+  <link rel="stylesheet" href="styles.css?v=20260701-tpl1">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -868,6 +868,11 @@
         <button class="btn bs sm-btn" onclick="prevTpl()"><i class=ic-eye></i> Preview</button>
       </div>
     </div>
+  </div>
+  <div class="card" style="text-align:center;padding:18px;background:#F8FAFF">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Create your own letter</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Start a blank template, give it a name and type your own message. It’s saved on this device and appears in every letter menu.</div>
+    <button class="btn bp" onclick="newTpl();document.getElementById('tname')?.scrollIntoView({behavior:'smooth'});document.getElementById('tname')?.focus()">✍️ Create your own letter</button>
   </div>
   <div class="card" id="prev-area" style="display:none">
     <div class="sec-hdr"><div class="sec-title"><i class=ic-file></i> Letter Preview</div><button class="btn bghost sm-btn" onclick="document.getElementById('prev-area').style.display='none'">Close</button></div>
@@ -1739,6 +1744,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260701-rintel2"></script>
+<script src="app.js?v=20260701-tpl1"></script>
 </body>
 </html>
