@@ -37,13 +37,15 @@ export default async function handler(req, res) {
   const u = new URL(req.url, 'http://localhost');
   const wanted = (u.searchParams.get('districts') || '').toUpperCase().split(',').map((s) => s.trim()).filter((s) => /^HA\d$/.test(s));
   const districts = wanted.length ? wanted : HA;
-  const pages = Math.min(parseInt(u.searchParams.get('pages') || '2', 10) || 2, 3);
+  // Deep pagination when few districts (full coverage of that market); shallower
+  // for an all-HA sweep to stay within time. Rightmove pages 24 at a time.
+  const reqPages = parseInt(u.searchParams.get('pages') || '0', 10);
+  const deep = reqPages || (districts.length <= 2 ? 16 : districts.length <= 4 ? 9 : 4);
 
   // Live to-let listings across the chosen districts (Rightmove + OnTheMarket).
-  const opts = { channel: 'rent', pages };
   const lists = await Promise.all(districts.flatMap((d) => [
-    rightmoveListings(d, opts).catch(() => []),
-    onTheMarketListings(d, { channel: 'rent', pages: Math.min(pages, 2) }).catch(() => []),
+    rightmoveListings(d, { channel: 'rent', pages: deep }).catch(() => []),
+    onTheMarketListings(d, { channel: 'rent', pages: Math.min(deep, 10) }).catch(() => []),
   ]));
   const listings = lists.flat().filter((p) => p && p.displayAddress);
 

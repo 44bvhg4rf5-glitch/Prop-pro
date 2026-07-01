@@ -1309,19 +1309,24 @@ async function scanHotspots(){
   finally{ if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-zap></i> Scan live rentals';} }
 }
 function renderHotspotMap(list){
-  const el=document.getElementById('hs-map'); if(!el||typeof L==='undefined')return;
-  if(!window._hsMap){ window._hsMap=L.map('hs-map',{scrollWheelZoom:true}).setView([51.585,-0.335],12); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(window._hsMap); }
+  const el=document.getElementById('hs-map'); if(!el) return;
+  if(typeof L==='undefined'){ el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;text-align:center;padding:20px">Map library still loading (needs internet). The ranked list below works regardless — scroll down.</div>'; return; }
+  if(!window._hsMap){ window._hsMap=L.map('hs-map',{scrollWheelZoom:true}).setView([51.585,-0.335],12); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(window._hsMap); }
   if(window._hsLayer) window._hsMap.removeLayer(window._hsLayer);
   const grp=L.layerGroup(); const pts=[];
-  list.filter(h=>h.lat&&h.lon).forEach((h,i)=>{
-    const col=HS_COL[h.tier]||'#059669'; const rad=Math.min(9+h.onMarket*2,26);
-    const m=L.circleMarker([h.lat,h.lon],{radius:rad,color:'#fff',weight:2,fillColor:col,fillOpacity:.82});
-    m.bindPopup('<div style="font-family:Inter,sans-serif;min-width:170px"><div style="font-weight:800;font-size:14px">'+esc(h.street)+' <span style="color:#888;font-weight:400">('+esc(h.district)+')</span></div><div style="margin:5px 0;font-size:12px"><span style="color:'+col+';font-weight:700">'+h.onMarket+' on the market</span>'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div><button onclick="targetHotspot('+i+')" style="margin-top:3px;padding:6px 12px;background:#6b1fa0;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Target this street</button></div>');
+  list.forEach((h,i)=>{
+    if(!h.lat||!h.lon) return;
+    const col=HS_COL[h.tier]||'#059669'; const rad=Math.min(9+h.onMarket*2,28);
+    const m=L.circleMarker([h.lat,h.lon],{radius:rad,color:'#fff',weight:2,fillColor:col,fillOpacity:.85});
+    m.bindPopup('<div style="font-family:Inter,sans-serif;min-width:190px"><div style="font-weight:800;font-size:14px">'+esc(h.street)+' <span style="color:#888;font-weight:400">('+esc(h.district)+')</span></div>'
+      +'<div style="margin:5px 0 8px;font-size:12px"><span style="color:'+col+';font-weight:700">'+h.onMarket+' on the market</span>'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div>'
+      +'<button onclick="letterWholeRoad('+i+')" style="width:100%;margin-bottom:5px;padding:7px 12px;background:#1E6FD9;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter every home on this road</button>'
+      +'<button onclick="targetHotspot('+i+')" style="width:100%;padding:7px 12px;background:#6b1fa0;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">See addresses &amp; landlords</button></div>');
     grp.addLayer(m); pts.push([h.lat,h.lon]);
   });
   grp.addTo(window._hsMap); window._hsLayer=grp;
-  if(pts.length){ try{ window._hsMap.fitBounds(pts,{padding:[30,30],maxZoom:14}); }catch(e){} }
-  setTimeout(()=>window._hsMap.invalidateSize(),100);
+  const draw=()=>{ window._hsMap.invalidateSize(); if(pts.length){ try{ window._hsMap.fitBounds(pts,{padding:[30,30],maxZoom:14}); }catch(e){} } };
+  setTimeout(draw,60); setTimeout(()=>window._hsMap.invalidateSize(),400);
 }
 function renderHotspotList(list){
   const c=document.getElementById('hs-count'); if(c) c.textContent=list.length?('· '+list.length+' streets'):'';
@@ -1330,12 +1335,33 @@ function renderHotspotList(list){
     +'<span style="width:12px;height:12px;border-radius:50%;background:'+(HS_COL[h.tier])+';flex-shrink:0"></span>'
     +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">'+esc(h.street)+' <span style="font-size:11px;color:var(--muted);font-weight:400">'+esc(h.district)+'</span></div>'
     +'<div style="font-size:11.5px;color:var(--muted)">'+h.onMarket+' on market'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div></div>'
+    +'<button onclick="letterWholeRoad('+i+')" class="btn sm-btn" style="flex-shrink:0;background:#1E6FD9;color:#fff;border:none" title="Print to every home on this road"><i class=ic-mailbox></i> All homes</button>'
     +'<button onclick="targetHotspot('+i+')" class="btn bs sm-btn" style="flex-shrink:0">Target</button></div>').join('');
 }
 function targetHotspot(i){
   const h=_hsData[i]; if(!h)return;
   showPanel('success');
   setTimeout(()=>{ const el=document.getElementById('st-input'); if(el) el.value=h.street+', '+h.district; if(typeof lookupStreet==='function') lookupStreet(); },160);
+}
+// Pull EVERY home on the road and queue general-marketing letters to all of them.
+async function letterWholeRoad(i){
+  const h=_hsData[i]; if(!h)return;
+  toast('Finding every home on '+esc(h.street)+'…','ok');
+  try{
+    const r=await fetch('/api/addresses?street='+encodeURIComponent(h.street+', '+h.district)+'&types=homes');
+    const d=await r.json(); const list=d.addresses||[];
+    if(!list.length){ toast('No addresses found for '+esc(h.street),'warn'); return; }
+    if(!confirm('Queue general-marketing letters to all '+list.length+' homes on '+h.street+'?')) return;
+    const tpl=[...templates,...(uploadedTpls||[])].find(t=>t.id==='intro')||templates[0];
+    let n=0;
+    list.forEach(a=>{
+      const prop={address:a.fullAddress,displayAddress:a.fullAddress,fullAddress:a.fullAddress,postcode:a.postcode||'',uprn:a.uprn||'',source:'Rental hotspot',status:'Success letter',addressConfirmed:true};
+      if(typeof isBlockedAddr==='function'&&isBlockedAddr(prop))return;
+      queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false}); n++;
+    });
+    updQBadge();updQStats(); if(typeof updateKPIs==='function')updateKPIs();
+    toast('<i class=ic-mailbox></i> Queued '+n+' letters to every home on '+esc(h.street),'ok');
+  }catch(e){ toast('Failed: '+e.message,'warn'); }
 }
 function queueWebAddr(i){
   const a=(window._waList||[])[i]; if(!a) return;
