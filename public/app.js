@@ -1290,6 +1290,53 @@ function queuePhotoAddr(i){
   updQBadge();updQStats();updateKPIs();
   toast('<i class=ic-mailbox></i> Letter queued for '+esc(a.fullAddress),'ok');
 }
+// ── Rental Hotspots: map HA streets by live to-let listing count ──
+let _hsData=[];
+const HS_COL={red:'#DC2626',amber:'#D97706',green:'#059669'};
+async function scanHotspots(){
+  const btn=document.getElementById('hs-btn'); if(btn){btn.disabled=true;btn.innerHTML='<i class=ic-zap></i> Scanning…';}
+  const d=(document.getElementById('hs-districts').value||'').trim().toUpperCase();
+  const empty=document.getElementById('hs-empty'); if(empty){empty.style.display='';empty.textContent='Scanning live rentals across '+(d||'all HA')+'… ~20–40s.';}
+  try{
+    const r=await fetch('/api/rental-hotspots'+(d?('?districts='+encodeURIComponent(d)):''));
+    const j=await r.json();
+    _hsData=j.hotspots||[];
+    const lg=document.getElementById('hs-legend'); if(lg){lg.style.display='';lg.innerHTML='🔴 '+j.counts.red+'  🟠 '+j.counts.amber+'  🟢 '+j.counts.green+' · '+j.scanned+' rentals scanned';}
+    renderHotspotMap(_hsData); renderHotspotList(_hsData);
+    if(empty){ empty.style.display=_hsData.length?'none':''; if(!_hsData.length) empty.textContent='No live rentals found — try specific districts (e.g. HA0,HA1).'; }
+    if(_hsData.length) toast(_hsData.length+' hotspot streets mapped','ok');
+  }catch(e){ if(empty){empty.style.display='';empty.textContent='Scan failed — '+e.message;} }
+  finally{ if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-zap></i> Scan live rentals';} }
+}
+function renderHotspotMap(list){
+  const el=document.getElementById('hs-map'); if(!el||typeof L==='undefined')return;
+  if(!window._hsMap){ window._hsMap=L.map('hs-map',{scrollWheelZoom:true}).setView([51.585,-0.335],12); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(window._hsMap); }
+  if(window._hsLayer) window._hsMap.removeLayer(window._hsLayer);
+  const grp=L.layerGroup(); const pts=[];
+  list.filter(h=>h.lat&&h.lon).forEach((h,i)=>{
+    const col=HS_COL[h.tier]||'#059669'; const rad=Math.min(9+h.onMarket*2,26);
+    const m=L.circleMarker([h.lat,h.lon],{radius:rad,color:'#fff',weight:2,fillColor:col,fillOpacity:.82});
+    m.bindPopup('<div style="font-family:Inter,sans-serif;min-width:170px"><div style="font-weight:800;font-size:14px">'+esc(h.street)+' <span style="color:#888;font-weight:400">('+esc(h.district)+')</span></div><div style="margin:5px 0;font-size:12px"><span style="color:'+col+';font-weight:700">'+h.onMarket+' on the market</span>'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div><button onclick="targetHotspot('+i+')" style="margin-top:3px;padding:6px 12px;background:#6b1fa0;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Target this street</button></div>');
+    grp.addLayer(m); pts.push([h.lat,h.lon]);
+  });
+  grp.addTo(window._hsMap); window._hsLayer=grp;
+  if(pts.length){ try{ window._hsMap.fitBounds(pts,{padding:[30,30],maxZoom:14}); }catch(e){} }
+  setTimeout(()=>window._hsMap.invalidateSize(),100);
+}
+function renderHotspotList(list){
+  const c=document.getElementById('hs-count'); if(c) c.textContent=list.length?('· '+list.length+' streets'):'';
+  const box=document.getElementById('hs-list'); if(!box)return;
+  box.innerHTML=list.slice(0,120).map((h,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--border)">'
+    +'<span style="width:12px;height:12px;border-radius:50%;background:'+(HS_COL[h.tier])+';flex-shrink:0"></span>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text)">'+esc(h.street)+' <span style="font-size:11px;color:var(--muted);font-weight:400">'+esc(h.district)+'</span></div>'
+    +'<div style="font-size:11.5px;color:var(--muted)">'+h.onMarket+' on market'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div></div>'
+    +'<button onclick="targetHotspot('+i+')" class="btn bs sm-btn" style="flex-shrink:0">Target</button></div>').join('');
+}
+function targetHotspot(i){
+  const h=_hsData[i]; if(!h)return;
+  showPanel('success');
+  setTimeout(()=>{ const el=document.getElementById('st-input'); if(el) el.value=h.street+', '+h.district; if(typeof lookupStreet==='function') lookupStreet(); },160);
+}
 function queueWebAddr(i){
   const a=(window._waList||[])[i]; if(!a) return;
   const tplEl=document.getElementById('f-tpl');
@@ -3607,6 +3654,7 @@ function showPanel(n){
   if (n === 'schedule')  { loadContacts(); loadGroups(); loadPrintSchedule(); runDueSequences(true); renderSchedule(); }
   if (n === 'ha')        loadTargeting();
   if (n === 'templates') { renderTpls(); loadGroups(); renderGroups(); loadBrandForm(); }
+  if (n === 'hotspots')  setTimeout(()=>{ if(window._hsMap) window._hsMap.invalidateSize(); }, 120);
   if (n === 'queue')     renderQueue();
   if (n === 'blocked')   { loadBlocklist().then(renderBlockedPanel); renderBlockedPanel(); }
   if (n === 'leads')     loadLeads();
