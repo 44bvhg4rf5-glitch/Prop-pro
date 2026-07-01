@@ -386,23 +386,22 @@ function recipientName(p){
 function letterAddress(p){
   p=p||{};
   const name=recipientName(p);
-  let streetLines=[], area='', postcode=tidyPostcode(p.postcode);
-  if(p.line1){                                   // Success-letter address shape
-    streetLines=[p.line1,p.line2].map(s=>String(s||'').trim()).filter(Boolean);
-    area=String(p.area||'').trim();
-  } else {
-    const raw=String(p.fullAddress||p.address||'').trim();
-    let parts=raw.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
-    if(!postcode){                               // pull the postcode out of the parts
-      for(let i=parts.length-1;i>=0;i--){ const pc=tidyPostcode(parts[i]); if(pc){ postcode=pc; break; } }
-    }
-    parts=parts.map(s=>s.replace(UK_PC,'').trim()).filter(Boolean);   // strip postcode remnants
-    const TOWNS=/^(harrow|north harrow|south harrow|west harrow|wembley|london|pinner|hatch end|stanmore|edgware|northwood|ruislip|kenton|wealdstone|sudbury|greenford|kingsbury|belmont)$/i;
-    if(parts.length>1 && TOWNS.test(parts[parts.length-1])) area=parts.pop();
-    if(!area) area=String(p.district||'').trim();
-    streetLines=parts;
-  }
-  // Tidy an all-lowercase town to title case (real resolver data is already cased).
+  const TOWNS=/^(harrow|north harrow|south harrow|west harrow|wembley|north wembley|wembley park|london|pinner|hatch end|stanmore|edgware|northwood|ruislip|kenton|wealdstone|sudbury|greenford|kingsbury|belmont|middlesex)$/i;
+  // Always parse the full address too, so we can backfill any missing part
+  // (postcode/area) even when structured line fields are supplied.
+  const raw=String(p.fullAddress||p.address||'').trim();
+  let parts=raw.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+  let postcode=tidyPostcode(p.postcode);
+  if(!postcode){ for(let i=parts.length-1;i>=0;i--){ const pc=tidyPostcode(parts[i]); if(pc){ postcode=pc; break; } } }
+  parts=parts.map(s=>s.replace(UK_PC,'').trim()).filter(Boolean);   // drop postcode tokens
+  let area=String(p.area||'').trim();
+  if(area){ if(parts.length && parts[parts.length-1].toLowerCase()===area.toLowerCase()) parts.pop(); }
+  else if(parts.length>1 && TOWNS.test(parts[parts.length-1])) area=parts.pop();
+  if(!area) area=String(p.district||'').trim();
+  // Street line(s): explicit line1/line2 when given, else the remaining parts.
+  let streetLines = p.line1 ? [p.line1,p.line2].map(s=>String(s||'').trim()).filter(Boolean) : parts;
+  if(!streetLines.length && parts.length) streetLines=parts;
+  streetLines=streetLines.map(s=>s.replace(/\s+at\s+(?=\d)/i,', ').trim()).filter(Boolean); // "Flat 1 At 34" → "Flat 1, 34"
   if(area && area===area.toLowerCase()) area=area.replace(/\b[a-z]/g,c=>c.toUpperCase());
   const full=[...streetLines,area,postcode].filter(Boolean).join(', ');
   const lines=[name,...streetLines,area,postcode].filter(Boolean);
@@ -1308,6 +1307,13 @@ async function scanHotspots(){
   }catch(e){ if(empty){empty.style.display='';empty.textContent='Scan failed — '+e.message;} }
   finally{ if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-zap></i> Scan live rentals';} }
 }
+function hotspotPopupHTML(h,i){
+  const col=HS_COL[h.tier]||'#059669';
+  return '<div style="font-family:Inter,sans-serif;min-width:190px"><div style="font-weight:800;font-size:14px">'+esc(h.street)+' <span style="color:#888;font-weight:400">('+esc(h.district)+')</span></div>'
+    +'<div style="margin:5px 0 8px;font-size:12px"><span style="color:'+col+';font-weight:700">'+h.onMarket+' on the market</span>'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div>'
+    +'<button onclick="letterWholeRoad('+i+')" style="width:100%;margin-bottom:5px;padding:7px 12px;background:#1E6FD9;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter every home on this road</button>'
+    +'<button onclick="targetHotspot('+i+')" style="width:100%;padding:7px 12px;background:#6b1fa0;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">See addresses &amp; landlords</button></div>';
+}
 function renderHotspotMap(list){
   const el=document.getElementById('hs-map'); if(!el) return;
   if(typeof L==='undefined'){ el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;text-align:center;padding:20px">Map library still loading (needs internet). The ranked list below works regardless — scroll down.</div>'; return; }
@@ -1316,17 +1322,44 @@ function renderHotspotMap(list){
   const grp=L.layerGroup(); const pts=[];
   list.forEach((h,i)=>{
     if(!h.lat||!h.lon) return;
-    const col=HS_COL[h.tier]||'#059669'; const rad=Math.min(9+h.onMarket*2,28);
+    const col=HS_COL[h.tier]||'#059669'; const rad=Math.min(8+h.onMarket*2,26);
     const m=L.circleMarker([h.lat,h.lon],{radius:rad,color:'#fff',weight:2,fillColor:col,fillOpacity:.85});
-    m.bindPopup('<div style="font-family:Inter,sans-serif;min-width:190px"><div style="font-weight:800;font-size:14px">'+esc(h.street)+' <span style="color:#888;font-weight:400">('+esc(h.district)+')</span></div>'
-      +'<div style="margin:5px 0 8px;font-size:12px"><span style="color:'+col+';font-weight:700">'+h.onMarket+' on the market</span>'+(h.licensedLandlords?' · '+h.licensedLandlords+' licensed LLs':'')+(h.rentAvg?' · ~£'+h.rentAvg+'pcm':'')+'</div>'
-      +'<button onclick="letterWholeRoad('+i+')" style="width:100%;margin-bottom:5px;padding:7px 12px;background:#1E6FD9;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter every home on this road</button>'
-      +'<button onclick="targetHotspot('+i+')" style="width:100%;padding:7px 12px;background:#6b1fa0;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">See addresses &amp; landlords</button></div>');
+    m.bindPopup(hotspotPopupHTML(h,i));
     grp.addLayer(m); pts.push([h.lat,h.lon]);
   });
   grp.addTo(window._hsMap); window._hsLayer=grp;
-  const draw=()=>{ window._hsMap.invalidateSize(); if(pts.length){ try{ window._hsMap.fitBounds(pts,{padding:[30,30],maxZoom:14}); }catch(e){} } };
+  const draw=()=>{ window._hsMap.invalidateSize(); if(pts.length){ try{ window._hsMap.fitBounds(pts,{padding:[30,30],maxZoom:15}); }catch(e){} } };
   setTimeout(draw,60); setTimeout(()=>window._hsMap.invalidateSize(),400);
+  drawHotspotRoads(list); // colour the actual roads on top (best-effort)
+}
+// Fetch the real street geometry from OpenStreetMap (Overpass) and draw each
+// hotspot road as a thick coloured, clickable line over the base map.
+async function drawHotspotRoads(list){
+  if(typeof L==='undefined'||!window._hsMap) return;
+  const withPts=list.filter(h=>h.lat&&h.lon); if(!withPts.length) return;
+  const lats=withPts.map(h=>h.lat), lons=withPts.map(h=>h.lon);
+  const s=Math.min(...lats)-0.004, n=Math.max(...lats)+0.004, w=Math.min(...lons)-0.006, e=Math.max(...lons)+0.006;
+  const key=x=>String(x||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  const idxByName=new Map(); list.forEach((h,i)=>{ const k=key(h.street); if(!idxByName.has(k)) idxByName.set(k,i); });
+  const names=[...new Set(list.slice(0,90).map(h=>h.street))].map(n=>n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  if(!names.length) return;
+  const q='[out:json][timeout:25];way[highway][name~"^('+names.join('|')+')$",i]('+s+','+w+','+n+','+e+');out geom;';
+  try{
+    const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
+    const j=await r.json();
+    if(window._hsRoadLayer) window._hsMap.removeLayer(window._hsRoadLayer);
+    const grp=L.layerGroup(); let drawn=0;
+    (j.elements||[]).forEach(el=>{
+      if(!el.geometry||!el.tags||!el.tags.name) return;
+      const idx=idxByName.get(key(el.tags.name)); if(idx===undefined) return;
+      const h=list[idx]; const col=HS_COL[h.tier]||'#059669';
+      const latlngs=el.geometry.map(g=>[g.lat,g.lon]);
+      const line=L.polyline(latlngs,{color:col,weight:8,opacity:.9,lineCap:'round'});
+      line.bindPopup(hotspotPopupHTML(h,idx));
+      grp.addLayer(line); drawn++;
+    });
+    if(drawn){ grp.addTo(window._hsMap); window._hsRoadLayer=grp; }
+  }catch(e){ /* base map + markers remain */ }
 }
 function renderHotspotList(list){
   const c=document.getElementById('hs-count'); if(c) c.textContent=list.length?('· '+list.length+' streets'):'';
