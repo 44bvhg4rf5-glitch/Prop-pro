@@ -6623,6 +6623,36 @@ function renderStreetIntel(intel){
     const rows=bd.map(b=>'<span style="display:inline-flex;gap:6px;align-items:baseline;font-size:11.5px;background:#fff;border:1px solid var(--border);border-radius:7px;padding:4px 9px"><strong style="color:var(--text)">'+esc(b.postcode)+'</strong><span style="color:var(--muted)">'+b.count+' home'+(b.count===1?'':'s')+'</span></span>').join('');
     el.insertAdjacentHTML('beforeend','<div style="margin-top:11px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:7px">Postcodes on this road ('+bd.length+')</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+rows+'</div></div>');
   }
+  // Named landlords on this street (licence registers + Land Registry companies).
+  const lls=window._slLandlords||[];
+  if(lls.length){
+    const rows=lls.slice(0,40).map((l,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--text)">'+esc(l.name)+(l.portfolio>1?' <span style="font-size:10px;font-weight:800;color:#6b1fa0;background:rgba(107,31,160,.1);padding:1px 6px;border-radius:10px">owns '+l.portfolio+'</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+esc(l.licence)+' · write to: '+esc((l.writeTo||l.property).slice(0,48))+'</div></div>'
+      +'<button onclick="queueOneLandlord('+i+')" style="flex-shrink:0;padding:5px 11px;background:rgba(107,31,160,.1);color:#6b1fa0;border:1.5px solid rgba(107,31,160,.25);border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter</button>'
+      +'</div>').join('');
+    el.insertAdjacentHTML('beforeend','<div style="margin-top:11px;padding-top:10px;border-top:1px dashed var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6b1fa0">Named landlords ('+lls.length+')</div><button onclick="queueAllLandlords()" style="padding:5px 11px;background:#6b1fa0;color:#fff;border:none;border-radius:7px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">Letter all '+lls.length+'</button></div>'+rows+'</div>');
+  }
+}
+// Queue a landlord letter to the landlord's posting address (their own, if known).
+function _landlordProp(l){
+  const addr=l.writeTo||l.property;
+  const pcM=(addr||'').match(/[A-Z]{1,2}\d[\dA-Z]?\s*\d[A-Z]{2}/i);
+  return {address:addr,displayAddress:addr,fullAddress:addr,postcode:pcM?pcM[0]:(l.postcode||''),ownerName:l.name,_audience:'landlord',status:'To Let',channel:'rent',source:l.source||'Licence register',addressConfirmed:true};
+}
+function _landlordTpl(){ const all=[...templates,...(uploadedTpls||[])]; return all.find(t=>t.id==='let-t1')||all.find(t=>/landlord|let/i.test(t.name))||templates[0]; }
+function queueOneLandlord(i){
+  const l=(window._slLandlords||[])[i]; if(!l) return;
+  queue.push({id:Date.now()+Math.random(),prop:_landlordProp(l),tpl:_landlordTpl(),status:'pend',at:new Date(),auto:false});
+  updQBadge();updQStats(); if(typeof updateKPIs==='function')updateKPIs();
+  toast('<i class=ic-mailbox></i> Letter queued for '+esc(l.name),'ok');
+}
+function queueAllLandlords(){
+  const lls=window._slLandlords||[]; if(!lls.length){ toast('No named landlords','warn'); return; }
+  const tpl=_landlordTpl(); let n=0;
+  lls.forEach(l=>{ const prop=_landlordProp(l); if(typeof isBlockedAddr==='function'&&isBlockedAddr(prop))return; queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false}); n++; });
+  updQBadge();updQStats(); if(typeof updateKPIs==='function')updateKPIs();
+  toast('<i class=ic-mailbox></i> Queued '+n+' landlord letters (addressed by name)','ok');
 }
 // Queue landlord letters to the EPC-identified rental homes on the searched street.
 function queueRentalHomes(){
@@ -6718,6 +6748,7 @@ async function doStreetLookup(street){
       lastSource = data.source || '';
       intel = data.intel || null;
       window._slBreakdown = data.breakdown || [];
+      window._slLandlords = data.landlords || [];
       list.forEach((a,i)=>{
         const type = a.type === 'Commercial' ? 'Commercial' : 'Residential';
         const line1 = a.line1 || (a.fullAddress||'').split(',')[0] || '';

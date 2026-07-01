@@ -1,0 +1,31 @@
+name: Address cache pre-warm
+
+# Nightly address precompute (#4). Hits /api/prewarm which Council-Taxes a batch
+# of HA postcodes and persists them to the durable KV cache, so real searches are
+# instant and area-wide coverage builds over time. Runs a few times to rotate
+# through the districts. Needs:
+#   • repo/Actions variable  SITE_URL      (e.g. https://prop-pro-theta.vercel.app)
+#   • repo/Actions secret    PREWARM_KEY   (same value set in Vercel env)
+on:
+  schedule:
+    - cron: '30 3 * * *'        # 03:30 UTC nightly (quiet hours)
+  workflow_dispatch:
+
+jobs:
+  prewarm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pre-warm the address cache
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          PREWARM_KEY: ${{ secrets.PREWARM_KEY }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$PREWARM_KEY" ]; then
+            echo "SITE_URL or PREWARM_KEY not set — skipping."; exit 0
+          fi
+          for i in 1 2 3 4 5; do
+            code=$(curl -sS -o /tmp/prewarm.json -w '%{http_code}' \
+              "$SITE_URL/api/prewarm?key=$PREWARM_KEY&batch=25" || echo 000)
+            echo "run $i → HTTP $code"; cat /tmp/prewarm.json || true; echo
+            sleep 5
+          done

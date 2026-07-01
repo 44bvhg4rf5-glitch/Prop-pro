@@ -3,6 +3,7 @@ import { EPC_BASE, fetchJson, sendJson, guardOrigin } from '../lib/helpers.js';
 import { getBlocklist, buildMatcher, isSuppressed } from '../lib/blocklist.js';
 import { freeAddressesForPostcode, freeAddressesForArea, freeAddressesForStreet } from '../lib/freeAddresses.js';
 import { streetIntel } from '../lib/streetIntel.js';
+import { landlordsForStreet } from '../lib/landlords.js';
 
 export const config = { maxDuration: 60 }; // area / street scans hit several postcodes
 
@@ -193,6 +194,7 @@ export default async function handler(req, res) {
       try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix, epcKey: process.env.EPC_API_KEY || '' }); } catch { /* best-effort */ }
       sendJson(res, 200, {
         street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], breakdown: r.breakdown || [], intel,
+        landlords: landlordsForStreet(roadName, prefix).slice(0, 60),
         note: `${addresses.length} homes across ${(r.postcodes || []).length} postcode(s)${prefix ? ' in ' + prefix : ''}, from the free Council Tax register.`,
       });
       return;
