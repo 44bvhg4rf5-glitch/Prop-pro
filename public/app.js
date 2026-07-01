@@ -3036,31 +3036,44 @@ async function initPremarket(){
     if(!r.ok){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+(d.error||('HTTP '+r.status))+'</div>'; return; }
     premarketItems = d.properties || [];
     const c = document.getElementById('pm-count'); if(c) c.textContent = premarketItems.length;
+    const s = d.summary||{};
+    const sm = document.getElementById('pm-summary');
+    if(sm) sm.innerHTML = '<span style="color:#2563EB;font-weight:700">'+(s.sale||0)+' about to sell</span> · <span style="color:#059669;font-weight:700">'+(s.rental||0)+' about to let</span>'+(s.pending?' · '+s.pending+' still classifying (check back shortly)':'');
     renderPremarket();
   }catch(e){ if(box) box.innerHTML = '<div style="padding:24px;color:var(--amber)"><i class=ic-alert></i> '+e.message+'</div>'; }
 }
+function pmChip(p){
+  const m = { sale:['#2563EB','ABOUT TO SELL'], rental:['#059669','ABOUT TO LET'], other:['#6B7280',(p.txType||'OTHER').toUpperCase()], pending:['#9CA3AF','CLASSIFYING…'], unknown:['#9CA3AF','UNCLASSIFIED'] }[p.kind||'unknown']||['#9CA3AF','—'];
+  return '<span style="background:'+m[0]+';color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;white-space:nowrap">'+m[1]+'</span>';
+}
 function renderPremarket(){
   const box = document.getElementById('pm-results'); if(!box) return;
-  if(!premarketItems.length){ box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">No new EPCs lodged in this window. Try a longer period.</div>'; return; }
-  box.innerHTML = premarketItems.slice(0,300).map((p,i)=>{
-    const q = encodeURIComponent(p.fullAddress+' for sale');
+  const want = (document.getElementById('pm-kind')||{}).value||'';
+  const items = want ? premarketItems.filter(p=>p.kind===want) : premarketItems;
+  if(!items.length){ box.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted)">'+(want?'None classified "'+(want==='sale'?'about to sell':'about to let')+'" in this window yet.':'No new EPCs lodged in this window. Try a longer period.')+'</div>'; return; }
+  box.innerHTML = items.slice(0,300).map((p)=>{
+    const i = premarketItems.indexOf(p);
+    const q = encodeURIComponent(p.fullAddress+(p.kind==='rental'?' to rent':' for sale'));
     return '<div style="display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--border)">'
+      +pmChip(p)
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:14px;font-weight:700;color:var(--text)">'+p.fullAddress+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:2px"><i class=ic-send></i> '+p.postcode+' · '+p.district+' · EPC '+(p.band||'?')+' · lodged '+p.lodged+'</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px"><i class=ic-send></i> '+p.postcode+' · '+p.district+' · EPC '+(p.band||'?')+(p.sqm?' · '+p.sqm+'m²':'')+' · lodged '+p.lodged+'</div>'
       +'</div>'
       +'<a href="https://www.google.com/search?q='+q+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;font-size:11px;font-weight:600;color:var(--blue);text-decoration:none;padding:6px 11px;border:1.5px solid rgba(37,99,235,.25);border-radius:7px">Check listings</a>'
-      +'<button onclick="queuePremarket('+i+')" style="flex-shrink:0;padding:6px 13px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue</button>'
+      +'<button onclick="queuePremarket('+i+')" style="flex-shrink:0;padding:6px 13px;background:'+(p.kind==='rental'?'#059669':'var(--blue)')+';color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Queue</button>'
     +'</div>';
   }).join('');
 }
 function queuePremarket(i){
   const it = premarketItems[i]; if(!it) return;
   const tpl = [...templates,...(uploadedTpls||[])][0] || templates[0];
+  const isLet = it.kind==='rental';
   const prop = { address:it.fullAddress, displayAddress:it.fullAddress, fullAddress:it.fullAddress,
     postcode:it.postcode, district:it.district, haCode:it.district, type:'Property', beds:0,
-    portal:'Pre-Market', source:'Pre-Market EPC', isRealUrl:true,
-    rmUrl:'https://www.google.com/search?q='+encodeURIComponent(it.fullAddress+' for sale') };
+    portal:'Pre-Market', source:isLet?'Pre-Market EPC (about to let)':'Pre-Market EPC'+(it.kind==='sale'?' (about to sell)':''),
+    status:isLet?'To Let':undefined, recipient:isLet?'The Owner / Landlord':undefined, isRealUrl:true,
+    rmUrl:'https://www.google.com/search?q='+encodeURIComponent(it.fullAddress+(isLet?' to rent':' for sale')) };
   queue.push({ id:Date.now()+Math.random(), prop, tpl, status:'pend', at:new Date(), auto:false });
   logContact(prop, tpl, 'Pre-Market EPC');
   if(typeof updQBadge==='function') updQBadge();

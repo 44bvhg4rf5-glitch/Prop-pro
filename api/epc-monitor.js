@@ -1,4 +1,7 @@
 import { EPC_BASE, fetchJson, sendJson, guardOrigin } from '../lib/helpers.js';
+import { classifyCerts } from '../lib/epcWatch.js';
+
+export const config = { maxDuration: 60 };
 
 // London boroughs covering the HA postcode area.
 const COUNCILS = ['Harrow', 'Brent', 'Hillingdon', 'Barnet', 'Ealing'];
@@ -55,15 +58,27 @@ export default async function handler(req, res) {
       const item = {
         fullAddress: full, postcode: pc, district: oc,
         band: r.currentEnergyEfficiencyBand || '', lodged: r.registrationDate || '', uprn: r.uprn || '',
+        cert: r.certificateNumber || '',
       };
       const ex = byKey.get(key);
       if (!ex || (item.lodged || '') > (ex.lodged || '')) byKey.set(key, item);
     }
     const list = [...byKey.values()].sort((a, b) => (b.lodged || '').localeCompare(a.lodged || ''));
 
+    // WHY was each EPC lodged? The certificate's transaction type separates
+    // "about to sell" from "about to let" — the pre-market trigger. Certs are
+    // KV-cached, so repeated (and daily cron) runs converge on full coverage.
+    const out = list.slice(0, 500);
+    let classifyMeta = null;
+    if (u.searchParams.get('classify') !== '0') {
+      classifyMeta = await classifyCerts(out, EPC_API_KEY, { deadlineMs: 38000 });
+    }
+    const summary = { sale: 0, rental: 0, other: 0, unknown: 0, pending: 0 };
+    out.forEach((p) => { summary[p.kind === 'pending' ? 'pending' : (p.kind || 'unknown')] = (summary[p.kind === 'pending' ? 'pending' : (p.kind || 'unknown')] || 0) + 1; });
+
     sendJson(res, 200, {
       days, from: ymd(start), to: ymd(end), districts,
-      councils: perCouncil, total: list.length, properties: list.slice(0, 500),
+      councils: perCouncil, total: list.length, summary, classifyMeta, properties: out,
     });
   } catch (e) {
     sendJson(res, 502, { error: 'EPC monitor failed: ' + e.message });

@@ -5,7 +5,8 @@
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "crons": [
-    { "path": "/api/marketing?cron=1", "schedule": "0 6 * * *" }
+    { "path": "/api/marketing?cron=1", "schedule": "0 6 * * *" },
+    { "path": "/api/epc-monitor?days=10", "schedule": "20 5 * * *" }
   ],
   "routes": [
     { "src": "/api/([a-zA-Z0-9_-]+)", "dest": "/api/$1.js" },

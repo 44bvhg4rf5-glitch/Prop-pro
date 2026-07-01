@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Sacramento&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Caveat:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <script src="/vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20260701-fonts1">
+  <link rel="stylesheet" href="styles.css?v=20260701-epcw1">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -1523,9 +1523,16 @@
         <option>HA5</option><option>HA6</option><option>HA7</option><option>HA8</option><option>HA9</option>
       </select>
     </label>
+    <label style="font-size:12px;color:var(--muted);font-weight:600">Show
+      <select id="pm-kind" onchange="renderPremarket()" style="margin-left:6px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-family:inherit">
+        <option value="">Everything</option>
+        <option value="sale">🔵 About to sell</option>
+        <option value="rental">🟢 About to let</option>
+      </select>
+    </label>
     <button class="btn bp sm-btn" onclick="initPremarket()"><i class=ic-refresh></i> Refresh</button>
     <div style="flex:1"></div>
-    <span style="font-size:11px;color:var(--muted);max-width:280px">A fresh EPC is a strong signal an owner is preparing to sell or let — reach them first.</span>
+    <span id="pm-summary" style="font-size:11px;color:var(--muted);max-width:320px">A fresh EPC is a strong signal an owner is preparing to sell or let — reach them first.</span>
   </div>
   <div class="card" id="pm-results"><div style="text-align:center;padding:32px;color:var(--muted)">Loading pre-market leads…</div></div>
 </div>
@@ -1746,6 +1753,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260701-fonts1"></script>
+<script src="app.js?v=20260701-epcw1"></script>
 </body>
 </html>
