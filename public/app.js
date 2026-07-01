@@ -1448,18 +1448,44 @@ function renderRILeads(j){
       +'<span style="font-size:9px;font-weight:800;color:#fff;background:'+tagc+';padding:2px 6px;border-radius:4px;white-space:nowrap">'+l.tag+'</span>'
       +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.address||'—')+'</div>'
       +'<div style="font-size:11px;color:var(--muted)">'+esc(l.rentLabel||'')+(l.beds?' · '+l.beds+' bed':'')+(l.agent?' · '+esc(l.agent):'')+'</div></div>'
-      +'<button class="btn bs" style="padding:5px 10px;font-size:12px" onclick="queueRIlead('+i+')"><i class=ic-mailbox></i> Letter</button></div>';
+      +'<button class="btn bs" style="padding:5px 10px;font-size:12px" onclick="queueRIlead('+i+',this)"><i class=ic-mailbox></i> Letter</button></div>';
   }).join('');
 }
-function queueRIlead(i){
+// Ask our resolver for the exact door behind a portal listing (photos + pin +
+// Council Tax + EPC). Returns { fullAddress, confidence } or null.
+async function riResolveAddress(l){
+  const p=new URLSearchParams();
+  if(l.url)p.set('url',l.url);
+  if(l.postcode)p.set('postcode',l.postcode);
+  if(l.type)p.set('type',l.type);
+  if(l.sizeSqft)p.set('size',l.sizeSqft);
+  if(l.lat!=null)p.set('lat',l.lat); if(l.lon!=null)p.set('lon',l.lon);
+  const st=(l.address||'').split(',')[0]; if(st)p.set('street',st);
+  if(_riData&&_riData.district)p.set('district',_riData.district);
+  try{
+    const r=await fetch('/api/resolve?'+p.toString());
+    const d=await r.json();
+    const cands=d.candidates||[]; const conf=d.confidence||'low';
+    // high/medium → top candidate is the resolved door; single candidate → usable too
+    if((conf==='high'||conf==='medium')&&cands[0]&&cands[0].fullAddress) return {fullAddress:cands[0].fullAddress,confidence:conf,pinMatched:!!d.pinMatched};
+    if(cands.length===1&&cands[0].fullAddress) return {fullAddress:cands[0].fullAddress,confidence:'low',pinMatched:!!d.pinMatched};
+  }catch{}
+  return null; // ambiguous → caller keeps the street-level address and flags "verify"
+}
+async function queueRIlead(i,btn){
   const l=(_riData&&_riData._leads)?_riData._leads[i]:null; if(!l)return;
+  if(btn){btn.disabled=true;btn.textContent='Finding…';}
+  const res=await riResolveAddress(l);
+  const addr=(res&&res.fullAddress) ? res.fullAddress : l.address+(l.postcode&&!l.address.includes(l.postcode)?', '+l.postcode:'');
+  const conf=res?res.confidence:'';
   const tpl=[...templates,...(uploadedTpls||[])].find(t=>t.id==='intro')||templates[0];
-  const addr=l.address+(l.postcode&&!l.address.includes(l.postcode)?', '+l.postcode:'');
-  const prop={address:addr,displayAddress:addr,fullAddress:addr,postcode:l.postcode||'',source:'Rental Intel ('+l.tag+')',status:'Landlord letter',recipient:'The Owner / Landlord',addressConfirmed:true};
-  if(typeof isBlockedAddr==='function'&&isBlockedAddr(prop)){toast('Address is on the do-not-contact list','warn');return;}
+  const prop={address:addr,displayAddress:addr,fullAddress:addr,postcode:l.postcode||'',source:'Rental Intel ('+l.tag+')',status:'Landlord letter',recipient:'The Owner / Landlord',addressConfirmed:conf==='high',addressConfidence:conf};
+  if(typeof isBlockedAddr==='function'&&isBlockedAddr(prop)){toast('Address is on the do-not-contact list','warn');if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-mailbox></i> Letter';}return;}
   queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false});
   updQBadge();updQStats(); if(typeof updateKPIs==='function')updateKPIs();
-  toast('<i class=ic-mailbox></i> Letter queued for '+esc(l.address),'ok');
+  const cnote=conf==='high'?' (exact ✓)':conf==='medium'?' (likely)':res?' (street-level — verify)':'';
+  toast('<i class=ic-mailbox></i> Queued: '+esc(addr)+cnote, conf==='high'?'ok':'ok');
+  if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-mailbox></i> Letter';}
 }
 function queueWebAddr(i){
   const a=(window._waList||[])[i]; if(!a) return;
