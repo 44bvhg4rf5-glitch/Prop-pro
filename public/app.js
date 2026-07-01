@@ -1395,6 +1395,72 @@ async function letterWholeRoad(i){
     toast('<i class=ic-mailbox></i> Queued '+n+' letters to every home on '+esc(h.street),'ok');
   }catch(e){ toast('Failed: '+e.message,'warn'); }
 }
+// ── Rental Intel (Spectre-style market + competitor stock) ──
+let _riData=null;
+async function scanRentalIntel(){
+  const d=(document.getElementById('ri-district')?.value||'HA1').toUpperCase();
+  const btn=document.getElementById('ri-btn');
+  const empty=document.getElementById('ri-empty');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class=ic-zap></i> Scanning '+esc(d)+'…';}
+  try{
+    const r=await fetch('/api/rental-intel?area='+encodeURIComponent(d)+'&pages=4');
+    const j=await r.json();
+    if(j.error){toast(j.error,'warn');return;}
+    _riData=j;
+    if(empty)empty.style.display='none';
+    renderRIStats(j); renderRIAgents(j); renderRILeads(j);
+    toast('<i class=ic-chart></i> '+j.counts.total+' rentals · '+j.counts.agents+' agents in '+esc(d),'ok');
+  }catch(e){ toast('Scan failed: '+e.message,'warn'); }
+  finally{ if(btn){btn.disabled=false;btn.innerHTML='<i class=ic-zap></i> Scan market';} }
+}
+function riSelf(a){ return /openrent|open rent|no agent|private|unknown/i.test(a||''); }
+function renderRIStats(j){
+  const el=document.getElementById('ri-stats'); if(!el)return;
+  const self=(j.byAgent||[]).filter(a=>riSelf(a.agent)).reduce((s,a)=>s+a.total,0);
+  const box=(n,l,c)=>'<div class="kpi-box"><div class="kpi-n" style="'+(c?'color:'+c:'')+'">'+n+'</div><div class="kpi-l">'+l+'</div></div>';
+  el.style.display='flex'; el.style.flexWrap='wrap'; el.style.gap='10px';
+  el.innerHTML=box(j.counts.total,'Rentals live')+box(j.counts.agents,'Rival agents')+box('£'+(j.rentMedian||0).toLocaleString(),'Median rent pcm')+box(j.counts.reduced,'Reduced (keen)','#DC2626')+box(j.counts.letAgreed,'Let agreed')+box(self,'Self-managed ⭐','#059669');
+}
+function renderRIAgents(j){
+  const card=document.getElementById('ri-agents-card'), el=document.getElementById('ri-agents'); if(!el)return;
+  card.style.display='';
+  document.getElementById('ri-agent-count').textContent=(j.byAgent||[]).length+' agents';
+  el.innerHTML=(j.byAgent||[]).slice(0,25).map(a=>{
+    const self=riSelf(a.agent);
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border)">'
+      +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.agent||'—')+(self?' <span style="color:#059669;font-size:11px;font-weight:700">⭐ SELF-MANAGED</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+a.total+' rental'+(a.total===1?'':'s')+(a.reduced?' · '+a.reduced+' reduced':'')+(a.letAgreed?' · '+a.letAgreed+' let agreed':'')+'</div></div>'
+      +'<div style="font-size:20px;font-weight:800;color:'+(self?'#059669':'var(--ink)')+'">'+a.total+'</div></div>';
+  }).join('');
+}
+function renderRILeads(j){
+  const card=document.getElementById('ri-leads-card'), el=document.getElementById('ri-leads'); if(!el)return;
+  card.style.display='';
+  // reduced first (keenest), then let-agreed; dedupe by address
+  const seen=new Set(); const leads=[];
+  for(const l of (j.leads.reduced||[])){ const k=(l.address||'').toLowerCase(); if(seen.has(k))continue; seen.add(k); leads.push({...l,tag:'REDUCED'}); }
+  for(const l of (j.leads.letAgreed||[])){ const k=(l.address||'').toLowerCase(); if(seen.has(k))continue; seen.add(k); leads.push({...l,tag:'LET AGREED'}); }
+  _riData._leads=leads;
+  if(!leads.length){ el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:12px">No reduced or let-agreed rentals in this scan.</div>'; return; }
+  el.innerHTML=leads.slice(0,80).map((l,i)=>{
+    const tagc=l.tag==='REDUCED'?'#DC2626':'#D97706';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--border)">'
+      +'<span style="font-size:9px;font-weight:800;color:#fff;background:'+tagc+';padding:2px 6px;border-radius:4px;white-space:nowrap">'+l.tag+'</span>'
+      +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.address||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--muted)">'+esc(l.rentLabel||'')+(l.beds?' · '+l.beds+' bed':'')+(l.agent?' · '+esc(l.agent):'')+'</div></div>'
+      +'<button class="btn bs" style="padding:5px 10px;font-size:12px" onclick="queueRIlead('+i+')"><i class=ic-mailbox></i> Letter</button></div>';
+  }).join('');
+}
+function queueRIlead(i){
+  const l=(_riData&&_riData._leads)?_riData._leads[i]:null; if(!l)return;
+  const tpl=[...templates,...(uploadedTpls||[])].find(t=>t.id==='intro')||templates[0];
+  const addr=l.address+(l.postcode&&!l.address.includes(l.postcode)?', '+l.postcode:'');
+  const prop={address:addr,displayAddress:addr,fullAddress:addr,postcode:l.postcode||'',source:'Rental Intel ('+l.tag+')',status:'Landlord letter',recipient:'The Owner / Landlord',addressConfirmed:true};
+  if(typeof isBlockedAddr==='function'&&isBlockedAddr(prop)){toast('Address is on the do-not-contact list','warn');return;}
+  queue.push({id:Date.now()+Math.random(),prop,tpl,status:'pend',at:new Date(),auto:false});
+  updQBadge();updQStats(); if(typeof updateKPIs==='function')updateKPIs();
+  toast('<i class=ic-mailbox></i> Letter queued for '+esc(l.address),'ok');
+}
 function queueWebAddr(i){
   const a=(window._waList||[])[i]; if(!a) return;
   const tplEl=document.getElementById('f-tpl');

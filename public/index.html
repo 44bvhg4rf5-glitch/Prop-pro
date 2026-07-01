@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Sacramento&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Caveat:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <script src="/vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20260701-hotspots4">
+  <link rel="stylesheet" href="styles.css?v=20260701-rintel1">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -100,6 +100,7 @@
     <button class="ni" id="nav-let" onclick="showPanel('let')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg></span><span>Let Board</span><span class="nb nb-g">NEW</span></button>
     <button class="ni" id="nav-touting" onclick="showPanel('touting')"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span><span>Touting Radar</span><span class="nb nb-r">HOT</span></button>
     <button class="ni" id="nav-hotspots" onclick="showPanel('hotspots')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span><span>Rental Hotspots</span><span class="nb nb-r">NEW</span></button>
+    <button class="ni" id="nav-rintel" onclick="showPanel('rintel')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span><span>Rental Intel</span><span class="nb nb-r">NEW</span></button>
     <button class="ni" id="nav-offmarket" onclick="showPanel('offmarket')"><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></span><span>Off-Market DB</span><span class="nb nb-b">NEW</span></button>
     <button class="ni" id="nav-campaigns" onclick="showPanel('campaigns')"><span class="ic"><svg viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span><span>Campaigns</span><span class="nb nb-b" id="camp-nav-badge" style="display:none">0</span></button>
     <button class="ni" id="nav-schedule" onclick="showPanel('schedule')"><span class="ic"><svg viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg></span><span>Schedule</span></button>
@@ -1569,6 +1570,33 @@
   </div>
 </div>
 
+<!-- RENTAL INTEL (SPECTRE-STYLE MARKET + COMPETITOR STOCK) -->
+<div class="panel" id="panel-rintel">
+  <div class="page-hdr">
+    <div><div class="page-title"><i class=ic-chart></i> Rental Intel</div><div class="page-sub">The live HA rental market — every property, <strong>which rival agent holds it</strong>, the rent, and who's <span style="color:#DC2626;font-weight:700">reduced</span> (keen). Match Spectre and go further: the softest targets are <strong>self-managing landlords</strong> (OpenRent &amp; co) with no agent to break.</div></div>
+    <button class="btn bp" id="ri-btn" onclick="scanRentalIntel()"><i class=ic-zap></i> Scan market</button>
+  </div>
+  <div class="card card-sm" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <label style="font-size:12px;color:var(--muted);font-weight:600">District
+      <select id="ri-district" style="margin-left:6px;padding:6px 10px;border:1px solid var(--border2);border-radius:8px;font-family:inherit">
+        <option>HA0</option><option selected>HA1</option><option>HA2</option><option>HA3</option><option>HA4</option>
+        <option>HA5</option><option>HA6</option><option>HA7</option><option>HA8</option><option>HA9</option>
+      </select>
+    </label>
+    <span id="ri-note" style="font-size:12px;color:var(--muted)">Live from Rightmove + OnTheMarket.</span>
+  </div>
+  <div id="ri-stats" class="grid-kpi" style="display:none"></div>
+  <div class="card" id="ri-agents-card" style="display:none">
+    <div class="ct"><div class="ct-icon" style="background:#EEF2FF"><i class=ic-building></i></div>Competitor stock — who holds the landlords <span id="ri-agent-count" style="font-size:12px;color:var(--muted);font-weight:400;margin-left:6px"></span></div>
+    <div id="ri-agents"></div>
+  </div>
+  <div class="card" id="ri-leads-card" style="display:none">
+    <div class="ct"><div class="ct-icon" style="background:#FEF2F2"><i class=ic-flame></i></div>Hot landlord leads <span style="font-size:12px;color:var(--muted);font-weight:400;margin-left:6px">reduced &amp; let-agreed — tout now</span></div>
+    <div id="ri-leads"></div>
+  </div>
+  <div id="ri-empty" class="card" style="text-align:center;color:var(--muted);font-size:13px;padding:26px">Pick a district and tap <strong>Scan market</strong> to see every rental, the rival agent behind it, and the keenest landlords to tout.</div>
+</div>
+
 <!-- LET BOARD (RENTAL LANDLORD FARMING) -->
 <div class="panel" id="panel-let">
   <div class="page-hdr">
@@ -1711,6 +1739,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260701-hotspots4"></script>
+<script src="app.js?v=20260701-rintel1"></script>
 </body>
 </html>
