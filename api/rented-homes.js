@@ -19,30 +19,6 @@ export default async function handler(req, res) {
   const url = new URL(req.url, 'http://x');
   const postcode = (url.searchParams.get('postcode') || '').trim();
   const area = (url.searchParams.get('area') || '').trim();
-  const debug = url.searchParams.get('debug');
-
-  // TEMP diagnostic: dump the raw certificate JSON for one postcode's first few
-  // certs so we can see the actual tenure field name/values.
-  if (debug) {
-    const { EPC_BASE, fetchJson } = await import('../lib/helpers.js');
-    const gap = Math.max(0, parseInt(url.searchParams.get('gap') || '150', 10) || 0);
-    const n = Math.min(60, Math.max(1, parseInt(url.searchParams.get('n') || '40', 10) || 40));
-    const search = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(debug).replace(/%20/g, '+')}&page_size=500`, key);
-    const rows = (search.json && search.json.data) || [];
-    const t0 = Date.now();
-    const tally = { 200: 0, 429: 0, other: 0 }; const tenures = {}; let first429At = -1;
-    const picks = rows.slice(0, n);
-    for (let i = 0; i < picks.length; i++) {
-      const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(picks[i].certificateNumber)}`, key);
-      if (d.status === 200) tally[200]++; else if (d.status === 429) { tally[429]++; if (first429At < 0) first429At = i; } else tally.other++;
-      const b = (d.json && d.json.data) ? d.json.data : d.json;
-      const tv = b && (b.tenure ?? b.TENURE);
-      if (tv != null) tenures[String(tv)] = (tenures[String(tv)] || 0) + 1;
-      if (gap) await new Promise((s) => setTimeout(s, gap));
-    }
-    sendJson(res, 200, { debug, gap, requested: picks.length, ms: Date.now() - t0, tally, first429At, tenures });
-    return;
-  }
 
   try {
     if (postcode) {
@@ -52,10 +28,10 @@ export default async function handler(req, res) {
     }
     if (area) {
       const start = Math.max(0, parseInt(url.searchParams.get('start') || '0', 10) || 0);
-      const batch = Math.min(8, Math.max(1, parseInt(url.searchParams.get('batch') || '4', 10) || 4));
+      const certBudget = Math.min(220, Math.max(30, parseInt(url.searchParams.get('budget') || '170', 10) || 170));
       const pcs = await postcodesInArea(area);
       if (!pcs.length) { sendJson(res, 404, { error: `No postcodes found for ${area}.` }); return; }
-      const r = await rentedHomesForArea(pcs, key, { start, batch });
+      const r = await rentedHomesForArea(pcs, key, { start, certBudget });
       sendJson(res, 200, { source: 'EPC tenure', mode: 'area', area, ...r, byStreet: rankByStreet(r.rented) });
       return;
     }
