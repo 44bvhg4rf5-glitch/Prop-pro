@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     }
     if (area) {
       const start = Math.max(0, parseInt(url.searchParams.get('start') || '0', 10) || 0);
-      const batch = Math.min(12, Math.max(1, parseInt(url.searchParams.get('batch') || '8', 10) || 8));
+      const batch = Math.min(8, Math.max(1, parseInt(url.searchParams.get('batch') || '4', 10) || 4));
       const pcs = await postcodesInArea(area);
       if (!pcs.length) { sendJson(res, 404, { error: `No postcodes found for ${area}.` }); return; }
       const r = await rentedHomesForArea(pcs, key, { start, batch });
