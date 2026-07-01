@@ -1569,6 +1569,7 @@ function switchAddrView(v){
     if(vEl)vEl.style.display=t===v?'block':'none';
     if(tab)tab.classList.toggle('act',t===v);
   });
+  if(v==='preview'){ syncPreviewLetterSel(); updateLetterPreview(); }
 }
 function queueSuccessLetters(){
   if(!slActiveLetter){toast('Choose a letter first','warn');return;}
@@ -7297,7 +7298,20 @@ function selectLetter(lt){
   document.querySelectorAll('.letter-choice').forEach(el=>el.classList.remove('sel'));
   const sel=document.getElementById('lc-'+lt.id);
   if(sel)sel.classList.add('sel');
+  syncPreviewLetterSel();
   updateLetterPreview();
+}
+// Keep the Preview-view "Letter:" dropdown populated + matched to the active letter.
+function syncPreviewLetterSel(){
+  const dd=document.getElementById('preview-letter-sel'); if(!dd)return;
+  const all=[...SUCCESS_LETTERS,...templates,...uploadedTpls];
+  dd.innerHTML=all.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  if(slActiveLetter) dd.value=slActiveLetter.id;
+}
+// Switch the letter straight from the Preview view dropdown.
+function selectPreviewLetter(id){
+  const lt=[...SUCCESS_LETTERS,...templates,...uploadedTpls].find(t=>t.id===id);
+  if(lt) selectLetter(lt);
 }
 
 function renderAddrResults(){

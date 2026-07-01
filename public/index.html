@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Allura&family=Sacramento&family=Dancing+Script:wght@600&family=Great+Vibes&family=Homemade+Apple&family=Caveat:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <script src="/vendor/leaflet/leaflet.js"></script>
-  <link rel="stylesheet" href="styles.css?v=20260701-tpl1">
+  <link rel="stylesheet" href="styles.css?v=20260701-tpl2">
 </head>
 <body>
 <!-- AUTH GATE (shown only when accounts are switched on and nobody is signed in) -->
@@ -583,9 +583,11 @@
     <div id="addr-grid-view"><div class="addr-grid" id="addr-grid"></div><div class="pag" id="addr-pag"></div></div>
     <div id="addr-list-view" style="display:none"><div id="addr-list"></div><div class="pag" id="addr-pag2"></div></div>
     <div id="addr-preview-view" style="display:none">
-      <div class="fr" style="margin-bottom:12px">
+      <div class="fr" style="margin-bottom:12px;gap:10px;flex-wrap:wrap">
+        <label style="white-space:nowrap">Letter:</label>
+        <select id="preview-letter-sel" style="flex:1;min-width:150px" onchange="selectPreviewLetter(this.value)"></select>
         <label style="white-space:nowrap">Preview for:</label>
-        <select id="preview-addr-sel" style="flex:1" onchange="updateLetterPreview()"></select>
+        <select id="preview-addr-sel" style="flex:1;min-width:150px" onchange="updateLetterPreview()"></select>
       </div>
       <div class="print-preview-box" id="letter-preview-content">Select an address above to preview</div>
     </div>
@@ -1744,6 +1746,6 @@
 <!-- Toast container -->
 <div id="tc" class="tc"></div>
 
-<script src="app.js?v=20260701-tpl1"></script>
+<script src="app.js?v=20260701-tpl2"></script>
 </body>
 </html>
