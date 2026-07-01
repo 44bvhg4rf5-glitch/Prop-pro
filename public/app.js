@@ -6617,6 +6617,12 @@ function renderStreetIntel(intel){
     ${(intel.rentedAddresses&&intel.rentedAddresses.length)?'<div style="margin-top:9px"><button onclick="queueRentalHomes()" style="padding:8px 14px;background:#6b1fa0;color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit"><i class=ic-mailbox></i> Letter the '+intel.rentedAddresses.length+' rental home'+(intel.rentedAddresses.length===1?'':'s')+' (to the landlord)</button></div>':''}
     <div style="font-size:11px;color:var(--muted);margin-top:7px">Rented % = EPC tenure (a real sample). Licensed = the public licence register (a floor). Sales = Land Registry, last 5 years.</div>`;
   window._slIntel=intel;
+  // Per-postcode residential breakdown for a road (exact counts from Council Tax).
+  const bd=window._slBreakdown||[];
+  if(bd.length>1){
+    const rows=bd.map(b=>'<span style="display:inline-flex;gap:6px;align-items:baseline;font-size:11.5px;background:#fff;border:1px solid var(--border);border-radius:7px;padding:4px 9px"><strong style="color:var(--text)">'+esc(b.postcode)+'</strong><span style="color:var(--muted)">'+b.count+' home'+(b.count===1?'':'s')+'</span></span>').join('');
+    el.insertAdjacentHTML('beforeend','<div style="margin-top:11px;padding-top:10px;border-top:1px dashed var(--border)"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:7px">Postcodes on this road ('+bd.length+')</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+rows+'</div></div>');
+  }
 }
 // Queue landlord letters to the EPC-identified rental homes on the searched street.
 function queueRentalHomes(){
@@ -6711,6 +6717,7 @@ async function doStreetLookup(street){
       const list = Array.isArray(data.addresses) ? data.addresses : [];
       lastSource = data.source || '';
       intel = data.intel || null;
+      window._slBreakdown = data.breakdown || [];
       list.forEach((a,i)=>{
         const type = a.type === 'Commercial' ? 'Commercial' : 'Residential';
         const line1 = a.line1 || (a.fullAddress||'').split(',')[0] || '';

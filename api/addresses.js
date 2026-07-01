@@ -192,7 +192,7 @@ export default async function handler(req, res) {
       let intel = null;
       try { intel = await streetIntel({ streetName: roadName, postcodes: r.postcodes || [], homes: addresses.length, outcode: prefix, epcKey: process.env.EPC_API_KEY || '' }); } catch { /* best-effort */ }
       sendJson(res, 200, {
-        street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], intel,
+        street, source: 'Council Tax register', total: addresses.length, addresses, postcodes: r.postcodes || [], breakdown: r.breakdown || [], intel,
         note: `${addresses.length} homes across ${(r.postcodes || []).length} postcode(s)${prefix ? ' in ' + prefix : ''}, from the free Council Tax register.`,
       });
       return;
