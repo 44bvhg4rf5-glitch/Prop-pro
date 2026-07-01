@@ -19,6 +19,23 @@ export default async function handler(req, res) {
   const url = new URL(req.url, 'http://x');
   const postcode = (url.searchParams.get('postcode') || '').trim();
   const area = (url.searchParams.get('area') || '').trim();
+  const debug = url.searchParams.get('debug');
+
+  // TEMP diagnostic: dump the raw certificate JSON for one postcode's first few
+  // certs so we can see the actual tenure field name/values.
+  if (debug) {
+    const { EPC_BASE, fetchJson } = await import('../lib/helpers.js');
+    const search = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(debug).replace(/%20/g, '+')}&page_size=8`, key);
+    const rows = (search.json && search.json.data) || [];
+    const out = [];
+    for (const r of rows.slice(0, 4)) {
+      const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(r.certificateNumber)}`, key);
+      const b = (d.json && d.json.data) ? d.json.data : d.json;
+      out.push({ cert: r.certificateNumber, status: d.status, keys: b ? Object.keys(b).filter(k => /ten/i.test(k)) : [], tenure: b && (b.tenure ?? b.TENURE), allKeysSample: b ? Object.keys(b).slice(0, 40) : null });
+    }
+    sendJson(res, 200, { debug, searchStatus: search.status, rows: rows.length, out });
+    return;
+  }
 
   try {
     if (postcode) {
