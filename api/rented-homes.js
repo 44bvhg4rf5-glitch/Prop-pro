@@ -25,17 +25,22 @@ export default async function handler(req, res) {
   // certs so we can see the actual tenure field name/values.
   if (debug) {
     const { EPC_BASE, fetchJson } = await import('../lib/helpers.js');
-    const search = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(debug).replace(/%20/g, '+')}&page_size=8`, key);
+    const gap = Math.max(0, parseInt(url.searchParams.get('gap') || '150', 10) || 0);
+    const n = Math.min(60, Math.max(1, parseInt(url.searchParams.get('n') || '40', 10) || 40));
+    const search = await fetchJson(`${EPC_BASE}/api/domestic/search?postcode=${encodeURIComponent(debug).replace(/%20/g, '+')}&page_size=500`, key);
     const rows = (search.json && search.json.data) || [];
-    const searchRowKeys = rows[0] ? Object.keys(rows[0]) : [];
-    const searchTenureFields = rows.slice(0, 8).map(r => ({ a: r.addressLine1, tenure: r.tenure, TENURE: r.TENURE, currentTenure: r.currentTenure }));
-    const out = [];
-    for (const r of rows.slice(0, 4)) {
-      const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(r.certificateNumber)}`, key);
+    const t0 = Date.now();
+    const tally = { 200: 0, 429: 0, other: 0 }; const tenures = {}; let first429At = -1;
+    const picks = rows.slice(0, n);
+    for (let i = 0; i < picks.length; i++) {
+      const d = await fetchJson(`${EPC_BASE}/api/certificate?certificate_number=${encodeURIComponent(picks[i].certificateNumber)}`, key);
+      if (d.status === 200) tally[200]++; else if (d.status === 429) { tally[429]++; if (first429At < 0) first429At = i; } else tally.other++;
       const b = (d.json && d.json.data) ? d.json.data : d.json;
-      out.push({ cert: r.certificateNumber, status: d.status, keys: b ? Object.keys(b).filter(k => /ten/i.test(k)) : [], tenure: b && (b.tenure ?? b.TENURE), allKeysSample: b ? Object.keys(b).slice(0, 40) : null });
+      const tv = b && (b.tenure ?? b.TENURE);
+      if (tv != null) tenures[String(tv)] = (tenures[String(tv)] || 0) + 1;
+      if (gap) await new Promise((s) => setTimeout(s, gap));
     }
-    sendJson(res, 200, { debug, searchStatus: search.status, rows: rows.length, searchRowKeys, searchTenureFields, out });
+    sendJson(res, 200, { debug, gap, requested: picks.length, ms: Date.now() - t0, tally, first429At, tenures });
     return;
   }
 
